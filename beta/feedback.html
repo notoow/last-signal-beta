@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>LAST SIGNAL · 버그 제보</title><link rel="stylesheet" href="./support.css">
+<main class="beta-form"><h1>버그 제보 / Report a bug</h1>
+<p>상황을 적으면 버전과 저장된 항해 정보를 넣은 GitHub 이슈 작성 화면으로 이동합니다. 최종 등록에는 GitHub 로그인이 필요합니다.</p>
+<p>제보는 공개됩니다. 이름·이메일 등 개인정보는 적지 마세요. 전체 저장 파일은 첨부하지 않습니다.</p>
+<form><label for="description">상황과 재현 방법 / What happened?</label><textarea id="description" required minlength="3" maxlength="3000" rows="8"></textarea>
+<details open><summary>함께 첨부할 정보 / Attached context</summary><pre id="context"></pre></details>
+<button type="submit">GitHub에서 제보 작성 / Open GitHub issue</button><p id="result" role="status"></p></form>
+<p><a href="https://github.com/notoow/last-signal-beta/issues" target="_blank" rel="noopener">기존 제보 보기 / Existing reports</a> · <a href="../">게임으로 / Play</a></p>
+<p>GitHub 작성 화면에서 Submit new issue를 눌러야 등록이 완료됩니다.</p></main>
+<script type="module" src="./feedback.js"></script></html>

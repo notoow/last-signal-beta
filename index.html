@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>마지막 신호 · LAST SIGNAL</title>
+  <link rel="stylesheet" href="src/style.css">
+  <link rel="stylesheet" href="src/rescue-style.css">
+  <link rel="stylesheet" href="src/rogue-style.css">
+  <link rel="stylesheet" href="src/session-ui.css">
+  <link rel="stylesheet" href="src/play-hud.css">
+  <link rel="stylesheet" href="src/rogue-hud.css">
+  <link rel="stylesheet" href="src/crew-interior.css">
+  <link rel="stylesheet" href="src/refit-view.css">
+<link rel="stylesheet" href="beta/support.css">
+</head>
+<body>
+  <canvas id="space" aria-label="Last Signal harbor rescue game"></canvas>
+  <div id="hud" class="hidden"></div>
+  <button id="interiorToggle" hidden></button><div id="voyageStatus" hidden></div>
+  <button id="playPause" class="play-pause" hidden></button>
+  <main id="panel"></main>
+  <div id="rewardNotice" class="reward-notice" role="status" aria-live="polite"></div>
+  <div id="toast" role="status"></div>
+  <div id="version">LAST SIGNAL / 0.3.0 · FIRST RESCUE</div>
+  <script type="module" src="src/rescue-app.js"></script>
+<script type="module" src="beta/game-support.js"></script>
+</body>
+</html>

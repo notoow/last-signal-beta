@@ -1,0 +1,38 @@
+/* Compact roguelike instruments. Leave room for the world, keeping real
+   simultaneous hazards visible; no clipped text or forced maximum heights. */
+#rogue[data-hud=compact] .rogue-top-stack{width:320px;gap:8px}
+#rogue[data-hud=compact] #rogueMission{padding:10px 14px;font-size:16px;line-height:1.35}
+#rogue[data-hud=compact] #rogueMission small{font-size:14px;margin-bottom:4px}
+#rogue[data-hud=compact] #rogueMission strong{display:block;font-size:18px;line-height:1.35}
+#rogue[data-hud=compact] #rogueMission .rogue-boss-state{margin-top:6px;font-size:14px;line-height:1.4}
+#rogue[data-hud=compact] .rogue-radio{padding:10px 14px;font:400 14px/1.45 Pretendard,sans-serif}
+#rogue[data-hud=compact] .rogue-console{left:16px;width:min(780px,calc(100% - 232px));padding:10px 14px;border-top:1px solid #647580}
+#rogue[data-hud=compact] .rogue-readings{gap:6px 20px;font-size:14px}
+#rogue[data-hud=compact] [data-rogue-metric]{display:inline-flex;align-items:baseline;gap:6px;white-space:nowrap}
+#rogue[data-hud=compact] .rogue-readings b{margin:0;font-size:20px;line-height:1.2}
+#rogue[data-hud=compact] .rogue-maximum{font-size:14px;color:#b9c1c8;margin-left:-4px}
+#rogue[data-hud=compact] .rogue-conditions{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:7px;font:400 14px/1.4 Pretendard,sans-serif;color:#b9c1c8}
+#rogue[data-hud=compact] .rogue-conditions:empty{display:none}
+#rogue[data-hud=compact] [data-tone=warning]{color:#ffbe78}
+#rogue[data-hud=compact] .rogue-controls{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;font:500 14px/1.4 Pretendard,sans-serif;margin-top:7px;padding-top:7px;color:#f3f1e8}
+#rogue[data-hud=compact] .rogue-work{display:flex;gap:10px;align-items:center;font-size:14px;color:#f3a343}
+#rogue[data-hud=compact] .rogue-work progress{width:110px;height:5px;accent-color:#f3a343}
+#rogue[data-hud=compact] #rogueSkill{padding:10px 12px 14px;min-height:0;width:184px;gap:6px;font:400 14px/1.4 Pretendard,sans-serif}
+#rogue[data-hud=compact] #rogueSkill kbd{font-size:14px;margin:0;flex-shrink:0}
+#rogue[data-hud=compact] #rogueSkill b{font-size:16px}
+#rogue[data-hud=compact] #rogueSkill small{font-size:14px;line-height:1.4}
+#rogue[data-hud=compact] #rogueSkill[data-compact=true]{padding:8px 10px;border-color:transparent;background:#15191dcc}
+#rogue[data-hud=compact] #rogueSkill[data-compact=true] b{display:none}
+#rogue[data-hud=compact] #rogueSkill[data-compact=true] small{margin:0}
+#rogue[data-hud=compact] #rogueSkill:focus-visible{outline:2px solid #f3a343;outline-offset:3px}
+#rogue .rogue-detail-list{display:grid;gap:10px;font-size:14px;line-height:1.5}
+#rogue .rogue-detail-list>div{display:grid;grid-template-columns:120px 1fr;gap:12px}
+#rogue .rogue-detail-list dt{color:#b9c1c8}
+#rogue .rogue-detail-list dd{margin:0;color:#f3f1e8}
+@media(max-width:700px){
+ #rogue[data-hud=compact] .rogue-console{left:12px;bottom:12px;width:calc(100% - 24px)}
+ #rogue[data-hud=compact] #rogueSkill{right:12px;bottom:auto;top:70px;width:156px}
+ #rogue[data-hud=compact] .rogue-top-stack{max-width:calc(100% - 190px)}
+ #rogue[data-hud=compact] .rogue-readings{gap:6px 14px}
+ #rogue .rogue-detail-list>div{grid-template-columns:1fr;gap:2px}
+}

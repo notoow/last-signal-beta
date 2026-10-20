@@ -1,0 +1,119 @@
+.play-pause{position:fixed;right:16px;top:16px;z-index:15;min-width:112px;min-height:44px;padding:10px 16px;background:#15191deb;color:#f3f1e8;border:1px solid #b9c1c84d;border-radius:3px;font:600 14px Pretendard,sans-serif}
+.play-pause[hidden]{display:none}
+.play-pause:focus-visible{outline:2px solid #f3a343;outline-offset:3px}
+#hud[data-kind=tow] .play-top,.rogue-top-stack{position:absolute;top:16px;left:16px;width:360px;max-width:calc(100% - 160px);display:grid;gap:12px}
+#hud[data-kind=tow] .mission-objective,#rogueMission{position:static;left:auto;top:auto;transform:none;width:auto;max-width:none;white-space:normal;text-align:left;padding:16px;background:#15191deb;border:0;border-left:3px solid #f3a343;color:#f3f1e8;font:600 18px/1.45 Pretendard,sans-serif;word-break:keep-all}
+#hud[data-kind=tow] .mission-objective span{font-size:14px;color:#f3a343}
+#hud[data-kind=tow] .radio-panel,.rogue-top-stack .rogue-radio{position:static;max-width:none;margin:0;padding:12px 16px;background:#15191ddc;border:0;border-left:2px solid #75b4c4;border-radius:0;text-align:left;text-shadow:none;box-shadow:none;font:400 14px/1.6 Pretendard,sans-serif;color:#b9c1c8}
+#hud[data-kind=tow] .radio-panel>div{font-size:12px;letter-spacing:0;color:#b9c1c8}
+#hud[data-kind=tow] .radio-panel b{font-size:14px;color:#f3f1e8}
+#hud[data-kind=tow] .radio-panel p{font-size:14px;line-height:1.6;margin:8px 0 0;color:#f3f1e8}
+.rogue-radio:empty{display:none}
+#hud[data-kind=tow] .play-console{position:absolute;bottom:16px;left:max(216px,calc((100% - 744px)/2));width:min(744px,calc(100% - 240px));padding:14px 16px;box-sizing:border-box;background:#15191df0;border-top:2px solid #647580;border-radius:3px;color:#f3f1e8}
+#hud[data-kind=tow] .hud-top{position:static;height:auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) 72px;gap:16px;padding:0 0 12px;background:none;border:0}
+#hud[data-kind=tow] .hud-brand{display:none}
+#hud[data-kind=tow] .meter{width:auto;min-width:0;max-width:none;font-size:14px;color:#b9c1c8}
+#hud[data-kind=tow] .meter>div{font-size:14px}
+#hud[data-kind=tow] .meter b{font-size:16px;color:#f3f1e8;font-variant-numeric:tabular-nums}
+#hud[data-kind=tow] .meter progress{height:4px}
+#hud[data-kind=tow] .hud-time{font-size:22px;text-align:right;color:#f3f1e8;font-variant-numeric:tabular-nums}
+#hud[data-kind=tow] .hud-time span{font-size:12px}
+#hud[data-kind=tow] .hud-bottom{position:static;display:grid;grid-template-columns:minmax(120px,.8fr) 1fr 1.2fr;gap:16px;height:auto;min-height:0;padding:12px 0 0;background:none;border:0;border-top:1px solid #b9c1c833}
+#hud[data-kind=tow] .anchor-state,#hud[data-kind=tow] .hud-hint,#hud[data-kind=tow] .tow-action{max-width:none;font-size:14px;line-height:1.45;color:#f3f1e8}
+#hud[data-kind=tow] .anchor-state b{font-size:16px;color:#f3a343}
+#hud[data-kind=tow] .hud-bottom small{font-size:12px;color:#b9c1c8}
+#hud[data-kind=tow] .dock-feedback{position:static;transform:none;max-width:none;padding:10px 0;margin:0;background:none;border:0;border-top:1px solid #b9c1c833;font-size:14px;line-height:1.45}
+#hud[data-kind=tow] .dock-checks{gap:12px;justify-content:flex-start}
+/* Expedition instruments share a single edge panel instead of covering the
+   steering console. Detailed crew/build readings retain their existing state. */
+#interiorToggle{top:16px;right:144px;min-height:44px;padding:10px 16px;background:#15191deb;color:#f3f1e8;border:1px solid #b9c1c84d;border-radius:3px;font-size:14px}
+#voyageStatus,#voyageStatus:has(.expedition-live){top:76px;right:16px;width:min(420px,calc(100vw - 440px));max-width:none;box-sizing:border-box;padding:12px 16px;background:#15191deb;color:#b9c1c8;font:400 12px/1.5 Pretendard,sans-serif;border:1px solid #b9c1c833;border-radius:3px}
+#voyageStatus.fuel-low{border-color:#f3a343;color:#f3c78f}
+#voyageStatus .sea-instruments{position:static;max-width:none;width:100%;padding:10px 0 0;margin:8px 0 0;border:0;border-top:1px solid #b9c1c833;background:none;gap:10px}
+#voyageStatus .sea-instruments svg{width:38px;height:38px}
+#voyageStatus .sea-instruments>div{font-size:12px}
+#voyageStatus .sea-instruments .drive-reading{min-width:72px}
+#voyageStatus .expedition-live{gap:6px 14px;padding-top:8px;margin-top:8px}
+body:has(#hud[data-kind=tow]:not([hidden])) #toast{left:16px;right:auto;top:var(--play-notice-top,90px);transform:none;width:360px;max-width:calc(100vw - 160px);box-sizing:border-box;padding:12px 16px;text-align:left;background:#15191df0;color:#f3f1e8;border:0;border-left:2px solid #f3a343;font:400 14px/1.6 Pretendard,sans-serif}
+body:has(#toast.show) #hud[data-kind=tow] .radio-panel{display:none}
+.rogue-top{inset:0;padding:0;background:none}
+#rogueMission small{font-size:14px;color:#b9c1c8;font-weight:400;margin-bottom:8px}
+#rogueMission strong{font-size:18px;line-height:1.45;color:#f3f1e8}
+#rogueMission .rogue-boss-state{font-size:14px;line-height:1.5;color:#f3a343}
+.rogue-console{position:absolute;bottom:16px;left:max(16px,calc((100% - 960px)/2));width:min(744px,calc(100% - 232px));box-sizing:border-box;padding:16px;background:#15191df0;border-top:2px solid #647580;border-radius:3px}
+.rogue-console .rogue-readings{margin:0;display:flex;flex-wrap:wrap;gap:10px 24px;font:400 14px/1.45 Pretendard,sans-serif;color:#b9c1c8}
+.rogue-readings b{color:#f3f1e8;font-size:16px;font-variant-numeric:tabular-nums}
+.rogue-console .rogue-controls{position:static;margin-top:12px;padding:12px 0 0;border-top:1px solid #b9c1c833;background:none;text-align:left;font:400 14px/1.45 Pretendard,sans-serif;color:#b9c1c8}
+.rogue-shell .rogue-skill{bottom:16px;right:16px;min-width:0;width:184px;box-sizing:border-box;min-height:76px;padding:14px;background:#15191df0;border:1px solid #b9c1c84d;border-radius:3px;color:#f3f1e8}
+.rogue-shell .rogue-skill b{font-size:16px}.rogue-shell .rogue-skill small{font-size:12px}
+.rogue-shell:not([data-surface=playing]) #rogueHud,.rogue-shell:not([data-surface=playing]) #roguePause{display:none}
+@media(max-width:700px){
+ #hud[data-kind=tow] .play-top,.rogue-top-stack{max-width:calc(100% - 88px);width:320px;left:12px;top:12px}
+ .play-pause{right:12px;top:12px;min-width:60px;width:60px;padding:8px;font-size:12px}
+ #hud[data-kind=tow] .play-console{left:12px;width:calc(100% - 24px);bottom:12px;padding:12px}
+ #hud[data-kind=tow] .hud-top{gap:8px;grid-template-columns:repeat(3,minmax(0,1fr))}
+ #hud[data-kind=tow] .hud-time{display:none}
+ #hud[data-kind=tow] .hud-bottom{grid-template-columns:1fr 1fr;gap:8px}
+ #hud[data-kind=tow] .hud-hint{grid-column:1/-1;order:1}
+ .rogue-console{left:12px;bottom:12px;width:calc(100% - 24px);padding:12px}
+ .rogue-shell .rogue-skill{right:12px;bottom:190px;width:156px}
+ #hud[data-kind=tow] .radio-panel,.rogue-top-stack .rogue-radio{font-size:14px}
+}
+
+/* Compact view is opt-in; the existing runtime remains intact until its owner
+   connects the pure presentation model and the paused detail view together. */
+#hud[data-ui=compact] .compact-top{width:320px;gap:8px}
+#hud[data-ui=compact] .mission-objective{padding:12px 14px;font-size:16px;line-height:1.35}
+#hud[data-ui=compact] .mission-objective small{display:block;font-size:14px;font-weight:400;color:#b9c1c8;margin-bottom:4px}
+#hud[data-ui=compact] .mission-objective strong{display:block;font-size:18px;font-weight:700}
+#hud[data-ui=compact] .compact-console{padding:12px 16px;border-top:1px solid #647580}
+#hud[data-ui=compact] .compact-metrics{display:flex;flex-wrap:wrap;align-items:center;gap:10px 24px}
+#hud[data-ui=compact] .compact-metric{display:flex;align-items:baseline;gap:8px;white-space:nowrap}
+#hud[data-ui=compact] .compact-metric>span{font-size:14px;color:#b9c1c8}
+#hud[data-ui=compact] .compact-metric>strong{font-size:20px;line-height:1.2;font-variant-numeric:tabular-nums}
+#hud[data-ui=compact] .compact-metric>small{font-size:14px;font-variant-numeric:tabular-nums}
+#hud[data-ui=compact] [data-tone=warning]{color:#f3c78f}
+#hud[data-ui=compact] [data-tone=danger]{color:#ffaaa2}
+#hud[data-ui=compact] .compact-build,
+#hud[data-ui=compact] .compact-environment,
+#hud[data-ui=compact] .compact-risks,
+#hud[data-ui=compact] .compact-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;font-size:14px;line-height:1.4}
+#hud[data-ui=compact] .compact-conditions{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin-top:8px}
+#hud[data-ui=compact] .compact-conditions:not(:has(> *)){display:none}
+#hud[data-ui=compact] .compact-build{gap:6px}
+#hud[data-ui=compact] .compact-environment{display:contents;color:#b9c1c8}
+#hud[data-ui=compact] .compact-risks{display:contents}
+#hud[data-ui=compact] .compact-actions{border-top:1px solid #b9c1c833;margin-top:6px;padding-top:6px}
+#hud[data-ui=compact] .compact-actions [data-hud-item=context]{font-size:16px;font-weight:600;flex:1 1 240px}
+#hud[data-ui=compact] [data-hud-item]{display:inline-flex;align-items:center;gap:6px;min-width:0}
+#hud[data-ui=compact] [data-hud-item] small{font-size:14px}
+#hud[data-ui=compact] kbd{font:600 14px Pretendard,sans-serif;display:inline-grid;place-items:center;min-width:23px;min-height:23px;padding:0 4px;border:1px solid #b9c1c866;border-radius:2px;box-sizing:border-box;color:#f3f1e8;flex-shrink:0}
+#hud[data-ui=compact] .compact-build kbd{color:#f3a343;border-color:#f3a343}
+#hud[data-ui=compact] .compact-work{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;border-top:1px solid #b9c1c833;padding-top:10px;margin-top:10px;font-size:14px;line-height:1.4;background:none}
+#hud[data-ui=compact] .compact-work strong{font-size:16px}
+#hud[data-ui=compact] .compact-work label{display:flex;align-items:center;gap:12px;flex:1 1 200px;font-size:14px}
+#hud[data-ui=compact] .compact-work progress{flex:1;min-width:80px;max-width:180px;height:6px;accent-color:#f3a343}
+#hud[data-ui=compact] .compact-work[data-work-state=no-parts],
+#hud[data-ui=compact] .compact-work[data-work-state=moving]{color:#f3c78f}
+#hud[data-ui=compact] .compact-docking{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px}
+#hud[data-ui=compact] .compact-docking .dock-checks{display:flex;flex-wrap:wrap;font-size:14px}
+#hud[data-ui=compact] .compact-docking .met{color:#b9c1c8}
+#hud[data-ui=compact] .compact-docking .unmet{color:#f3c78f}
+.compact-hud-details{font-size:14px;text-align:left}
+.compact-hud-details summary{cursor:pointer;min-height:44px;display:flex;align-items:center}
+.compact-hud-details dl{margin:0;display:grid;gap:12px}
+.compact-hud-details dl>div{display:grid;grid-template-columns:minmax(110px,.4fr) 1fr;gap:16px}
+.compact-hud-details dt{color:#b9c1c8}
+.compact-hud-details dd{margin:0;line-height:1.5}
+@media(min-width:800px){
+ .session-scrim .session-pause:has(.compact-hud-details[open]){width:min(960px,100%);display:grid;grid-template-columns:minmax(280px,.9fr) minmax(320px,1.1fr);grid-template-rows:auto 1fr auto;column-gap:48px}
+ .session-pause:has(.compact-hud-details[open])>header{grid-column:1;grid-row:1}
+ .session-pause:has(.compact-hud-details[open])>.session-pause-actions{grid-column:1;grid-row:2;align-self:start}
+ .session-pause:has(.compact-hud-details[open])>.session-body{grid-column:2;grid-row:1/4;max-height:calc(100dvh - 64px);align-self:start}
+ .session-pause:has(.compact-hud-details[open])>.session-save{grid-column:1;grid-row:3}
+}
+@media(max-width:700px){
+ #hud[data-ui=compact] .compact-metrics{gap:8px 16px}
+ #hud[data-ui=compact] .compact-console{padding:12px}
+ #hud[data-ui=compact] .compact-actions [data-hud-item=context]{flex-basis:100%}
+}

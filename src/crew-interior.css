@@ -1,0 +1,72 @@
+/* Crew screen owns its layout; the ship illustration gives space to controls
+   at short heights, while text and actions keep their readable size. */
+#panel.overlay:has(.crew-interior){padding:24px;background:#101519dc}
+#panel .crew-interior{width:min(1320px,100%);height:min(800px,calc(100dvh - 48px));max-height:none;overflow:hidden;display:flex;flex-direction:column;gap:20px;padding:24px;background:#15191df5;border:1px solid #b9c1c833;border-radius:3px;color:#f3f1e8;box-sizing:border-box;font-family:Pretendard,sans-serif}
+.crew-interior *{box-sizing:border-box}
+.crew-interior .crew-header{display:flex;justify-content:space-between;align-items:center;flex:none}
+.crew-interior .crew-header p{margin:0 0 6px;font-size:14px;line-height:1.4;color:#b9c1c8}
+.crew-interior .crew-header h2{font-size:28px;line-height:1.2;margin:0;color:#f3f1e8}
+.crew-header>span{font-size:14px;color:#b9c1c8}
+.crew-header .crew-save{display:flex;align-items:center;gap:12px;max-width:48%}
+.crew-header .crew-save p{font-size:14px;margin:0;color:#ffaaa2}
+.crew-header .crew-save button{flex-shrink:0;padding:8px 12px}
+.crew-workspace{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(320px,1fr);gap:24px;flex:1;min-height:0}
+.crew-stage{display:flex;flex-direction:column;min-height:0;overflow:auto;scrollbar-gutter:stable;padding-right:8px}
+.crew-ship{flex:1;min-height:110px;display:flex;align-items:center;overflow:hidden}
+.crew-ship .ship-section{width:100%;height:100%}
+.crew-ship .ship-scene{height:100%;max-height:340px}
+.crew-readings{display:flex;flex-wrap:wrap;gap:8px 20px;padding:12px 0;border-block:1px solid #b9c1c833;font-size:14px;color:#b9c1c8}
+.crew-readings b{font-size:20px;line-height:1.2;color:#f3f1e8;font-variant-numeric:tabular-nums;margin-left:4px}
+.crew-readings small{font-size:14px}
+.crew-readings [data-work-water=rising]{color:#f3c78f}
+.crew-effects{font-size:14px;line-height:1.5;padding-top:10px}
+.crew-effects p{font-size:14px;margin:0 0 6px;color:#f3f1e8}
+.crew-effects small{display:block;font-size:14px;color:#b9c1c8}
+.crew-effects .crew-warning,.crew-effects [data-work-repair=empty]{color:#f3c78f}
+.crew-detail-slot{flex:none}
+.crew-inspector{border-left:1px solid #b9c1c833;padding-left:24px;min-height:0;overflow:auto;scrollbar-gutter:stable}
+.crew-interior button{font:500 16px/1.4 Pretendard,sans-serif;color:#f3f1e8;background:#252b30;border:1px solid #b9c1c844;border-radius:3px;min-height:44px;box-shadow:none}
+.crew-interior button:hover{background:#30383f}
+.crew-interior button:focus-visible,.crew-interior summary:focus-visible{outline:2px solid #f3a343;outline-offset:-3px}
+.crew-interior button[aria-pressed=true]{border-color:#f3a343;background:#f3a34316}
+.crew-picker{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.crew-picker button{text-align:left;padding:8px 10px}
+.crew-picker strong{font-size:16px;display:block}
+.crew-picker span{display:block;color:#b9c1c8;font-size:14px}
+.crew-person{display:flex;align-items:center;gap:14px;margin:16px 0}
+.crew-person img{width:56px;height:64px;object-fit:cover;object-position:center}
+.crew-person h3{margin:0 0 4px;font-size:24px;color:#f3f1e8}
+.crew-person p{margin:0;font-size:14px;color:#b9c1c8}
+.crew-inspector h4{font-size:14px;font-weight:500;color:#b9c1c8;margin:0 0 8px}
+.crew-jobs{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.crew-jobs button{padding:10px;text-align:left}
+.crew-jobs strong{display:block;font-size:16px}
+.crew-jobs small{display:block;font-size:14px;font-weight:400;line-height:1.35;color:#b9c1c8;margin-top:6px}
+.crew-footer{display:grid;grid-template-columns:minmax(0,1fr) 200px;gap:20px;border-top:1px solid #b9c1c833;padding-top:16px;flex:none}
+.crew-footer .crew-plans{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0}
+.crew-footer .crew-plans button{padding:8px 10px;text-align:left}
+.crew-footer .crew-plans strong{display:block;font-size:16px}
+.crew-footer .crew-plans small{display:block;font-size:14px;font-weight:400;color:#b9c1c8;line-height:1.35;margin-top:4px}
+.crew-interior #interiorBack{position:static;box-shadow:none;background:#f3a343;border-color:#f3a343;color:#15191d;padding:12px 16px;align-self:stretch;display:flex;justify-content:space-between;align-items:center}
+.crew-interior #interiorBack:hover{background:#ffb760}
+.crew-interior #interiorBack kbd{font:600 14px Pretendard,sans-serif;border:1px solid #15191d66;padding:2px 6px;border-radius:2px}
+@media(max-height:720px){
+ #panel .crew-interior{padding:18px 20px;gap:14px}
+ .crew-person{margin:10px 0}
+ .crew-person img{width:44px;height:50px}
+ .crew-person{display:none}
+ .crew-picker{margin-bottom:12px}
+ .crew-ship{min-height:110px}
+ .crew-ship .ship-scene{max-height:210px}
+ .crew-footer{padding-top:12px}
+}
+@media(max-width:799px){
+ #panel.overlay:has(.crew-interior){padding:12px}
+ #panel .crew-interior{height:calc(100dvh - 24px);padding:16px}
+ .crew-workspace{grid-template-columns:1fr;overflow:auto}
+ .crew-stage{overflow:visible}
+ .crew-inspector{overflow:visible;border-left:0;padding-left:0}
+ .crew-ship .ship-scene{max-height:180px}
+ .crew-footer{grid-template-columns:1fr}
+ .crew-footer .crew-plans small{display:none}
+}

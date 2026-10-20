@@ -1,0 +1,141 @@
+/* Refit owns a fixed header and departure bar; each workspace scrolls alone. */
+.refit-desk{
+ --desk-bg:#15191d;--desk-panel:#252b30;--desk-text:#f3f1e8;--desk-muted:#b9c1c8;--desk-accent:#f3a343;
+ width:min(1320px,calc(100vw - 40px));height:min(850px,calc(100dvh - 40px));
+ max-height:none;padding:0;display:flex;flex-direction:column;overflow:hidden;
+ color:var(--desk-text);background:var(--desk-bg);border:1px solid #566069;border-radius:7px;
+ box-shadow:0 22px 80px #0009;font-size:16px;
+}
+.refit-desk *{box-sizing:border-box}
+.refit-desk h2,.refit-desk h3,.refit-desk p{margin:0}
+.refit-desk h2{font-size:32px;line-height:1.15;letter-spacing:-.04em}
+.refit-desk h3{font-size:18px;line-height:1.35}
+.refit-desk button,.refit-desk select{min-height:44px;font:inherit;border-radius:3px}
+.refit-desk button{background:#252b30;border:1px solid #52606b;color:var(--desk-text)}
+.refit-desk button:hover:not(:disabled){background:#333c44;border-color:#b9c1c8}
+.refit-desk button:focus-visible,.refit-desk select:focus-visible,.refit-desk summary:focus-visible,.refit-desk input:focus-visible{outline:3px solid #f3a343;outline-offset:2px}
+.refit-desk button:disabled{opacity:.55}
+.refit-desk button[aria-pressed=true]{border-color:var(--desk-accent);box-shadow:inset 3px 0 var(--desk-accent);background:#343029}
+.refit-header{display:grid;grid-template-columns:1fr 1.4fr auto;gap:24px;align-items:center;padding:22px 26px 18px;flex:none}
+.refit-header>div>p{font-size:12px;letter-spacing:.1em;color:var(--desk-muted);margin-bottom:6px}
+.refit-header .voyage-route{padding:0;margin:0;border:0;gap:10px;font-size:16px}
+.refit-header .voyage-route li{padding:0;background:none;flex:1}
+.refit-header .voyage-route li small{font-size:12px;color:var(--desk-muted);margin-top:5px}
+.refit-header .voyage-route [aria-current=step]{color:var(--desk-accent)}
+.refit-resources{display:flex;gap:14px;align-self:center}
+.refit-resources span{font-size:13px;color:var(--desk-muted);display:flex;flex-direction:column}
+.refit-resources b{font-size:22px;color:var(--desk-text);line-height:1.4;font-variant-numeric:tabular-nums}
+.refit-tabs{display:flex;padding:0 26px;gap:24px;border-bottom:1px solid #44505a;flex:none}
+.refit-tabs button{padding:12px 2px;background:none;border:0;border-bottom:3px solid transparent;border-radius:0;font-weight:700}
+.refit-tabs button[aria-selected=true]{border-bottom-color:var(--desk-accent);color:var(--desk-accent)}
+.refit-workspace{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px;padding:22px 26px;flex:1;min-height:0}
+.refit-panels{min-width:0;min-height:0;display:flex}
+.refit-panel{min-height:0;width:100%;overflow-y:auto;scrollbar-gutter:stable;padding:3px 9px 6px 3px}
+.refit-panel[hidden]{display:none!important}
+.refit-panel>h3{margin-bottom:16px}
+.refit-calls{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:stretch}
+.refit-calls>button{padding:0;text-align:left;overflow:hidden;display:flex;flex-direction:column}
+.refit-calls img{width:100%;aspect-ratio:2.2;object-fit:cover;display:block;border-bottom:1px solid #52606b;background:#10181c}
+.refit-calls [data-contract=leaking] img,.refit-calls [data-contract=squall] img{object-fit:contain}
+.refit-call-copy{display:flex;flex-direction:column;gap:10px;padding:15px;flex:1}
+.refit-call-copy .refit-selection{font-size:12px;color:var(--desk-muted);line-height:1.25}
+.refit-calls [aria-pressed=true] .refit-selection{color:var(--desk-accent)}
+.refit-call-copy strong{font-size:22px;line-height:1.25}
+.refit-call-copy>span:not(.refit-selection){font-size:15px;line-height:1.5;color:#d5d9db}
+.refit-call-copy small{font-size:14px;line-height:1.35;color:var(--desk-accent);margin-top:auto;padding-top:4px}
+.refit-summary{overflow-y:auto;scrollbar-gutter:stable;min-height:0;padding:14px 14px 8px;background:#20262b;border:1px solid #44505a;border-radius:4px;display:flex;flex-direction:column}
+.refit-summary>*{flex-shrink:0}
+.refit-desk[data-refit-active=equipment] .refit-summary>h3{order:-2}
+.refit-desk[data-refit-active=equipment] .refit-selected{order:-1;margin-top:0;padding-top:0;margin-bottom:14px;border-top:0}
+.refit-summary h3{margin-bottom:12px}
+.refit-summary dl{margin:0;display:grid;gap:10px}
+.refit-summary dl>div{display:grid;grid-template-columns:82px 1fr;gap:9px;line-height:1.4;font-size:14px}
+.refit-summary dt{color:var(--desk-muted)}
+.refit-summary dd{margin:0;font-weight:600;overflow-wrap:anywhere}
+.refit-water{font-size:14px;color:#75b4c4;border-top:1px solid #44505a;padding-top:10px;margin-top:12px}
+.refit-water[data-summary-trend=rising]{color:#ee7770}
+.refit-water small{display:block;font-size:13px;color:#e9b37e;margin-top:4px}
+.refit-selected{margin-top:12px;padding-top:10px;border-top:1px solid #44505a}
+.refit-selected>p{font-size:12px;color:var(--desk-muted);margin-bottom:4px}
+.refit-selected>strong{color:var(--desk-accent);font-size:17px}
+.refit-desk .equipment-comparison{display:flex;flex-direction:column;gap:5px;margin-top:9px;padding:0;border:0;font-size:14px;line-height:1.35;color:var(--desk-text)}
+.refit-desk details{margin-top:14px;border-top:1px solid #44505a;padding-top:8px}
+.refit-desk summary{min-height:44px;display:list-item;align-content:center;padding:9px 3px;cursor:pointer;font-size:14px;color:var(--desk-muted)}
+.refit-summary details p{font-size:14px;line-height:1.5;margin-bottom:10px}
+.refit-desk .voyage-forecast{padding:0;margin:0}
+.refit-desk .voyage-forecast p{padding:5px 0}
+.refit-desk .voyage-forecast small{font-size:13px;display:block}
+.refit-desk .voyage-code{margin:0;display:flex;flex-direction:column;align-items:flex-start;gap:6px;font-size:14px}
+.refit-desk .voyage-code input{max-width:100%;width:100%;font:inherit;min-height:44px}
+.refit-desk .voyage-code small{font-size:13px;line-height:1.45}
+.refit-footer{display:flex;gap:12px;align-items:center;border-top:1px solid #44505a;padding:15px 26px;background:#1d2227;flex:none;position:static}
+.refit-footer button{padding:10px 20px;flex:none}
+.refit-footer #refitCode{background:transparent;border-color:transparent;color:var(--desk-muted)}
+.refit-footer p{font-size:12px;color:var(--desk-muted);margin-left:auto}
+.refit-footer p strong{display:block;font-size:16px;color:var(--desk-text);margin-top:3px}
+.refit-footer .primary{background:var(--desk-accent);border-color:var(--desk-accent);color:#171a1d;font-size:20px;font-weight:800;min-width:180px;display:flex;justify-content:space-between;align-items:center}
+.refit-footer .primary:hover{background:#ffc375!important;color:#171a1d}
+.refit-replace{display:flex;align-items:center;gap:12px;margin-bottom:14px;font-size:14px}
+.refit-replace select,.refit-desk .crew-orders select,.refit-desk #salvageSlot{background:#171c21;color:var(--desk-text);border:1px solid #65717c;padding:8px}
+.refit-supplies{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.refit-supplies>button{display:flex;text-align:left;align-items:center;gap:10px;padding:10px;min-height:100px}
+.refit-supplies>button>span:not(.refit-supply-symbol){flex:1;min-width:0}
+.refit-supplies strong{font-size:17px;line-height:1.3;display:block}
+.refit-supplies small{display:block;font-size:14px;line-height:1.4;color:#c4cbd0;margin-top:4px}
+.refit-supplies i{font-style:normal;color:var(--desk-accent);font-size:20px;align-self:flex-start}
+.refit-module-art,.refit-supply-symbol{width:52px;height:56px;flex:none}
+.refit-supply-symbol{display:flex;align-items:center;justify-content:center;font-size:22px;color:#75b4c4;font-weight:700}
+.refit-desk .refit-pending-note,.refit-wear{font-size:14px;line-height:1.5;margin-top:14px;color:var(--desk-muted)}
+.refit-desk .build-options,.refit-desk .salvage-options{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.refit-desk .build-options button,.refit-desk .salvage-options button{padding:14px;text-align:left}
+.refit-desk .build-options span,.refit-desk .salvage-options span{font-size:14px;line-height:1.5;color:#c4cbd0}
+.refit-desk .build-options strong,.refit-desk .salvage-options strong{font-size:16px}
+.refit-desk .build-desk .micro,.refit-desk .salvage-plan .micro{font-size:14px;line-height:1.5;margin:12px 0}
+.refit-desk .refit-crew{margin:0;padding:0;border:0}
+.refit-desk .refit-crew>summary{font-size:16px;color:var(--desk-text);padding-top:0}
+.refit-desk .refit-crew .crew-plans{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.refit-desk .crew-plans button{padding:14px;text-align:left}
+.refit-desk .crew-plans small{font-size:14px;line-height:1.45}
+.refit-desk .crew-orders{margin:22px 0;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.refit-desk .crew-orders label{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:10px}
+.refit-desk .crew-orders select{width:100%;min-width:0}
+.refit-desk .crew-balance,.refit-desk .crew-tradeoffs{font-size:16px;margin:14px 0}
+.refit-desk .refit-crew>small{font-size:14px;line-height:1.55;color:var(--desk-muted)}
+.refit-receipt{margin-top:16px}
+.refit-receipt .voyage-debrief{margin:0;font-size:14px}
+.refit-receipt .voyage-story-result{font-size:15px;line-height:1.5;margin:12px 0}
+.refit-save{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 26px;background:#3b2525;color:#ffbcad;font-size:14px;flex:none}
+.refit-save button{padding:6px 12px}
+@media(max-width:1100px){
+ .refit-header{grid-template-columns:auto 1fr auto;gap:20px;padding:16px 20px 12px}
+ .refit-desk h2{font-size:28px}
+ .refit-header>div>p{font-size:10px;max-width:190px;letter-spacing:.04em}
+ .refit-header .voyage-route{font-size:14px}
+ .refit-header .voyage-route li small{font-size:11px}
+ .refit-resources{gap:12px}
+ .refit-workspace{grid-template-columns:minmax(0,1fr) 260px;padding:14px 20px;gap:16px}
+ .refit-tabs{padding:0 20px}
+ .refit-call-copy{padding:11px;gap:8px}
+ .refit-call-copy strong{font-size:19px}
+ .refit-call-copy>span:not(.refit-selection){font-size:14px}
+ .refit-calls{gap:10px}
+ .refit-summary{padding:10px}
+ .refit-summary dl{gap:8px}
+ .refit-summary dl>div{grid-template-columns:72px 1fr;font-size:14px}
+ .refit-footer{padding:12px 20px}
+ .refit-footer button{padding:9px 16px}
+ .refit-footer .primary{min-width:150px}
+ .refit-supplies>button{gap:7px;padding:9px;min-height:106px}
+ .refit-module-art,.refit-supply-symbol{width:38px;height:46px}
+ .refit-supplies strong{font-size:16px}
+ .refit-desk .refit-crew .crew-plans{grid-template-columns:1fr}
+ .refit-desk .crew-plans button{padding:10px}
+ .refit-desk .crew-orders{grid-template-columns:1fr;gap:10px;margin:14px 0}
+}
+@media(max-height:700px){
+ .refit-desk{height:calc(100dvh - 24px)}
+ .refit-header{padding-top:12px;padding-bottom:10px}
+ .refit-tabs button{padding-top:8px;padding-bottom:8px}
+ .refit-panel>h3{margin-bottom:12px}
+ .refit-footer{padding-top:10px;padding-bottom:10px}
+}
