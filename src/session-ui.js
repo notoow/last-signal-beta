@@ -7,6 +7,9 @@ export function rogueFailureText(reason,language='ko'){
     '연료가 소진되어 항해를 잃었다':'Fuel exhausted.',
     '밸브를 닫지 못해 침몰했다':'The open inlet flooded the tug.',
     '기계선의 공격으로 선체가 파손됐다':'The machine ship destroyed the tug.',
+    '수문 충돌로 선체가 파손됐다':'The tug was destroyed against the sluice gate.',
+    '크레인 버킷에 선체가 파손됐다':'The crane bucket destroyed the tug.',
+    '등대 봉쇄 포격으로 선체가 파손됐다':'The lighthouse blockade battery destroyed the tug.',
     '충돌로 선체가 파손됐다':'The tug was destroyed in a collision.',
     '육상에서 선원이 쓰러졌다':'The captain fell while ashore.',
     '갈매기 습격으로 손상된 선체가 침몰했다':'The damaged tug sank under the gull attack.'

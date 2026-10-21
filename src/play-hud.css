@@ -66,24 +66,36 @@ body:has(#toast.show) #hud[data-kind=tow] .radio-panel{display:none}
 #hud[data-ui=compact] .mission-objective{padding:12px 14px;font-size:16px;line-height:1.35}
 #hud[data-ui=compact] .mission-objective small{display:block;font-size:14px;font-weight:400;color:#b9c1c8;margin-bottom:4px}
 #hud[data-ui=compact] .mission-objective strong{display:block;font-size:18px;font-weight:700}
-#hud[data-ui=compact] .compact-console{padding:12px 16px;border-top:1px solid #647580}
+#hud[data-ui=compact] .compact-console{padding:10px 16px;border-top:1px solid #647580}
 #hud[data-ui=compact] .compact-metrics{display:flex;flex-wrap:wrap;align-items:center;gap:10px 24px}
 #hud[data-ui=compact] .compact-metric{display:flex;align-items:baseline;gap:8px;white-space:nowrap}
 #hud[data-ui=compact] .compact-metric>span{font-size:14px;color:#b9c1c8}
 #hud[data-ui=compact] .compact-metric>strong{font-size:20px;line-height:1.2;font-variant-numeric:tabular-nums}
 #hud[data-ui=compact] .compact-metric>small{font-size:14px;font-variant-numeric:tabular-nums}
+#hud[data-ui=compact] .compact-instrument{position:relative;padding-bottom:8px}
+#hud[data-ui=compact] .compact-gauge{position:absolute;display:block;left:0;bottom:0;width:100%;height:8px;color:#b9c1c8}
+#hud[data-ui=compact] .gauge-track{fill:#b9c1c826}
+#hud[data-ui=compact] .gauge-fill{fill:currentColor}
+#hud[data-ui=compact] .gauge-band{fill:#75b4c466}
+#hud[data-ui=compact] .gauge-mark{stroke:#f3f1e8;stroke-width:1}
+#hud[data-ui=compact] [data-tone=warning] .compact-gauge{color:#f3a343}
+#hud[data-ui=compact] [data-tone=danger] .compact-gauge{color:#ffaaa2}
+#hud[data-ui=compact] [data-build-state=ready] .compact-gauge{color:#75b4c4}
+#hud[data-ui=compact] [data-active=true] .compact-gauge{color:#f3a343}
+#hud[data-ui=compact] .compact-build>strong{font-size:14px;white-space:nowrap}
+#hud[data-ui=compact] .compact-metric>strong{color:inherit}
 #hud[data-ui=compact] [data-tone=warning]{color:#f3c78f}
 #hud[data-ui=compact] [data-tone=danger]{color:#ffaaa2}
 #hud[data-ui=compact] .compact-build,
 #hud[data-ui=compact] .compact-environment,
 #hud[data-ui=compact] .compact-risks,
 #hud[data-ui=compact] .compact-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;font-size:14px;line-height:1.4}
-#hud[data-ui=compact] .compact-conditions{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin-top:8px}
+#hud[data-ui=compact] .compact-conditions{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin-top:6px}
 #hud[data-ui=compact] .compact-conditions:not(:has(> *)){display:none}
 #hud[data-ui=compact] .compact-build{gap:6px}
 #hud[data-ui=compact] .compact-environment{display:contents;color:#b9c1c8}
 #hud[data-ui=compact] .compact-risks{display:contents}
-#hud[data-ui=compact] .compact-actions{border-top:1px solid #b9c1c833;margin-top:6px;padding-top:6px}
+#hud[data-ui=compact] .compact-actions{border-top:1px solid #b9c1c833;margin-top:4px;padding-top:6px}
 #hud[data-ui=compact] .compact-actions [data-hud-item=context]{font-size:16px;font-weight:600;flex:1 1 240px}
 #hud[data-ui=compact] [data-hud-item]{display:inline-flex;align-items:center;gap:6px;min-width:0}
 #hud[data-ui=compact] [data-hud-item] small{font-size:14px}

@@ -11,7 +11,7 @@ title: '[Web beta] '
 ## 기대한 동작 / Expected behavior
 
 ## 환경 / Context
-- Version: 0.45.0
+- Version: 0.60.0
 - Browser / OS:
 - Seed (if known):
 

@@ -4,6 +4,9 @@ const load=file=>{const i=new Image();i.src='assets/art/'+file;return i;};
 const fauna=load('shore-fauna-v1.png');
 const crew=Object.fromEntries(['woo','park','han','jeong'].map(id=>[id,load('crew-sd-'+id+'-v1.png')]));
 const idleSheet=load('crew-sd-idle-v1.png');
+const workerSheet=load('shore-worker-v1.png');
+let workerArt=null;
+fetch('assets/art/shore-worker-v1-metadata.json').then(r=>r.ok?r.json():null).then(data=>{workerArt=data;}).catch(()=>{});
 const crewRows={woo:0,park:1,han:2,jeong:3},faunaRows={rat:0,dog:1,crab:2,gull:3};
 // Feet stay at the physical actor origin. Artwork has measured, non-square rows.
 const crewAnchors={woo:[422,815,1187,350],park:[425,795,1176,350],han:[416,817,1215,375],jeong:[415,815,1208,368]};
@@ -31,6 +34,21 @@ function crewSprite(c,s,p,reduced){
   }
   c.save();c.translate(p.x,p.y);c.scale(flip?-1:1,1+breath);
   c.drawImage(img,x,y,w,h,-w*.5*scale,(y-anchors[row])*scale,w*scale,h*scale);c.restore();
+}
+function workerSprite(c,s,p,reduced){
+  if(!workerArt||!workerSheet.complete||!workerSheet.naturalWidth)return;
+  const r=s.rescue,vertical=Math.abs(Math.sin(r.angle))>.65;
+  const direction=vertical?(Math.sin(r.angle)<0?'rear':'front'):'side';
+  // Each contact pose advances with eight world units actually walked, so
+  // standing still cannot cycle feet and obstacles cannot cause foot sliding.
+  const step=['walk-a','walk-b'][Math.floor(r.stride/8)%2];
+  const moving=r.moving&&workerArt.delivery.walkReady;
+  const id=r.blocked==='threat'?'frightened-stop':r.stage==='waiting'?'seated-wait':direction+'-'+(moving?step:'idle');
+  const frame=workerArt.frames.find(f=>f.id===id);if(!frame)return;
+  const {rect,pivot}=frame,k=55/workerArt.sourceReferenceHeight;
+  const breath=!reduced&&!r.moving?Math.sin(s.time*2.1)*.008:0;
+  c.save();c.translate(p.x,p.y);c.scale(direction==='side'&&Math.cos(r.angle)<0&&!['frightened-stop','seated-wait'].includes(id)?-1:1,1+breath);
+  c.drawImage(workerSheet,rect.x,rect.y,rect.w,rect.h,-pivot.x*k,-pivot.y*k,rect.w*k,rect.h*k);c.restore();
 }
 export function animationFrame({hit=0,phase='idle',moving=false,stride=0,dead=0},action=null){
   if(hit>0||dead>0)return 5;
@@ -60,19 +78,21 @@ export function drawShoreEncounter(c,s,reduced){
   }
   const actors=fight.enemies.filter(e=>(e.hp>0||e.dead>0)&&visibleAt(s,e)).map(e=>({p:e,enemy:true}));
   if(s.person)actors.push({p:s.person,enemy:false});
+  if(s.depth===0&&['waiting','following'].includes(s.rescue?.stage)&&visibleAt(s,s.rescue))actors.push({p:s.rescue,enemy:false,worker:true});
   actors.sort((a,b)=>(a.p.y+(a.p.kind==='gull'?100:0))-(b.p.y+(b.p.kind==='gull'?100:0)));
-  for(const {p,enemy} of actors){
+  for(const {p,enemy,worker} of actors){
     const bird=p.kind==='gull',size=enemy?{rat:32,dog:49,crab:78,gull:53}[p.kind]:55;
     c.fillStyle='#04141866';c.beginPath();c.ellipse(p.x,p.y+2,size*.23,size*.075,0,0,7);c.fill();
     const pose=enemy?p:{...fight,phase:'idle'};
     const frame=animationFrame(pose,enemy?null:fight.action);
     const lift=bird?16+(reduced?0:Math.sin(s.time*7+p.homeX)*2):0;
     const alpha=enemy&&p.hp===0?p.dead/.65:1;
-    const drawP={...p,y:p.y-lift,angle:!enemy&&fight.action?fight.action.angle:p.angle};
+    const drawP={...p,y:p.y-lift,angle:!enemy&&!worker&&fight.action?fight.action.angle:p.angle};
     if(enemy){
       const breath=!reduced&&!p.moving&&p.phase==='idle'?Math.sin(s.time*2.8+p.homeX)*.018:0;
       sprite(c,fauna,faunaRows[p.kind],frame,drawP,size,alpha,1+breath);
-    }else crewSprite(c,s,drawP,reduced);
+    }else if(worker)workerSprite(c,s,drawP,reduced);
+    else crewSprite(c,s,drawP,reduced);
     if(enemy&&p.hp>0&&(p.alert||p.hp<FAUNA[p.kind].hp)){
       c.fillStyle='#081c20cc';c.fillRect(p.x-15,p.y-size-8,30,3);
       c.fillStyle=p.kind==='crab'&&p.phase==='recover'?'#a7e1bc':'#dfaa7c';c.fillRect(p.x-15,p.y-size-8,30*p.hp/FAUNA[p.kind].hp,3);

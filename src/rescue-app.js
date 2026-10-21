@@ -374,7 +374,12 @@ function shipInterior(){
  screen='interior';keys.clear();
  shell(interiorMarkup(state,settings.language,campaign.paint,{selectedCrew:interiorCrew,details:voyageDetails(),saveError:saveError?(saveReadOnly?l().saveNewerVersion:l().saveError):''}),'overlay');
  if(detailsOpen)panel.querySelector('.compact-hud-details').open=true;
- const refresh=selector=>{shipInterior();panel.querySelector(selector)?.focus({preventScroll:true});};
+ const refresh=selector=>{
+  const scroll=['.crew-stage','.crew-inspector'].map(selector=>[selector,panel.querySelector(selector)?.scrollTop||0]);
+  shipInterior();
+  for(const [selector,top] of scroll){const area=panel.querySelector(selector);if(area)area.scrollTop=top;}
+  panel.querySelector(selector)?.focus({preventScroll:true});
+ };
  panel.querySelectorAll('[data-select-crew]').forEach(b=>b.addEventListener('click',()=>{interiorCrew=b.dataset.selectCrew;refresh('[data-select-crew="'+interiorCrew+'"]');}));
  panel.querySelectorAll('[data-assign-crew]').forEach(b=>b.addEventListener('click',()=>{
   if(assignCrew(state,b.dataset.assignCrew,b.dataset.crewJob)){save();refresh('[data-crew-job="'+b.dataset.crewJob+'"]');}

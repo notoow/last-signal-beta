@@ -1,5 +1,5 @@
 import {towBody,towMission,towTarget} from './tow-core.js';
-import {fuelUse,seaState} from './voyage.js';
+import {fuelUse,seaState,FUEL_MAX} from './voyage.js';
 import {bilgeBuild,buildThrust,pumpCharge,impactLeak} from './bilge-build.js';
 import {winchBuild,winchState,winchLimit} from './winch-build.js';
 import {shipWork} from './ship-work.js';
@@ -16,6 +16,15 @@ const copy={
 const metric=(id,label,value,extra={})=>({id,label,value,...extra});
 const line=(id,text,extra={})=>({id,text,...extra});
 const direction=(x,y)=>Math.abs(x)>=Math.abs(y)?(x<0?'←':'→'):(y<0?'↑':'↓');
+// These gauges describe existing rules; they never select or gate an action.
+const gauge=(value,max,label,marks=[],band=null)=>({value,max,label,marks,band});
+const percent=(value,max)=>Math.max(0,Math.min(100,value/max*100));
+function instrument(g){
+ if(!g)return '';
+ const value=Math.max(0,Math.min(g.max,g.value));
+ return `<svg class="compact-gauge" viewBox="0 0 100 8" preserveAspectRatio="none" role="meter" aria-label="${escape(g.label)}" aria-valuemin="0" aria-valuemax="${g.max}" aria-valuenow="${Number(value.toFixed(2))}" aria-valuetext="${escape(`${Number(value.toFixed(1))} / ${g.max}${g.marks.length?' · '+g.marks.map(m=>m.label).join(' · '):''}`)}"><rect class="gauge-track" x="0" y="2" width="100" height="4" aria-hidden="true"/>${g.band?`<rect class="gauge-band" x="${percent(g.band[0],g.max)}" y="1" width="${percent(g.band[1]-g.band[0],g.max)}" height="6" aria-hidden="true"/>`:''}<rect class="gauge-fill" x="0" y="2" width="${percent(value,g.max)}" height="4" aria-hidden="true"/>${g.marks.map(m=>`<line class="gauge-mark" data-gauge-mark="${m.value}" x1="${percent(m.value,g.max)}" x2="${percent(m.value,g.max)}" y1="0" y2="8" vector-effect="non-scaling-stroke" aria-hidden="true"><title>${escape(m.label)}</title></line>`).join('')}</svg>`;
+
+}
 
 export function fieldWorkSnapshot(s){
  const a=s.voyage?.situation;
@@ -47,7 +56,7 @@ export function compactTowHud(s,{language='ko',guidance,input={},interruption=nu
  const leaking=!!(v?.version>=3&&v.situation.contract==='leaking'&&!v.situation.patched);
  const model={
   language:lang,phase:guidance.phase,goal:guidance.goal,mark:def.visual.mark,
-  leg:v?`${t.leg} ${v.leg+1}/3`:'',metrics:[metric('hull',t.tug,Math.ceil(s.boat.hp),{max:100})],
+  leg:v?`${t.leg} ${v.leg+1}/3`:'',metrics:[metric('hull',t.tug,Math.ceil(s.boat.hp),{max:100,gauge:gauge(s.boat.hp,100,t.tug)})],
   build:null,environment:[],risks:[],actions:[],work:null,
   docking:guidance.docking?{...guidance.docking}:null,
   dockChecks:guidance.dockChecks||[],
@@ -56,15 +65,22 @@ export function compactTowHud(s,{language='ko',guidance,input={},interruption=nu
  if(s.connected||leaking||guidance.dockChecks?.length){
   const body=s.connected?target:leaking?s.bus:target;
   const name=body===s.bus?labels[def.visual.busNameKey||(def.id==='market'?'marketPassenger':'towBusHull')]:labels[body.nameKey||'marketIce'];
-  model.metrics.push(metric('target',name||t.rescue,Math.ceil(body.hp),{max:100,tone:leaking&&body===s.bus?'danger':'normal'}));
-  if(leaking&&body!==s.bus)model.metrics.push(metric('rescue-hull',labels[def.visual.busNameKey||'marketPassenger']||t.rescue,Math.ceil(s.bus.hp),{max:100,tone:'danger'}));
+  model.metrics.push(metric('target',name||t.rescue,Math.ceil(body.hp),{max:100,gauge:gauge(body.hp,100,name||t.rescue),tone:leaking&&body===s.bus?'danger':'normal'}));
+  if(leaking&&body!==s.bus)model.metrics.push(metric('rescue-hull',labels[def.visual.busNameKey||'marketPassenger']||t.rescue,Math.ceil(s.bus.hp),{max:100,gauge:gauge(s.bus.hp,100,t.rescue),tone:'danger'}));
  }
- if(s.connected)model.metrics.push(metric('tension',t.tension,`${Math.round(s.ropeTension*100)}%`));
+ if(s.connected){
+  const limit=winchBuild(v)?winchLimit(v):null;
+  model.metrics.push(metric('tension',t.tension,`${Math.round(s.ropeTension*100)}%`,{
+   gauge:gauge(s.ropeTension*100,100,t.tension,limit?[{value:15,label:lang==='en'?'15% starts winding':'15%부터 축력 충전'},{value:limit*100,label:(lang==='en'?'Overload ':'과부하 ')+Math.round(limit*100)+'%'}]:[],limit?[15,limit*100]:null),
+   tone:limit&&s.ropeTension>=limit?'danger':'normal'
+  }));
+ }
  if(guidance.gateState||!s.power)model.environment.push(line('infrastructure',guidance.gateState||labels.towCurrentOff));
  if(v){
   const work=shipWork(s),waterTrend=work.trend==='held'?t.held:(work.net>0?'+':'−')+Math.abs(work.net).toFixed(2)+(lang==='en'?'/s':'/초');
-  if(v.version>=2){const fuel=fuelUse(s,input);model.metrics.push(metric('fuel',t.fuel,Math.ceil(v.fuel),{rate:fuel.rate,boost:fuel.boost,tone:v.fuel<=45?'warning':'normal',note:v.fuel<=45?fuel.rate.toFixed(2)+(lang==='en'?'/s':'/초'):''}));}
-  model.metrics.push(metric('water',t.water,`${Math.floor(v.flood)}%`,{note:waterTrend,trend:work.trend,tone:work.trend==='rising'?'warning':'normal'}));
+  if(v.version>=2){const fuel=fuelUse(s,input);model.metrics.push(metric('fuel',t.fuel,Math.ceil(v.fuel),{gauge:gauge(v.fuel,FUEL_MAX,t.fuel),rate:fuel.rate,boost:fuel.boost,tone:v.fuel<=45?'warning':'normal',note:v.fuel<=45?(lang==='en'?'Low · ':'부족 · ')+fuel.rate.toFixed(2)+(lang==='en'?'/s':'/초'):''}));}
+  const floodMarks=bilgeBuild(v)?[{value:20,label:t.power},{value:50,label:t.power},{value:60,label:lang==='en'?'60% flood warning':'60% 침수 경고'}]:[{value:60,label:lang==='en'?'60% flood warning':'60% 침수 경고'}];
+  model.metrics.push(metric('water',t.water,`${Math.floor(v.flood)}%`,{gauge:gauge(v.flood,100,t.water,floodMarks,bilgeBuild(v)?[20,50]:null),note:waterTrend,trend:work.trend,tone:v.flood>=60?'danger':work.trend==='rising'?'warning':'normal'}));
   model.metrics.push(metric('parts',t.parts,v.parts));
   if(work.repair.status==='working')model.risks.push(line('repair',`${t.repair} ${work.repair.seconds.toFixed(1)}${t.seconds}`,{state:'working'}));
   else if(work.repair.status==='empty')model.risks.push(line('repair',t.repairEmpty,{tone:'warning',state:'empty'}));
@@ -76,6 +92,7 @@ export function compactTowHud(s,{language='ko',guidance,input={},interruption=nu
   }else if(winchBuild(v)){
    const state=winchState(s),cost=v.specialization==='harpoon'?5:v.specialization==='ratchet'?2:3;
    model.build={id:'winch',key:'B',state,value:`${t.pull} ${Math.floor(v.winchCharge)}`,
+    gauge:gauge(v.winchCharge,100,t.pull,[{value:v.specialization==='harpoon'?60:35,label:(lang==='en'?'Release from ':'방출 축력 ')+(v.specialization==='harpoon'?60:35)}]),
     note:`${v.fuel<cost?t.noFuel:t[state]} · ${t.fuelCost} ${cost}`,tone:state==='overload'||v.fuel<cost?'warning':'normal'};
   }
   if(v.version>=3){
@@ -111,10 +128,10 @@ export function compactTowHud(s,{language='ko',guidance,input={},interruption=nu
 }
 
 const keycap=key=>key?`<kbd>${escape(key)}</kbd>`:'';
-const renderLine=item=>`<span${item.id==='context'?' class="tow-action-label"':''} data-hud-item="${escape(item.id)}" data-tone="${escape(item.tone||'normal')}"${item.state?` data-state="${escape(item.state)}"`:''}${item.active!==undefined?` data-active="${!!item.active}"`:''}${item.bonus!==undefined?` data-ride-bonus="${item.bonus}"`:''}>${keycap(item.key)}${escape(item.text)}${item.note?` <small>${escape(item.note)}</small>`:''}</span>`;
+const renderLine=item=>`<span class="${item.id==='context'?'tow-action-label':item.gauge?'compact-instrument':''}" data-hud-item="${escape(item.id)}" data-tone="${escape(item.tone||'normal')}"${item.state?` data-state="${escape(item.state)}"`:''}${item.active!==undefined?` data-active="${!!item.active}"`:''}${item.bonus!==undefined?` data-ride-bonus="${item.bonus}"`:''}>${keycap(item.key)}${escape(item.text)}${item.note?` <small>${escape(item.note)}</small>`:''}${instrument(item.gauge)}</span>`;
 export function compactTowHudMarkup(model){
- const metrics=model.metrics.map(m=>`<div class="compact-metric" data-hud-metric="${escape(m.id)}" data-tone="${escape(m.tone||'normal')}"${m.trend?` data-trend="${m.trend}"`:''}${m.rate!==undefined?` data-fuel-rate="${m.rate}" data-fuel-boost="${!!m.boost}"`:''}><span>${escape(m.label)}</span><strong>${escape(m.value)}</strong>${m.note?`<small>${escape(m.note)}</small>`:''}</div>`).join('');
- const build=model.build?`<div class="compact-build" data-hud-build="${model.build.id}" data-build-state="${model.build.state}" data-tone="${model.build.tone}">${keycap(model.build.key)}<strong>${escape(model.build.value)}</strong><span>${escape(model.build.note)}</span></div>`:'';
+ const metrics=model.metrics.map(m=>`<div class="compact-metric${m.gauge?' compact-instrument':''}" data-hud-metric="${escape(m.id)}" data-tone="${escape(m.tone||'normal')}"${m.trend?` data-trend="${m.trend}"`:''}${m.rate!==undefined?` data-fuel-rate="${m.rate}" data-fuel-boost="${!!m.boost}"`:''}><span>${escape(m.label)}</span><strong>${escape(m.value)}</strong>${m.note?`<small>${escape(m.note)}</small>`:''}${instrument(m.gauge)}</div>`).join('');
+ const build=model.build?`<div class="compact-build" data-hud-build="${model.build.id}" data-build-state="${model.build.state}" data-tone="${model.build.tone}">${keycap(model.build.key)}<strong class="${model.build.gauge?'compact-instrument':''}">${escape(model.build.value)}${instrument(model.build.gauge)}</strong><span>${escape(model.build.note)}</span></div>`:'';
  const work=model.work?`<div class="compact-work field-progress" data-work-state="${escape(model.work.status)}" data-field-work="${escape(model.work.target)}"><strong>${escape(model.work.title)}</strong>${model.work.cost?`<span>${escape(model.work.cost)}</span>`:''}<label>${escape(model.work.action)}<progress max="${model.work.max}" value="${model.work.progress}" aria-label="${escape(model.work.title)}"></progress></label></div>`:'';
  const checks=model.dockChecks.length?`<div class="compact-docking dock-feedback" data-dock-reason="${escape(model.docking?.reason||'')}">${model.docking?`<strong>${escape(model.docking.label)}</strong>`:''}<div class="dock-checks">${model.dockChecks.map(c=>`<span class="${c.met?'met':'unmet'}">${c.met?'✓':'○'} ${escape(c.text)}</span>`).join('')}</div></div>`:'';
  return `<div class="play-top compact-top"><div class="mission-objective"><small>${escape(model.leg||model.mark)}</small><strong>${escape(model.goal)}</strong></div></div>

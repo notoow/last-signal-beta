@@ -1,4 +1,10 @@
 // World units, not metres. Hull dimensions also drive clearance and contact.
+export const CAPTAINS={
+  woo:{name:'Woo',hp:120,boost:60,fuel:1,thrust:1,pull:1,note:'내구 120 · 부스터 60'},
+  park:{name:'Park',hp:90,boost:110,fuel:1,thrust:1,pull:1,note:'내구 90 · 부스터 110'},
+  han:{name:'Han',hp:100,boost:75,fuel:.75,thrust:.9,pull:1,note:'연료 소모 −25% · 추진력 −10%'},
+  jeong:{name:'Jeong',hp:105,boost:70,fuel:1,thrust:.9,pull:1.2,note:'견인 전달 +20% · 추진력 −10%'}
+};
 export const CAPTAIN_VESSELS={
   woo:{name:'방호 예인정',length:70,width:34,turn:2.2,
     handling:'넓은 방현재 · 느린 선회',detail:'두꺼운 방현재와 비상 버팀 장치. 좁은 부두에서는 일찍 감속하고 돌아 들어갑니다.'},

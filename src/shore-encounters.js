@@ -1,4 +1,6 @@
 import {walkableAt,shoreBuildings,inside} from './rogue-map.js';
+import {shoreWaypoint} from './shore-navigation.js';
+import {recordHit} from './rogue-voyage-record.js';
 
 export const FAUNA={
   rat:{name:'시궁쥐',hp:20,speed:73,radius:7,reach:23,notice:115,windup:.38,recovery:.7,damage:6},
@@ -74,7 +76,11 @@ export function shoreAttack(s,kind='ranged',aim=null){
   s.noise={x:p.x,y:p.y,left:1.6};
   return true;
 }
-function moveEnemy(s,e,target,velocity,dt){
+function moveEnemy(s,e,target,velocity,dt,route=true){
+  if(route&&e.kind!=='gull'){
+    target=shoreWaypoint(s.map,e,target,FAUNA[e.kind].radius,s.time);
+    if(!target)return;
+  }
   const d=dist(e,target);if(d<2)return;
   const v=Math.min(d,velocity*dt),dx=(target.x-e.x)/d*v,dy=(target.y-e.y)/d*v;
   const before={x:e.x,y:e.y};e.angle=Math.atan2(dy,dx);
@@ -90,14 +96,16 @@ function enemyHit(s,e){
   if(dist(e,p)>spec.reach+(s.person?6:s.boat.width/2)||Math.abs(diff(Math.atan2(p.y-e.y,p.x-e.x),e.angle))>1.05||!sightLine(s.map,e,p))return;
   if(s.person){
     if(c.hit>0)return;
+    const before=s.crewHp;
     s.crewHp=Math.max(0,s.crewHp-spec.damage);c.hit=.65;s.work=0;c.action=null;c.hitId++;
+    recordHit(s,'crew',e.kind,before);
     const away={x:p.x+Math.cos(e.angle)*13,y:p.y+Math.sin(e.angle)*13};
     if(walkableAt(s.map,away)){p.x=away.x;p.y=away.y;}
     if(!s.crewHp){s.status='lost';s.reason=spec.name+'의 공격으로 선원이 쓰러졌다';}
   }else if(e.kind==='gull'){
     if(s.boat.inv>0)return;
     if(c.ammo>0){const stolen=Math.min(2,c.ammo);c.ammo-=stolen;e.stolen+=stolen;}
-    else{s.hp=Math.max(0,s.hp-3);if(!s.hp){s.status='lost';s.reason='갈매기 습격으로 손상된 선체가 침몰했다';}}
+    else{const before=s.hp;s.hp=Math.max(0,s.hp-3);recordHit(s,'hull','gull',before);if(!s.hp){s.status='lost';s.reason='갈매기 습격으로 손상된 선체가 침몰했다';}}
     s.boat.inv=.8;c.hitId++;
   }
   effect(s,p.x,p.y,'hurt');
@@ -135,7 +143,7 @@ export function tickEncounter(s,input,dt){
       continue;
     }
     if(e.phase==='strike'||e.phase==='recover'){
-      if(e.phase==='strike'&&(e.kind==='dog'||e.kind==='gull'))moveEnemy(s,e,{x:e.x+Math.cos(e.angle)*50,y:e.y+Math.sin(e.angle)*50},100,dt);
+      if(e.phase==='strike'&&(e.kind==='dog'||e.kind==='gull'))moveEnemy(s,e,{x:e.x+Math.cos(e.angle)*50,y:e.y+Math.sin(e.angle)*50},100,dt,false);
       e.left-=dt;if(e.left<=0){if(e.phase==='strike'){e.phase='recover';e.left=spec.recovery;}else e.phase='idle';}
       continue;
     }

@@ -1,5 +1,7 @@
 import {waterAt} from './rogue-map.js';
 import {waterMotion,waterVelocity,driftBody} from './ship-motion.js';
+import {sluiceBlocked} from './sluice-counterplay.js';
+import {lighthouseBlocked} from './lighthouse-counterplay.js';
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const wrap=a=>Math.atan2(Math.sin(a),Math.cos(a));
@@ -48,7 +50,7 @@ export function tickRogueTow(s,dt){
     else{t.vx+=(ax-t.vx*.75)*dt;t.vy+=(ay-t.vy*1.1)*dt;}
     t.x+=t.vx*dt;t.y+=t.vy*dt;
   }
-  if(!t.anchor&&!towClear(s.map,t)){
+  if(!t.anchor&&(!towClear(s.map,t)||sluiceBlocked(s,t)||lighthouseBlocked(s,t))){
     const impact=Math.hypot(t.vx,t.vy);Object.assign(t,old);t.vx*=-.15;t.vy*=-.15;
     if(impact>28&&!t.inv){t.hp=Math.max(0,t.hp-(impact-20)*.18);t.inv=.8;}
   }
@@ -59,10 +61,10 @@ export function tickRogueTow(s,dt){
     if(d>0&&d<r){
       const nx=(q.x-p.x)/d,ny=(q.y-p.y)/d,shift=r-d;
       const next={...t,x:t.x-nx*shift,y:t.y-ny*shift};
-      if(!t.anchor&&towClear(s.map,next)){t.x=next.x;t.y=next.y;}
+      if(!t.anchor&&towClear(s.map,next)&&!sluiceBlocked(s,next)&&!lighthouseBlocked(s,next)){t.x=next.x;t.y=next.y;}
       else if(s.mode==='sailing'){
         const moved={...b,x:b.x+nx*shift,y:b.y+ny*shift};
-        if(towClear(s.map,moved)){b.x=moved.x;b.y=moved.y;}
+        if(towClear(s.map,moved)&&!sluiceBlocked(s,moved)&&!lighthouseBlocked(s,moved)){b.x=moved.x;b.y=moved.y;}
         const approach=b.vx*nx+b.vy*ny;
         if(approach<0){b.vx-=nx*approach;b.vy-=ny*approach;}
       }
@@ -70,10 +72,13 @@ export function tickRogueTow(s,dt){
   }
   if(!t.hp){t.connected=false;t.anchor=null;s.radio={text:'Park: 보급정이 침몰했어. 남은 배로 항해를 이어가야 해.',left:7};}
 }
-export function deliverRogueTow(s){
+export function canDeliverRogueTow(s){
   const t=s.tow;
-  if(!t||t.delivered||t.hp<=0||dist(t,s.map.exit)>230||Math.hypot(t.vx,t.vy)>25)return false;
-  t.delivered=true;t.connected=false;return true;
+  return !!t&&!t.delivered&&t.hp>0&&dist(t,s.map.exit)<=230&&Math.hypot(t.vx,t.vy)<=25;
+}
+export function deliverRogueTow(s){
+  if(!canDeliverRogueTow(s))return false;
+  s.tow.delivered=true;s.tow.connected=false;return true;
 }
 export function validRogueTow(t,finite,map){
   return t===null||!!t&&finite(t.x,0,map.width)&&finite(t.y,0,map.height)&&finite(t.angle,-Math.PI,Math.PI)&&finite(t.vx,-2000,2000)&&finite(t.vy,-2000,2000)&&t.length===94&&t.width===34&&finite(t.hp,0,80)&&finite(t.inv,0,.81)&&typeof t.connected==='boolean'&&typeof t.delivered==='boolean'&&finite(t.tension,0,1)&&
