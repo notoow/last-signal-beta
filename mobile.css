@@ -345,21 +345,48 @@ html,body{height:var(--mobile-height,100dvh);overflow:hidden}
 #mobileActions{margin-left:auto}
 html[data-mobile-move-side=right] #mobileControls{flex-direction:row-reverse}
 html[data-mobile-move-side=right] #mobileActions{margin-left:0;margin-right:auto}
-#mobileControls[data-mode=rogue]:not(.expanded) #mobileActions{grid-template-columns:52px 64px;grid-template-areas:'boost more' 'primary attack';gap:8px}
-#mobileControls[data-mode=rogue]:not(.expanded) #mobileActions[data-context-count='2'],#mobileControls[data-mode=rogue]:not(.expanded) #mobileActions[data-context-count='3']{grid-template-columns:52px 64px 64px;grid-template-areas:'boost tertiary more' 'secondary primary attack'}
-#mobileControls[data-mode=rogue]:not(.expanded) #mobileActions>[data-code=Space]{grid-area:attack;width:64px;height:64px;border-width:2px}
-#mobileControls[data-mode=rogue]:not(.expanded) #mobileActions>[data-code=ShiftLeft]{grid-area:boost}
-#mobileControls[data-mode=rogue]:not(.expanded) #mobileMore{grid-area:more}
-#mobileControls:not(.expanded) [data-context-slot='0']{grid-area:primary}
-#mobileControls:not(.expanded) [data-context-slot='1']{grid-area:secondary}
-#mobileControls:not(.expanded) [data-context-slot='2']{grid-area:tertiary}
+#mobileControls[data-mode=rogue] #mobileActions{grid-template-columns:52px 64px;grid-template-areas:'boost more' 'primary attack';gap:8px}
+#mobileControls[data-mode=rogue] #mobileActions[data-context-count='2'],#mobileControls[data-mode=rogue] #mobileActions[data-context-count='3']{grid-template-columns:52px 64px 64px;grid-template-areas:'boost tertiary more' 'secondary primary attack'}
+#mobileControls[data-mode=rogue] #mobileActions>[data-code=Space]{grid-area:attack;width:64px;height:64px;border-width:2px}
+#mobileControls[data-mode=rogue] #mobileActions>[data-code=ShiftLeft]{grid-area:boost}
+#mobileControls[data-mode=rogue] #mobileMore{grid-area:more}
+#mobileControls [data-context-slot='0']{grid-area:primary}
+#mobileControls [data-context-slot='1']{grid-area:secondary}
+#mobileControls [data-context-slot='2']{grid-area:tertiary}
 #mobileActions .mobile-context-action{position:relative;width:60px;height:60px;border:2px solid #e4c282ab;background:#c99a4320;color:#ffe0a1;isolation:isolate}
 #mobileActions .mobile-context-action[data-ready=false]{opacity:.5}
 #mobileActions .mobile-context-action.working::after{content:'';position:absolute;inset:-5px;background:conic-gradient(#f0cb84 var(--work-progress),transparent 0);mask:radial-gradient(transparent 65%,#000 67%);border-radius:50%;pointer-events:none}
 #mobileActions .mobile-context-action[data-hold=true] span::after{content:' · 누르기';font-size:8px;display:block;color:#d6d8cb}
 html[lang=en] #mobileActions .mobile-context-action[data-hold=true] span::after{content:'HOLD'}
-#mobileControls:not(.expanded) #mobileActions[data-mode=ashore]>[data-code=ShiftLeft]{visibility:hidden;pointer-events:none}
-#mobileControls.expanded #mobileActions>*{grid-area:auto}
+#mobileControls #mobileActions[data-mode=ashore]>[data-code=ShiftLeft]{visibility:hidden;pointer-events:none}
+#mobileTools>*{grid-area:auto}
+/* The special control keeps one slot across valve, charging and stored launch
+   states. Existing primary, brake and boost slots retain their dimensions. */
+#mobileControls[data-mode=rogue] #mobileActions[data-special=true]{grid-template-columns:52px 64px 64px;grid-template-areas:'boost tertiary more' 'secondary primary attack'}
+#mobileControls #mobileActions>.mobile-special{display:flex;grid-area:secondary;width:52px;height:64px;min-height:64px;padding:3px;gap:2px;border-radius:12px;border-color:#d9bc83;background:#c99a4314}
+#mobileActions .mobile-special .mobile-build-readout{display:flex;align-items:center;gap:4px;height:14px;line-height:14px}
+#mobileActions .mobile-special .mobile-build-readout svg{width:14px;height:14px}
+#mobileActions .mobile-special .mobile-build-readout b{font:750 14px/14px Pretendard,sans-serif;font-variant-numeric:tabular-nums}
+#mobileActions .mobile-special .mobile-build-label{font-size:10px;line-height:10px;max-width:100%;text-align:center;word-break:keep-all}
+#mobileActions .mobile-special .mobile-build-meter{display:block;position:relative;flex:none;width:40px;height:3px;background:#061b26;box-shadow:0 0 0 1px #c9d6d344}
+#mobileActions .mobile-build-meter i{display:block;height:3px;background:#ecc87c}
+#mobileActions .mobile-build-meter em{position:absolute;top:-1px;width:1px;height:5px;background:#fff4d8}
+#mobileActions .mobile-special .mobile-build-time{display:block;min-height:10px;font:500 10px/10px Pretendard,sans-serif;color:#e8d7ac;white-space:nowrap;font-variant-numeric:tabular-nums}
+#mobileActions .mobile-special[data-ready=false]{opacity:1;border-color:#a3b8bf77}
+#mobileActions .mobile-special[data-phase=jet],#mobileActions .mobile-special[data-phase=pull],#mobileActions .mobile-special[data-phase=burst],#mobileActions .mobile-special[data-phase=launch]{border-color:#f0d094;background:#c99a4328}
+#mobileBuildStatus{position:fixed;text-align:center;font-size:11px;line-height:1.25;color:#e1c18c;pointer-events:none}
+/* More opens a separate scrolling tray; the held main controls never reflow. */
+#mobileTools{display:none;position:fixed;right:max(10px,env(safe-area-inset-right));bottom:max(136px,calc(env(safe-area-inset-bottom) + 128px));width:292px;padding:8px;grid-template-columns:repeat(4,64px);gap:6px;max-height:calc(var(--mobile-height,100dvh) - 144px);overflow:auto;overscroll-behavior:contain;background:#10212cf2;border:1px solid #667e8a;border-radius:12px;box-shadow:0 4px 18px #0008}
+html[data-mobile-move-side=right] #mobileTools{left:max(10px,env(safe-area-inset-left));right:auto}
+#mobileControls.expanded #mobileTools{display:grid}
+#mobileControls.expanded #mobileActions{padding:0;background:none;border:0;border-radius:0;max-height:none;overflow:visible;box-shadow:none;grid-template-columns:54px 60px}
+#mobileControls.expanded #mobileActions>button{width:48px;height:48px;min-height:48px;border-radius:50%;padding:5px}
+#mobileControls.expanded #mobileActions>.mobile-context-action,#mobileControls.expanded #mobileActions>[data-code=KeyE]{width:60px;height:60px}
+#mobileControls[data-mode=rogue].expanded #mobileActions{grid-template-columns:52px 64px}
+#mobileControls[data-mode=rogue].expanded #mobileActions[data-context-count='2'],#mobileControls[data-mode=rogue].expanded #mobileActions[data-context-count='3'],#mobileControls[data-mode=rogue].expanded #mobileActions[data-special=true]{grid-template-columns:52px 64px 64px}
+#mobileControls[data-mode=rogue].expanded #mobileActions>[data-code=Space]{width:64px;height:64px}
+#mobileControls.expanded #mobileActions>.mobile-special{width:52px;height:64px;min-height:64px;padding:3px;border-radius:12px}
+#mobileControls.expanded #mobileTools button{width:64px;height:48px;min-height:48px;border-radius:8px}
 #mobileMinimap{position:absolute;top:52px;right:max(12px,env(safe-area-inset-right));width:112px;height:68px;padding:0;min-height:0;margin:0;overflow:hidden;border:1px solid #a8bdb188;border-radius:5px;background:#08171fe6;box-shadow:0 1px 4px #00182466;pointer-events:auto;touch-action:manipulation}
 #mobileMinimap canvas{position:static!important;display:block;width:100%!important;height:100%!important}
 #mobileMinimap>svg{position:absolute;right:3px;bottom:3px;width:14px;height:14px;color:#f0dfb6;background:#09232bbb;border-radius:2px}

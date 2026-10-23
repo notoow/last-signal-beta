@@ -8,7 +8,7 @@ import {WATER_PROFILE,waterMotion,stepShipMotion,releaseShipAssist} from './ship
 import {terrainTurnPose} from './ship-contact.js';
 import {dockStatus,dockHint,dockingAlignment} from './docking-readiness.js';
 import {DREDGER_MODEL,CRANE,usesDredger,newCrane,beginCrane,trackCrane,strikeCrane,craneHitsHull,hullHitsCircle,validCrane,craneWarningTime} from './dredger-counterplay.js';
-import {newSalvage,recoverSalvage,tickSalvage,clearSalvageCharge,catchWinch,dischargeWinch,dischargeBilge,validSalvage,SALVAGE_NAMES,RIG_MODEL,rigEffects} from './rogue-salvage.js';
+import {newSalvage,recoverSalvage,tickSalvage,clearSalvageCharge,catchWinch,dischargeWinch,dischargeBilge,validSalvage,SALVAGE_NAMES,RIG_MODEL,rigEffects,winchBurstReady} from './rogue-salvage.js';
 import {SLUICE_MODEL,SLUICE,usesSluice,newSluice,beginSluice,trackSluice,sluiceGate,sluiceCleat,applySluiceFlow,sluiceContact,sluiceStatus,validSluice} from './sluice-counterplay.js';
 import {LIGHTHOUSE_MODEL,LIGHTHOUSE,usesLighthouse,newLighthouse,relayPosition,relayApproach,lighthouseStatus,tickLighthouse,lighthouseBlocked,validLighthouse} from './lighthouse-counterplay.js';
 import {CACHE_MODEL,cacheOffer,validCache} from './rogue-cache.js';
@@ -245,12 +245,12 @@ export function interact(s,action,input={}){
     if(s.build==='bilge'){s.valve=!s.valve;if(!s.valve)dischargeBilge(s);return true;}
     if(dischargeWinch(s))return true;
     if(usesSluice(s)||usesLighthouse(s)){
-      if(!(usesSluice(s)?sluiceStatus(s):lighthouseStatus(s)).canBurst)return false;
+      if(!winchBurstReady(s))return false;
       const p=partPosition(s,s.boss.hook),d=distance(b,p)||1,force=(120+s.charge*.5)*rigEffects(s).winchLaunchMultiplier;
       b.vx+=(b.x-p.x)/d*force;b.vy+=(b.y-p.y)/d*force;
       s.boss.hook=-1;s.boss.tension=0;s.charge=0;s.fuel-=3;clearSalvageCharge(s);return true;
     }
-    if(s.build==='winch'&&s.charge>=35&&s.boss.hook>=0&&s.boss.phase==='recover'&&s.boss.tension>.1){
+    if(winchBurstReady(s)){
       const p=partPosition(s,s.boss.hook),d=distance(b,p)||1;
       const force=120*rigEffects(s).winchLaunchMultiplier;
       b.vx+=(b.x-p.x)/d*force;b.vy+=(b.y-p.y)/d*force;

@@ -654,6 +654,7 @@ var paths = {
   boost: "m14 2-9 12h6l-1 8 9-12h-6l1-8Z",
   ammo: "m5 7 5-4 5 4-5 4-5-4Zm5 4v9m-5-7 5 3 8-5m-13 6 5 4 8-5",
   water: "M12 2S5 10 5 15a7 7 0 0 0 14 0c0-5-7-13-7-13Z",
+  winch: "M5 4h14v16H5zM8 7h8M8 11h8M8 15h8M2 12h3m14 0h3",
   parts: "m5 3 4 4-2 4-4-2 2-6Zm4 8 10 10 3-3-10-10",
   objective: "m12 2 3 7 7 3-7 3-3 7-3-7-7-3 7-3 3-7Z",
   brake: "M5 5v14m14-14v14M9 8v8m6-8v8",
@@ -673,6 +674,29 @@ function buttonFace(button, label, name) {
   button.innerHTML = icon(name) + `<span></span>`;
   button.querySelector("span").textContent = label;
 }
+function specialButtonFace(button, action, en) {
+  if (!button.querySelector(".mobile-build-readout")) button.innerHTML = '<span class="mobile-build-readout"></span><span class="mobile-build-label"></span><span class="mobile-build-meter" role="meter"><i></i><em></em></span><small class="mobile-build-time"></small>';
+  const readout = button.querySelector(".mobile-build-readout");
+  if (button.dataset.build !== action.build) {
+    readout.innerHTML = icon(action.build === "bilge" ? "water" : "winch") + "<b></b>";
+    button.dataset.build = action.build;
+  }
+  const m = action.meter, value = Math.max(0, Math.min(m.max, m.value)), meter = button.querySelector(".mobile-build-meter");
+  readout.querySelector("b").textContent = Math.floor(value);
+  button.querySelector(".mobile-build-label").textContent = en ? action.labelEn : action.labelKo;
+  meter.setAttribute("aria-label", en ? m.labelEn : m.labelKo);
+  meter.setAttribute("aria-valuemin", "0");
+  meter.setAttribute("aria-valuemax", String(m.max));
+  meter.setAttribute("aria-valuenow", String(value));
+  meter.querySelector("i").style.width = value / m.max * 100 + "%";
+  meter.querySelector("em").style.left = m.threshold / m.max * 100 + "%";
+  const stored = Math.max(0, action.storedSeconds || 0), cooldown = Math.max(0, action.cooldown || 0);
+  button.querySelector(".mobile-build-time").textContent = stored > 0 ? "\u25F7 " + stored.toFixed(1) + (en ? "s" : "\uCD08") : cooldown > 0 ? "\u21BB " + cooldown.toFixed(1) + (en ? "s" : "\uCD08") : "\u2265 " + m.threshold;
+  const time = stored > 0 ? (en ? "Stored time " : "\uC800\uC7A5 \uC2DC\uAC04 ") + stored.toFixed(1) + (en ? " seconds" : "\uCD08") : cooldown > 0 ? (en ? "Cooldown " : "\uC7AC\uC0AC\uC6A9 ") + cooldown.toFixed(1) + (en ? " seconds" : "\uCD08") : "";
+  button.setAttribute("aria-label", [en ? action.labelEn : action.labelKo, (en ? m.labelEn : m.labelKo) + " " + Math.floor(value) + " / " + m.max, en ? action.detailEn : action.detailKo, time].filter(Boolean).join(" \xB7 "));
+  button.title = en ? action.detailEn : action.detailKo;
+  button.dataset.phase = action.phase;
+}
 var escape2 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 var text = (el) => el?.textContent.trim() || "";
 var set = (el, html) => {
@@ -684,7 +708,7 @@ function createMobileHud({ onMap = () => {
   const root = document.createElement("div");
   root.id = "mobileFlightHud";
   root.hidden = true;
-  root.innerHTML = '<div id="mobileObjective"></div><div id="mobileResources"></div><div id="mobileVitals"></div><div id="mobileNotice"></div><div id="mobileContext"></div>';
+  root.innerHTML = '<div id="mobileObjective"></div><div id="mobileResources"></div><div id="mobileVitals"></div><div id="mobileNotice"></div><div id="mobileContext"></div><div id="mobileBuildStatus"></div>';
   document.body.append(root);
   const nodes = Object.fromEntries([...root.children].map((el) => [el.id, el]));
   const mini = document.createElement("button");
@@ -757,6 +781,15 @@ function createMobileHud({ onMap = () => {
     mini.setAttribute("aria-label", document.documentElement.lang === "en" ? "Expand explored chart" : "\uD0D0\uC0AC\uD55C \uD574\uB3C4 \uD655\uB300");
     if (!mini.hidden) drawMinimap(presentation.minimap);
     const en = document.documentElement.lang === "en", source = rogue ? document.getElementById("rogueMission") : document.querySelector("#hud .mission-objective");
+    const special = presentation?.context?.special, actions2 = document.getElementById("mobileActions");
+    const explain = special && (!special.enabled || special.cooldown > 0) && !document.getElementById("mobileControls")?.classList.contains("expanded");
+    set(nodes.mobileBuildStatus, explain ? escape2(en ? special.detailEn : special.detailKo) : "");
+    if (explain && actions2) {
+      const r = actions2.getBoundingClientRect();
+      nodes.mobileBuildStatus.style.left = r.left + "px";
+      nodes.mobileBuildStatus.style.width = r.width + "px";
+      nodes.mobileBuildStatus.style.bottom = innerHeight - r.top + 5 + "px";
+    }
     const goal = text(source?.querySelector("strong")) || text(source), region = text(source?.querySelector("small"));
     set(nodes.mobileObjective, icon("objective") + `<div>${region ? `<small>${escape2(region)}</small>` : ""}<strong>${escape2(goal)}</strong></div>`);
     const metrics = rogue ? [...document.querySelectorAll("[data-rogue-metric]")].map((el) => {
@@ -989,8 +1022,7 @@ function render(next) {
   buttonFace(more, language === "en" ? "More" : "\uB354 \uBCF4\uAE30", "more");
   more.setAttribute("aria-label", "\uCD94\uAC00 \uC870\uC791 / More controls");
   more.setAttribute("aria-expanded", "false");
-  more.addEventListener("click", () => {
-    release();
+  bindMenuToggle(more, () => {
     const expanded = pad.classList.toggle("expanded");
     more.setAttribute("aria-expanded", String(expanded));
     buttonFace(more, expanded ? language === "en" ? "Close" : "\uC811\uAE30" : language === "en" ? "More" : "\uB354 \uBCF4\uAE30", "more");
@@ -1025,6 +1057,35 @@ function render(next) {
     bindAction(button);
     actions.append(button);
   }
+  const tools = document.createElement("div");
+  tools.id = "mobileTools";
+  tools.setAttribute("role", "group");
+  tools.setAttribute("aria-label", language === "en" ? "Additional controls" : "\uCD94\uAC00 \uC870\uC791");
+  for (const button of [...actions.children]) if (button.classList.contains("mobile-extra")) tools.append(button);
+  actions.append(tools);
+}
+function bindMenuToggle(button, toggle) {
+  let pointer = null;
+  button.addEventListener("pointerdown", (e) => {
+    if (!playing || e.button !== 0) return;
+    e.preventDefault();
+    handledPointers.add(e.pointerId);
+    if (pointer !== null) return;
+    pointer = e.pointerId;
+    button.setPointerCapture(pointer);
+  });
+  button.addEventListener("pointerup", (e) => {
+    if (e.pointerId !== pointer) return;
+    pointer = null;
+    e.preventDefault();
+    if (playing) toggle();
+  });
+  for (const type of ["pointercancel", "lostpointercapture"]) button.addEventListener(type, (e) => {
+    if (e.pointerId === pointer) pointer = null;
+  });
+  button.addEventListener("click", (e) => {
+    if (e.detail === 0 && playing) toggle();
+  });
 }
 function bindAction(button) {
   button.addEventListener("pointerdown", (e) => {
@@ -1062,6 +1123,27 @@ document.addEventListener("click", (e) => {
 }, true);
 function refreshContext() {
   const context = mobileFrame?.active ? mobileFrame.context : null, available = [context?.primary, ...context?.secondary || []].filter(Boolean), en = language === "en";
+  const build = actions.querySelector('[data-code="KeyB"]'), special = context?.special;
+  actions.dataset.special = String(!!special);
+  if (build) {
+    if (special) {
+      if (build.parentElement !== actions) actions.insertBefore(build, document.getElementById("mobileTools"));
+      build.classList.add("mobile-special");
+      specialButtonFace(build, special, en);
+      build.dataset.ready = String(special.enabled);
+      build.setAttribute("aria-disabled", String(!special.enabled));
+    } else if (build.classList.contains("mobile-special")) {
+      build.classList.remove("mobile-special");
+      delete build.dataset.build;
+      delete build.dataset.phase;
+      delete build.dataset.ready;
+      build.removeAttribute("aria-disabled");
+      build.removeAttribute("title");
+      buttonFace(build, en ? "Build" : "\uBE4C\uB4DC", "objective");
+      build.setAttribute("aria-label", "\uBE4C\uB4DC / Build");
+      document.getElementById("mobileTools").append(build);
+    }
+  }
   actions.dataset.contextCount = available.length;
   actions.dataset.mode = mobileFrame?.mode || "";
   for (const button of actions.querySelectorAll("[data-context-slot]")) {

@@ -2,12 +2,54 @@ import {berthReadiness,shoreSearchStatus,bossLinkCandidate} from './rogue-core.j
 import {rescueStatus} from './shore-rescue.js';
 import {visibleAt,SURVEY_COLS,SURVEY_CELL} from './rogue-vision.js';
 import {shoreRanges} from './shore-scale.js';
+import {salvageStatus,winchBurstReady,winchStoreReady,winchLaunchReady} from './rogue-salvage.js';
+import {usesSluice} from './sluice-counterplay.js';
+import {usesLighthouse} from './lighthouse-counterplay.js';
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const action=(id,code,labelKo,labelEn,enabled=true,hold=false,progress=0)=>({id,code,labelKo,labelEn,enabled,hold,progress});
+// One persistent control slot. Its label changes with the action the same B
+// input will perform, while real water/charge and expiry stay visible.
+export function rogueSpecialAction(s){
+  if(!s||s.status!=='playing'||s.mode!=='sailing'||s.pendingGear||s.pendingCache||s.salvage?.pending||s.build==='standard')return null;
+  const rig=salvageStatus(s),m=s.salvage;
+  const make=(phase,ko,en,enabled,value,labelKo,labelEn,threshold,detailKo,detailEn)=>({
+    ...action('build','KeyB',ko,en,enabled),phase,build:s.build,detailKo,detailEn,
+    meter:{value,max:100,threshold,labelKo,labelEn},
+    storedSeconds:s.build==='winch'&&s.boss.hook<0?m?.window||0:0,
+    cooldown:m?.cooldown||0
+  });
+  if(s.build==='bilge'){
+    const jet=s.valve&&rig.phase==='ready';
+    const phase=jet?'jet':s.valve?'close':'open';
+    const detail=!s.valve?['물을 받으면 추진력 증가','Fill for stronger thrust']:
+      jet?['앞으로 분사 · 연료 2','Forward jet · 2 fuel']:
+      s.flood<20?['침수 20%에서 분사 가능','Jet needs 20% water']:
+      rig.phase==='cooldown'?[`분사 재사용 ${m.cooldown.toFixed(1)}초`,`Jet cooldown ${m.cooldown.toFixed(1)}s`]:
+      rig.phase==='fuel'?['분사 연료 2 초과 필요','Jet needs >2 fuel']:
+      rig.phase==='skill'?['선장 기술 종료 후 분사','Jet after captain skill']:['밸브를 닫으면 침수 정지','Close to stop filling'];
+    return make(phase,jet?'배수 분사':s.valve?'밸브 닫기':'밸브 열기',jet?'Water jet':s.valve?'Close valve':'Open valve',true,s.flood,'침수','Flood',20,...detail);
+  }
+  if(s.boss.hook<0){
+    const ready=winchLaunchReady(s),stored=(m?.charge||0)>=35&&(m?.window||0)>0;
+    const detail=ready?['저장한 줄 방향으로 발진 · 연료 2','Launch along stored line · 2 fuel']:
+      stored&&rig.phase==='fuel'?['연료 2 초과 필요','Needs >2 fuel']:
+      stored&&rig.phase==='skill'?['선장 기술 종료 대기','Wait for captain skill']:
+      rig.phase==='cooldown'?[`재사용 ${m.cooldown.toFixed(1)}초`,`Cooldown ${m.cooldown.toFixed(1)}s`]:
+      ['고리 연결 → 당겨 축력 모으기','Hook a drive, then pull to charge'];
+    return make(ready?'launch':stored?'blocked':'hook','저장 발진','Stored launch',ready,m?.charge||0,'저장 축력','Stored charge',35,...detail);
+  }
+  const launch=usesSluice(s)||usesLighthouse(s),ready=winchBurstReady(s);
+  const detail=ready?launch?['줄을 놓고 발진 · 연료 3','Release and launch · 3 fuel']:
+    s.fuel<=3?['구동부 당김 · 남은 연료 소진','Pull drive · spends remaining fuel']:['구동부 당김 · 연료 3','Pull drive · 3 fuel']:
+    launch&&s.fuel<=3?['연료 3 초과 필요','Needs >3 fuel']:
+    !launch&&s.boss.phase!=='recover'?['고리 노출 대기','Wait for drive exposure']:
+    s.boss.tension<=.1?['줄을 더 팽팽하게 당기기','Pull the line taut']:['축력 35에서 사용','Needs 35 charge'];
+  return make(ready?(launch?'burst':'pull'):'charge',launch?'줄 놓고 발진':'축력 당김',launch?'Release launch':'Winch pull',ready,s.charge,'축력','Line charge',35,...detail);
+}
 // Read-only affordances. Inputs still pass through interact/tickRun; no UI can
 // award an item, snap a hull, reveal an enemy, or suppress the attack control.
 export function rogueContextActions(s){
-  const result={primary:null,secondary:[],attack:null};
+  const result={primary:null,secondary:[],attack:null,special:rogueSpecialAction(s)};
   if(!s||s.status!=='playing'||s.pendingGear||s.pendingCache||s.salvage?.pending)return result;
   if(s.person){
     result.attack=action('attack','Space','공격','Attack',true,true);
@@ -28,7 +70,10 @@ export function rogueContextActions(s){
     result.primary=action('land','KeyE','하선','Go ashore');
     result.secondary.push(action('unmoor','KeyQ','출항','Cast off'));return result;
   }
-  if(s.boss.hook>=0){result.primary=action('unhook','KeyE','줄 풀기','Release line');return result;}
+  if(s.boss.hook>=0){
+    const store=winchStoreReady(s);
+    result.primary=action('unhook','KeyE',store?'놓고 축력 저장':'줄 풀기',store?'Release & store':'Release line');return result;
+  }
   if(bossLinkCandidate(s)>=0){result.primary=action('link','KeyE',s.depth===2?'중계기 연결':'고리 연결',s.depth===2?'Link relay':'Hook drive');return result;}
   const b=[...s.map.berths,...(s.boss.cleared?[s.map.exit]:[])].filter(b=>visibleAt(s,b)).sort((a,b)=>distance(s.boat,a)-distance(s.boat,b))[0];
   if(b){const ready=berthReadiness(s,b);if(ready.near)result.primary=action('moor','KeyE',b===s.map.exit?'탈출 접안':'접안',b===s.map.exit?'Exit berth':'Moor',ready.ready);}

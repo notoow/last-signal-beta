@@ -31,6 +31,14 @@ export function recoverSalvage(s){
 const canFire=s=>s.salvage?.rank>0&&s.salvage.cooldown<=0&&s.fuel>2&&
   s.mode==='sailing'&&s.status==='playing'&&!s.salvage.pending&&!s.pendingGear&&!s.pendingCache&&
   !(s.skill?.left>0&&['woo','park'].includes(s.captain));
+// The input handler and the visible controls share these predicates. Attached
+// dredger pulls retain their original low-fuel rule; later-region launches do not.
+export const winchBurstReady=s=>s.build==='winch'&&s.boss.hook>=0&&s.boss.tension>.1&&s.charge>=35&&
+  (usesSluice(s)||usesLighthouse(s)?s.fuel>3:s.boss.phase==='recover');
+export const winchStoreReady=s=>!!s.salvage?.rank&&s.build==='winch'&&s.charge>=35&&s.boss.hook>=0&&
+  s.boss.tension>.15&&s.salvage.cooldown<=0;
+export const winchLaunchReady=s=>!!(s.build==='winch'&&s.boss.hook<0&&canFire(s)&&
+  s.salvage.charge>=35&&s.salvage.vector&&s.salvage.window>0);
 function impulse(s,vector,power){
   s.boat.vx+=vector.x*power;s.boat.vy+=vector.y*power;
   s.fuel-=2;s.salvage.cooldown=6;s.salvage.uses++;
@@ -63,14 +71,14 @@ export function dischargeBilge(s){
 }
 export function catchWinch(s,anchor){
   const m=s.salvage;
-  if(!m?.rank||s.build!=='winch'||s.charge<35||s.boss.tension<=.15||m.cooldown>0)return false;
+  if(!winchStoreReady(s))return false;
   const dx=s.boat.x-anchor.x,dy=s.boat.y-anchor.y,d=Math.hypot(dx,dy);
   if(d<1)return false;
   m.charge=s.charge;m.window=salvageWindow(s);m.vector={x:dx/d,y:dy/d};return true;
 }
 export function dischargeWinch(s){
   const m=s.salvage;
-  if(s.build!=='winch'||s.boss.hook>=0||!canFire(s)||m.charge<35||!m.vector||m.window<=0)return false;
+  if(!winchLaunchReady(s))return false;
   impulse(s,m.vector,m.charge*(m.rank===2?1.8:1.2)*rigEffects(s).winchLaunchMultiplier);return true;
 }
 export function salvageStatus(s){

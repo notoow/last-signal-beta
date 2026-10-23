@@ -12,7 +12,7 @@ function watchHud(){
   const roots=[document.getElementById('mobileControls'),document.getElementById('mobileFlightHud')];
   if(!observer||roots.some((el,i)=>el!==observed[i])){
     observer?.disconnect();observer=new MutationObserver(()=>{blocks=null;});observed=roots;blocks=null;
-    for(const el of roots)if(el)observer.observe(el,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['hidden','class','style','data-mode','data-layout','data-context-count']});
+    for(const el of roots)if(el)observer.observe(el,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['hidden','class','style','data-mode','data-layout','data-context-count','data-special']});
     observer.observe(document.documentElement,{attributes:true,attributeFilter:['class','style','data-mobile-move-side']});
     if(document.body)observer.observe(document.body,{attributes:true,attributeFilter:['class','style','hidden']});
   }
@@ -26,11 +26,14 @@ export function mobileObstacles(){
   // Share layout reads between camera and labels within this frame, while
   // resize/font/layout changes are remeasured by the next rendered frame.
   if(!clearScheduled){clearScheduled=true;requestAnimationFrame(()=>{blocks=null;clearScheduled=false;});}
-  blocks=[...document.querySelectorAll('#mobileStick,#mobileActions,#mobileFlightHud>div,#mobileMinimap')].flatMap(el=>{
+  blocks=[...document.querySelectorAll('#mobileStick,#mobileActions,#mobileTools,#mobileFlightHud>div,#mobileMinimap')].flatMap(el=>{
     let r=visibleRect(el);if(!r)return [];
     // Grid children and transformed bars can protrude beyond their parent's
     // rectangle. Keep the group id, but include every visible child boundary.
-    if(el.id!=='mobileStick')for(const child of el.querySelectorAll('*')){
+    if(!['mobileStick','mobileTools'].includes(el.id))for(const child of el.querySelectorAll('*')){
+      // The tools tray clips its scrolled children and has its own occupied
+      // rectangle; do not turn the empty gap above main controls into a box.
+      if(el.id==='mobileActions'&&child.closest('#mobileTools'))continue;
       if(!(child instanceof HTMLElement)&&child.tagName.toLowerCase()!=='svg')continue;
       const bounds=visibleRect(child);if(bounds)r=union(r,bounds);
     }
