@@ -1,10 +1,11 @@
+import {shoreScale} from './shore-scale.js';
 import {walkableAt} from './rogue-map.js';
 
 const CELL=12,MAX_NODES=1400,MAX_DETOUR=180;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const paths=new WeakMap();
 export function shoreSegment(map,a,b,radius){
-  const n=Math.max(1,Math.ceil(distance(a,b)/6));
+  const n=Math.max(1,Math.ceil(distance(a,b)/(map.version>=4?1:6)));
   for(let i=0;i<=n;i++)if(!walkableAt(map,{x:a.x+(b.x-a.x)*i/n,y:a.y+(b.y-a.y)*i/n},radius))return false;
   return true;
 }
@@ -15,7 +16,15 @@ export function shoreRoute(map,start,target,radius){
   if(!walkableAt(map,start,radius)||!walkableAt(map,target,0))return null;
   const fits=walkableAt(map,target,radius);
   if(fits&&shoreSegment(map,start,target,radius))return [{x:target.x,y:target.y}];
-  return searchRoute(map,start,target,radius,fits,CELL,MAX_NODES)||searchRoute(map,start,target,radius,fits,CELL/2,MAX_NODES*4);
+  // A whole connected waterfront is much larger than the metre-scale props.
+  // Try a coarse long-distance lattice before spending the local fine budget.
+  // Every edge still uses this map's one-unit samples and full body clearance;
+  // a coarse node can never jump over a small cache, wall or water channel.
+  if(map.version>=4&&distance(start,target)>CELL*8){
+    const route=searchRoute(map,start,target,radius,fits,CELL,MAX_NODES);
+    if(route)return route;
+  }
+  return searchRoute(map,start,target,radius,fits,map.version>=4?2:CELL,MAX_NODES)||searchRoute(map,start,target,radius,fits,map.version>=4?1:CELL/2,MAX_NODES*4);
 }
 function searchRoute(map,start,target,radius,fits,cell,maxNodes){
   // The fine fallback keeps a traversable corner from disappearing merely
@@ -63,12 +72,12 @@ function searchRoute(map,start,target,radius,fits,cell,maxNodes){
 }
 export function shoreWaypoint(map,enemy,target,radius,time){
   let cached=paths.get(enemy);
-  if(!cached||cached.map!==map||cached.radius!==radius||distance(cached.target,target)>12||time>=cached.until){
+  if(!cached||cached.map!==map||cached.radius!==radius||distance(cached.target,target)>12*shoreScale(map)||time>=cached.until){
     cached={map,radius,target:{x:target.x,y:target.y},until:time+.75,route:shoreRoute(map,enemy,target,radius)};
     paths.set(enemy,cached);
   }
   if(!cached.route)return null;
-  while(cached.route.length>1&&distance(enemy,cached.route[0])<3)cached.route.shift();
+  while(cached.route.length>1&&distance(enemy,cached.route[0])<3*shoreScale(map))cached.route.shift();
   const p=cached.route[0];
   // Knockback can move an actor to the other side of a corner. Replan, never
   // trust an old edge through an obstacle. Failed searches are briefly cached.

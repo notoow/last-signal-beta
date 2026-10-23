@@ -4,10 +4,21 @@ import {generateHarbor as legacyHarbor,validateMap as legacyValidate,waterAt as 
 import {generateHarbor as harborV2} from './rogue-map-v2.js';
 export {DEPTHS,random,inside} from './rogue-map-v1.js';
 import {random,inside} from './rogue-map-v1.js';
-export const GENERATOR_VERSION=3;
+import {WORLD_UNITS_PER_METRE as METRE,crewRadius} from './shore-scale.js';
+export const GENERATOR_VERSION=4;
 export const TILE=40;
 export const LAND={water:0,quay:1,brick:2,deck:3,rock:4};
 export const shoreBuildings=r=>r.buildings||[{kind:'hut',x:r.x+r.w-130,y:r.y+20,w:112,h:125}];
+export function shoreSolid(p,box,radius=0){
+  if(!box.footprint)return inside(p,box,radius);
+  const points=box.footprint;let contained=false;
+  for(let i=0,j=points.length-1;i<points.length;j=i++){
+    const a=points[j],b=points[i],dx=b.x-a.x,dy=b.y-a.y;
+    const t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/(dx*dx+dy*dy||1)));
+    if(Math.hypot(p.x-a.x-t*dx,p.y-a.y-t*dy)<=radius)return true;
+    if((a.y>p.y)!==(b.y>p.y)&&p.x<(b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x)contained=!contained;
+  }return contained;
+}
 export function tileAt(map,x,y){
   return x<0||y<0||x>=map.cols||y>=map.rows?LAND.rock:map.tiles[y*map.cols+x];
 }
@@ -34,7 +45,7 @@ export function walkableAt(map,p,radius=9){
   for(let y=Math.floor((p.y-radius)/TILE);y<=Math.floor((p.y+radius)/TILE);y++)
     for(let x=Math.floor((p.x-radius)/TILE);x<=Math.floor((p.x+radius)/TILE);x++)
       if(!tileAt(map,x,y))return false;
-  return !map.props.some(b=>inside(p,b,radius))&&!map.islands.some(r=>shoreBuildings(r).some(b=>inside(p,b,radius)));
+  return !map.props.some(b=>shoreSolid(p,b,radius))&&!map.islands.some(r=>shoreBuildings(r).some(b=>shoreSolid(p,b,radius)));
 }
 function candidate(seed,depth,attempt){
   const rng=random(seed^Math.imul(depth+1,0x9e3779b9)^Math.imul(attempt,0x85ebca6b));
@@ -141,11 +152,13 @@ export function validateMap(map){
   if(map.nodes.filter(n=>n.role==='outer'||n.role==='inlet').some(n=>!reachable(n)))errors.push('alternate route');
   for(const b of map.berths){
     const r=map.islands[b.island];
-    if(!r||!inside(b.landing,r,-10)||!inside(b.loot,r,-10))errors.push('shore access');
-    const walk=[b.landing,{x:b.loot.x,y:b.landing.y},b.loot];
+    const shoreRadius=map.version>=4?crewRadius(map):9,pad=map.version>=4?shoreRadius:10;
+    if(!r||!inside(b.landing,r,-pad)||!inside(b.loot,r,-pad))errors.push('shore access');
+    const endpoint=b.searchPoint||b.loot;
+    const walk=[b.landing,{x:endpoint.x,y:b.landing.y},endpoint];
     for(let i=1;i<walk.length;i++){
       const a=walk[i-1],p=walk[i],n=Math.ceil(Math.hypot(p.x-a.x,p.y-a.y)/8);
-      for(let k=0;k<=n;k++)if(!walkableAt(map,{x:a.x+(p.x-a.x)*k/n,y:a.y+(p.y-a.y)*k/n}))errors.push('blocked salvage path');
+      for(let k=0;k<=n;k++)if(!walkableAt(map,{x:a.x+(p.x-a.x)*k/n,y:a.y+(p.y-a.y)*k/n},shoreRadius))errors.push('blocked salvage path');
     }
     if(!reachable({x:b.x,y:b.y+100}))errors.push('berth access');
     for(const dx of[-100,0,100])if(!waterAt(map,{x:b.x+dx,y:b.y},24))errors.push('berth clearance');
@@ -155,6 +168,7 @@ export function validateMap(map){
 export function generateHarbor(seed,depth=0,version=GENERATOR_VERSION){
   if(version===1)return legacyHarbor(seed,depth);
   if(version===2)return harborV2(seed,depth,2);
+  if(version===4)return humanHarbor(seed,depth);
   if(version!==3||!Number.isInteger(seed)||seed<0||seed>0xffffffff||!Number.isInteger(depth)||depth<0||depth>2)throw Error('Invalid harbor seed/depth/version');
   for(let attempt=0;attempt<8;attempt++){const map=candidate(seed,depth,attempt);if(validateMap(map).ok)return map;}
   for(let attempt=0;attempt<8;attempt++){
@@ -162,4 +176,37 @@ export function generateHarbor(seed,depth=0,version=GENERATOR_VERSION){
     if(validateMap(fallback).ok){fallback.seed=seed;fallback.fallback=true;return fallback;}
   }
   throw Error('Fallback harbor failed validation');
+}
+
+// New voyages use the integrated shore profile. Saved generators1/2/3 keep
+// their terrain. Reuse sea topology; replacement solids are actual geometry.
+function humanHarbor(seed,depth){
+  const map=generateHarbor(seed,depth,3);map.version=4;
+  for(const b of map.berths){
+    const r=map.islands[b.island],edge=r.y+r.h;
+    // Step onto clear quay beside the bow, away from the tall wheelhouse.
+    // The ladder mount is the shoreline; the feet stop safely inland.
+    b.y=edge+28;b.ladder={x:b.x+26,y:edge};b.landing={x:b.ladder.x,y:edge-6};
+    b.loot={x:b.x+55,y:edge-42};
+    b.searchPoint={x:b.loot.x,y:b.loot.y+.85*METRE};
+    const building=(visual,x,y)=>({kind:'warehouse',visual,x,y,w:8*METRE,h:4.33*METRE});
+    r.buildings=[building('workshop',b.loot.x-4*METRE,b.loot.y-3-4.33*METRE),
+      building('warehouse',b.x-65,edge-52-4.33*METRE),
+      {kind:'bench',visual:'supplies',x:b.x+10,y:edge-78,w:1.5*METRE,h:METRE}];
+  }
+  // Every solid in this presentation profile has a corresponding painted
+  // footprint. Unconverted decorative crane blockers are not hidden walls.
+  map.props=map.props.filter(p=>p.kind!=='crane').map(p=>p.kind==='warehouse'?{...p,visual:'warehouse',x:p.x+p.w/2-4*METRE,
+    y:p.y+p.h-4.33*METRE,w:8*METRE,h:4.33*METRE}:{...p,visual:'supplies',w:1.5*METRE,h:METRE});
+  for(const box of [...map.islands.flatMap(shoreBuildings),...map.props])if(box.visual==='supplies'){
+    const anchor={x:box.x+box.w/2,y:box.y+box.h};
+    box.footprint=[[-1.16944,-.28575],[-.20954,.09253],[.35324,-.38516],[.34323,-1.09128],[-1.20166,-1.22633],[-1.28968,-.63005]]
+      .map(([x,y])=>({x:anchor.x+x*METRE,y:anchor.y+y*METRE}));
+  }
+  // A closed or emptied crate remains a real object. Search from its open
+  // apron instead of allowing the captain to stand inside the painted box.
+  for(const b of map.berths)map.props.push({kind:'cache',visual:'cache',berth:b.id,
+    x:b.loot.x-.45*METRE,y:b.loot.y-.5*METRE,w:.9*METRE,h:.5*METRE});
+  const result=validateMap(map);if(!result.ok)throw Error('Human quay profile failed validation: '+result.errors.join(', '));
+  return map;
 }

@@ -5,6 +5,9 @@ const load=name=>{const i=new Image();i.src='assets/art/'+name;return i;};
 const atlas=load('harbor-terrain-v2.png'),modules=load('harbor-modules-v1.png');
 const ready=i=>i.complete&&i.naturalWidth>0,cache=new WeakMap();
 function sprite(c,kind,x,y,w,h){
+  // The sailing/chart view shares the new shore solids and uses its existing
+  // top-down crate artwork for cache and workbench footprints.
+  if(kind==='cache'||kind==='bench')kind='crates';
   if(quayFrames[kind]){quaySprite(c,kind,x,y,w,h);return;}
   const f=harborFrames[kind];if(!ready(modules))return;
   c.drawImage(modules,...f,x,y,w,h);

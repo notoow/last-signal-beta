@@ -1,9 +1,11 @@
+import {shoreScale,crewRadius,shoreRanges} from './shore-scale.js';
 import {walkableAt} from './rogue-map.js';
 import {toolBerth,sightLine} from './shore-encounters.js';
 import {shoreRoute,shoreWaypoint,shoreSegment} from './shore-navigation.js';
 import {visibleAt} from './rogue-vision.js';
 import {recordVoyage} from './rogue-voyage-record.js';
 
+export const rescueRanges=s=>Object.fromEntries(Object.entries(RESCUE).map(([k,v])=>[k,['order','ladder','follow','speed','notice','leash'].includes(k)?v*shoreScale(s):v]));
 export const RESCUE=Object.freeze({order:44,ladder:24,follow:40,speed:48,notice:90,leash:180,hp:24,crew:20,ammo:4});
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const active=s=>s.depth===0&&['waiting','following'].includes(s.rescue?.stage);
@@ -19,16 +21,16 @@ export function newShoreRescue(s){
   const first=(s.seed>>>1)%candidates.length;
   for(let n=0;n<candidates.length;n++){
     const berth=candidates[(first+n)%candidates.length];
-    for(let radius=36;radius<=120;radius+=12)for(let i=0;i<12;i++){
+    for(let radius=36*shoreScale(s);radius<=120*shoreScale(s);radius+=12*shoreScale(s))for(let i=0;i<12;i++){
       const p={x:berth.loot.x+Math.cos(i*Math.PI/6)*radius,y:berth.loot.y+Math.sin(i*Math.PI/6)*radius};
-      if(distance(p,berth.landing)<70||!walkableAt(s.map,p,9)||!shoreRoute(s.map,p,berth.landing,9))continue;
+      if(distance(p,berth.landing)<70*shoreScale(s)||!walkableAt(s.map,p,crewRadius(s))||!shoreRoute(s.map,p,berth.landing,crewRadius(s)))continue;
       return {...p,site:berth.island,quay:berth.island,stage:'waiting',angle:Math.PI/2,stride:0,moving:false,discovered:false,blocked:null};
     }
   }
   // The generator guarantees each cache-to-ladder route. This fallback keeps
   // a rescue possible even when nearby decoration fills the preferred spots.
   const b=candidates[first];
-  return {...b.loot,site:b.island,quay:b.island,stage:'waiting',angle:Math.PI/2,stride:0,moving:false,discovered:false,blocked:null};
+  return {...(b.searchPoint||b.loot),site:b.island,quay:b.island,stage:'waiting',angle:Math.PI/2,stride:0,moving:false,discovered:false,blocked:null};
 }
 export const rescueBerth=s=>s.depth===0&&s.rescue?s.map.berths.find(b=>b.island===(active(s)?s.rescue.quay:s.rescue.site)):null;
 export const rescuePendingAt=(s,id)=>active(s)&&s.rescue.discovered&&rescueBerth(s)?.id===id;
@@ -37,7 +39,7 @@ export const rescuePendingAt=(s,id)=>active(s)&&s.rescue.discovered&&rescueBerth
 function markPickup(s,following){
   const r=s.rescue,old=rescueBerth(s),home=s.map.berths.find(b=>b.id===s.mooring);
   const routes=s.map.berths.map(b=>{
-    const path=shoreRoute(s.map,r,b.landing,9);if(!path)return null;
+    const path=shoreRoute(s.map,r,b.landing,crewRadius(s));if(!path)return null;
     let from=r,length=0;for(const p of path){length+=distance(from,p);from=p;}
     return {b,length};
   }).filter(Boolean).sort((a,b)=>a.length-b.length);
@@ -49,10 +51,10 @@ function markPickup(s,following){
 export function rescueStatus(s){
   const r=s.rescue;if(!r)return null;
   const ground=active(s),home=s.map.berths.find(b=>b.id===s.mooring);
-  const boarding=ground&&s.mode==='ashore'&&!!s.person&&!!home&&distance(s.person,home.landing)<36;
+  const boarding=ground&&s.mode==='ashore'&&!!s.person&&!!home&&distance(s.person,home.landing)<shoreRanges(s).boarding;
   return {active:ground,site:r.site,stage:r.stage,discovered:r.discovered,point:r,blocked:r.blocked,
-    near:ground&&s.mode==='ashore'&&!!s.person&&distance(s.person,r)<=RESCUE.order&&sightLine(s.map,s.person,r),
-    boarding,ready:boarding&&distance(r,home.landing)<=RESCUE.ladder&&shoreSegment(s.map,r,home.landing,9),
+    near:ground&&s.mode==='ashore'&&!!s.person&&distance(s.person,r)<=rescueRanges(s).order&&sightLine(s.map,s.person,r),
+    boarding,ready:boarding&&distance(r,home.landing)<=rescueRanges(s).ladder&&shoreSegment(s.map,r,home.landing,crewRadius(s)),
     distance:distance(s.person||s.boat,r)};
 }
 export function orderRescue(s){
@@ -75,8 +77,8 @@ export function tickRescue(s,dt){
   r.blocked=null;
   if(r.stage!=='following'||s.mode!=='ashore'||!s.person)return;
   const d=distance(r,s.person);
-  if(d>RESCUE.leash){r.blocked='distant';return;}
-  if(s.combat.enemies.some(e=>e.hp>0&&e.kind!=='gull'&&distance(e,r)<RESCUE.notice&&sightLine(s.map,r,e)&&shoreSegment(s.map,r,e,1))){
+  if(d>rescueRanges(s).leash){r.blocked='distant';return;}
+  if(s.combat.enemies.some(e=>e.hp>0&&e.kind!=='gull'&&distance(e,r)<rescueRanges(s).notice&&sightLine(s.map,r,e)&&shoreSegment(s.map,r,e,1))){
     r.blocked='threat';
     if(visibleAt(s,r))say(s,'rescue-threat','정비공: 앞에 짐승이 있어요! Q로 유인하거나 길을 확보해 주세요.');
     return;
@@ -84,16 +86,16 @@ export function tickRescue(s,dt){
   // When the captain reaches the ladder, complete the last few steps to the
   // ladder itself. A following gap must not leave someone permanently just
   // outside boarding range while both actors stand still.
-  const home=s.map.berths.find(b=>b.id===s.mooring),atLadder=home&&distance(s.person,home.landing)<36;
-  const target=atLadder?home.landing:s.person,gap=atLadder?12:RESCUE.follow,remaining=distance(r,target);
+  const home=s.map.berths.find(b=>b.id===s.mooring),atLadder=home&&distance(s.person,home.landing)<shoreRanges(s).boarding;
+  const target=atLadder?home.landing:s.person,gap=atLadder?12*shoreScale(s):rescueRanges(s).follow,remaining=distance(r,target);
   if(remaining<=gap)return;
-  const p=shoreWaypoint(s.map,r,target,9,s.time);
+  const p=shoreWaypoint(s.map,r,target,crewRadius(s),s.time);
   if(!p){r.blocked='route';return;}
   const reach=distance(r,p);if(reach<.01)return;
-  const step=Math.min(reach,Math.max(0,remaining-gap),RESCUE.speed*dt);
+  const step=Math.min(reach,Math.max(0,remaining-gap),rescueRanges(s).speed*dt);
   const before={x:r.x,y:r.y},dx=(p.x-r.x)/reach*step,dy=(p.y-r.y)/reach*step;
-  if(walkableAt(s.map,{x:r.x+dx,y:r.y},9))r.x+=dx;
-  if(walkableAt(s.map,{x:r.x,y:r.y+dy},9))r.y+=dy;
+  if(walkableAt(s.map,{x:r.x+dx,y:r.y},crewRadius(s)))r.x+=dx;
+  if(walkableAt(s.map,{x:r.x,y:r.y+dy},crewRadius(s)))r.y+=dy;
   const moved=distance(r,before);r.moving=moved>.001;r.stride+=moved;
   if(r.moving)r.angle=Math.atan2(r.y-before.y,r.x-before.x);
 }
@@ -135,6 +137,6 @@ export function validRescue(s){
   if(r.stage!=='following'&&(r.moving||r.blocked!==null))return false;
   if(s.depth>0&&!['aboard','left-behind'].includes(r.stage))return false;
   if(s.depth===0&&r.stage==='left-behind')return false;
-  if(active(s)&&!walkableAt(s.map,r,9))return false;
+  if(active(s)&&!walkableAt(s.map,r,crewRadius(s)))return false;
   return true;
 }

@@ -13,6 +13,7 @@ import {SLUICE_MODEL,SLUICE,usesSluice,newSluice,beginSluice,trackSluice,sluiceG
 import {LIGHTHOUSE_MODEL,LIGHTHOUSE,usesLighthouse,newLighthouse,relayPosition,relayApproach,lighthouseStatus,tickLighthouse,lighthouseBlocked,validLighthouse} from './lighthouse-counterplay.js';
 import {CACHE_MODEL,cacheOffer,validCache} from './rogue-cache.js';
 import {CREW_UPGRADES,crewEffects,validCrewUpgrades} from './crew-upgrades.js';
+import {shoreScale,crewRadius,shoreRanges,crewSpeed} from './shore-scale.js';
 import {newHarborIntel,refreshHarborIntel,harborPlan,harborDestination,planHarbor,validHarborIntel} from './harbor-plan.js';
 import {newVoyageRecord,recordVoyage,recordHit,resourceSnapshot,resourceGains,validVoyageRecord} from './rogue-voyage-record.js';
 import {newShoreRescue,rescueStatus,rescueBerth,rescuePendingAt,orderRescue,tickRescue,boardRescue,leaveRescue,validRescue} from './shore-rescue.js';
@@ -25,7 +26,7 @@ export const GEAR={motor:'개량 추진기',pump:'배수 펌프',winch:'강화 �
 export const SAVE_KEY='lastsignal.rogue.v1';
 export const SHORE_RANGE=Object.freeze({search:32,boarding:36});
 const searchInterruptions=new WeakMap();
-const searchCache=s=>s.person?s.map.berths.find(b=>!s.claimed.includes(b.id)&&distance(s.person,b.loot)<SHORE_RANGE.search):null;
+const searchCache=s=>s.person?s.map.berths.find(b=>!s.claimed.includes(b.id)&&distance(s.person,b.loot)<shoreRanges(s).search):null;
 function interruptSearch(s,reason,work=s.work){
   if(s.mode==='ashore'&&work>0)searchInterruptions.set(s,{reason,time:s.time});
 }
@@ -55,7 +56,7 @@ function floor(s){
   s.mode='sailing';s.mooring=null;s.person=null;s.claimed=[];s.work=0;s.noise=null;s.secretFound=false;s.pendingCache=null;
   if(s.harborIntel!==null)s.harborIntel=newHarborIntel();
   s.dogs=s.map.berths.slice(1).map(b=>{
-    const x=b.loot.x+80,y=s.generator===1?b.loot.y+20:Math.max(b.loot.y+40,s.map.islands[b.island].y+175);
+    const x=s.generator>=4?b.loot.x:b.loot.x+80,y=s.generator>=4?b.landing.y:s.generator===1?b.loot.y+20:Math.max(b.loot.y+40,s.map.islands[b.island].y+175);
     return {x,y,homeX:x,homeY:y,island:b.island,alert:0,bite:0};
   });
   if(s.combat!==null)s.combat=newEncounter(s,s.combat?.ammo??12);
@@ -147,7 +148,7 @@ export function objective(s){
   if(s.status==='won')return {text:'세 계층 돌파 · 마지막 신호를 전달했다',target:null};
   if(s.mode==='ashore'){
     const b=s.map.berths.find(b=>!s.claimed.includes(b.id)&&distance(s.person,b.loot)<100)||s.map.berths.find(b=>b.id===s.mooring);
-    const cache=s.map.berths.find(x=>!s.claimed.includes(x.id)&&distance(s.person,x.loot)<SHORE_RANGE.search);
+    const cache=s.map.berths.find(x=>!s.claimed.includes(x.id)&&distance(s.person,x.loot)<shoreRanges(s).search);
     const home=s.map.berths.find(x=>x.id===s.mooring);
     const rescue=rescueStatus(s);
     if(rescue?.active&&rescue.discovered){
@@ -168,7 +169,7 @@ export function objective(s){
       const island=s.map.islands[cache.island],gear=GEAR[island.equipment];
       action=s.cacheModel===CACHE_MODEL?'F / R 수색 · 길게 누른 뒤 장비 또는 보급 선택':island.role==='equipment'?'F / R '+gear+' 회수 · 길게 누르기':
         'F '+(island.role==='fuel'?'연료 보충':'선체 수리')+' · R '+gear+' 회수 · 길게 누르기';
-    }else if(distance(s.person,home.landing)<SHORE_RANGE.boarding)action='E 재승선';
+    }else if(distance(s.person,home.landing)<shoreRanges(s).boarding)action='E 재승선';
     return s.claimed.includes(b.id)?{text:'배로 돌아가기',target:b.landing,action}:{text:'부두 수색',target:b.loot,action};
   }
   if(s.mode==='moored')return {text:'E · 하선 / Q · 계류 해제',target:s.map.berths.find(b=>b.id===s.mooring)};
@@ -260,7 +261,8 @@ export function interact(s,action,input={}){
   if(action==='horn'){
     if(s.mode==='moored'){s.mode='sailing';s.mooring=null;return true;}
     const origin=s.person||b;
-    s.noise={x:origin.x+Math.cos(origin.angle||0)*90,y:origin.y+Math.sin(origin.angle||0)*90,left:5};
+    const reach=90*(s.person?shoreScale(s):1);
+    s.noise={x:origin.x+Math.cos(origin.angle||0)*reach,y:origin.y+Math.sin(origin.angle||0)*reach,left:5};
     return true;
   }
   if(action==='cutnet'&&s.mode==='sailing'&&distance(b,{x:2110,y:500})<95&&!s.netResolved){
@@ -271,7 +273,7 @@ export function interact(s,action,input={}){
   if(action!=='interact')return false;
   if(s.mode==='ashore'){
     const berth=s.map.berths.find(x=>x.id===s.mooring);
-    if(distance(s.person,berth.landing)<SHORE_RANGE.boarding){boardRescue(s,maxHp(s));s.person=null;s.mode='moored';return true;}
+    if(distance(s.person,berth.landing)<shoreRanges(s).boarding){boardRescue(s,maxHp(s));s.person=null;s.mode='moored';return true;}
     return orderRescue(s);
   }
   if(s.mode==='moored'){
@@ -423,15 +425,15 @@ function shore(s,input,dt){
   const p=s.person,berth=s.map.berths.find(b=>b.id===s.mooring),island=s.map.islands[berth.island];
   const old={...p},buildings=shoreBuildings(island);
   const mag=Math.hypot(input.x||0,input.y||0),fast=input.boost;
-  if(mag){p.angle=Math.atan2(input.y,input.x);const v=(fast?100:58)*crewEffects(s).speed*(s.combat?.action?.kind==='melee'?.55:1);
+  if(mag){p.angle=Math.atan2(input.y,input.x);const v=crewSpeed(s,fast)*crewEffects(s).speed*(s.combat?.action?.kind==='melee'?.55:1);
     if(s.generator===1){
       p.x=clamp(p.x+input.x/mag*v*dt,island.x+12,island.x+island.w-12);
       p.y=clamp(p.y+input.y/mag*v*dt,island.y+12,island.y+island.h-12);
       if(buildings.some(building=>inside(p,building,9))){p.x=old.x;p.y=old.y;}
     }else{
       const nx=p.x+input.x/mag*v*dt,ny=p.y+input.y/mag*v*dt;
-      if(walkableAt(s.map,{x:nx,y:p.y}))p.x=nx;
-      if(walkableAt(s.map,{x:p.x,y:ny}))p.y=ny;
+      if(walkableAt(s.map,{x:nx,y:p.y},crewRadius(s)))p.x=nx;
+      if(walkableAt(s.map,{x:p.x,y:ny},crewRadius(s)))p.y=ny;
     }
   }
   if(s.combat){const traveled=distance(p,old);s.combat.moving=traveled>.01;s.combat.stride+=traveled;}
@@ -681,7 +683,7 @@ export function restoreRun(raw){
   try{
     if(typeof raw!=='string'||raw.length>160000)return null;
     const s=JSON.parse(raw),finite=(v,min,max)=>Number.isFinite(v)&&v>=min&&v<=max;
-    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,RUN_VERSION].includes(s.version)||![1,2,GENERATOR_VERSION].includes(s.generator)||!Number.isInteger(s.seed)||!finite(s.seed,0,0xffffffff)||!Number.isInteger(s.depth)||!finite(s.depth,0,2))return null;
+    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,RUN_VERSION].includes(s.version)||![1,2,3,4].includes(s.generator)||!Number.isInteger(s.seed)||!finite(s.seed,0,0xffffffff)||!Number.isInteger(s.depth)||!finite(s.depth,0,2))return null;
     if(s.version<17)s.crewUpgrades=null;
     if(!validCrewUpgrades(s))return null;
     if(s.version<15)s.rescue=null;

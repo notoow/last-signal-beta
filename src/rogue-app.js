@@ -4,8 +4,8 @@ import {voyageRecordMarkup,voyagePreparationText} from './rogue-voyage-record-ui
 import {salvageChoiceMarkup,salvageDetailsMarkup} from './rogue-salvage-ui.js';
 import {cacheChoiceMarkup,cacheReplacementMarkup,cacheChoiceModel} from './rogue-cache-ui.js';
 import {GENERATOR_VERSION} from './rogue-map.js';
-import {drawRogue,rogueCamera,lastRogueCamera} from './rogue-view.js';
-import {CAMERA_KEY,cameraSettings} from './rogue-camera.js';
+import {drawRogue,lastRogueCamera} from './rogue-view.js';
+import {CAMERA_KEY,cameraSettings,project,unproject,screenVectorToWorld} from './rogue-camera.js';
 import {drawCaptain} from './departure-art.js';
 import {CAPTAIN_SKILLS} from './captain-skills.js';
 import {CAPTAIN_VESSELS} from './captain-vessels.js';
@@ -24,11 +24,12 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   document.body.append(root);
   const $=id=>root.querySelector('#'+id),keys=new Set(),controller=new AbortController(),options={signal:controller.signal};
   $('roguePause').insertAdjacentHTML('beforebegin','<button id="rogueChart" class="play-pause" hidden></button>');
+  $('roguePause').insertAdjacentHTML('beforebegin','<div id="rogueQuayAssets" hidden><span id="rogueQuayAssetMessage" role="status" aria-live="polite"><span class="quay-asset-long"></span><span class="quay-asset-short"></span></span><span id="rogueQuayAssetCount" aria-hidden="true"></span><button id="rogueQuayRetry" type="button" aria-controls="rogueSea" hidden></button></div>');
   const ui=sessionText(language),en=language==='en';
   const t=(ko,english)=>en?english:ko;
   const hudMarkup=new Map();
   const setHud=(id,html)=>{if(hudMarkup.get(id)!==html){$(id).innerHTML=html;hudMarkup.set(id,html);}};
-  const probe=hudProbe($('rogueSea'),'#rogue .rogue-top-stack,#rogue .rogue-console,#rogueSkill,#roguePause,#rogueChart');
+  const probe=hudProbe($('rogueSea'),'#rogue .rogue-top-stack,#rogue .rogue-console,#rogueSkill,#roguePause,#rogueChart,#rogueQuayAssets,#rogue[data-shore-profile=metre] #rogueReadings,#rogue[data-shore-profile=metre] #rogueControls,#rogue[data-shore-profile=metre] #rogueConditions');
   $('rogueSea').tabIndex=-1;
   let hudRects=[];
   $('roguePause').textContent=en?'Esc · Pause':'Esc · 일시정지';
@@ -36,6 +37,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   let state=null,paused=true,mapOpen=false,last=performance.now(),clock=0,frameId,closed=false,captain='woo',build='standard',saveError=false;
   let preparationReturn=null,resultView=null;
   let lastMobileFrame=-Infinity;
+  let quayRetryPending=false,quayAssetSignature='',quayAssetLayout='';
   let camera=cameraSettings(null);
   try{camera=cameraSettings(JSON.parse(localStorage.getItem(CAMERA_KEY)));}catch{}
   const saveCamera=()=>{try{localStorage.setItem(CAMERA_KEY,JSON.stringify(camera));}catch{}};
@@ -46,6 +48,57 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     $('rogueZoom')?.addEventListener('input',e=>{changeZoom(Number(e.target.value)/100);$('rogueZoomValue').textContent=Math.round(camera.zoom*100)+'%';},options);
   }
   const bind=(id,fn)=>$(id)?.addEventListener('click',fn,options);
+  $('rogueQuayRetry').textContent=t('다시 시도','Retry');
+  $('rogueQuayRetry').setAttribute('aria-label',t('항구 이미지 다시 불러오기','Retry loading harbor images'));
+  function refreshQuayAssets(view){
+    const notice=$('rogueQuayAssets'),button=$('rogueQuayRetry'),assets=view?.quayAssets;
+    const eligible=state?.generator===4&&['moored','ashore'].includes(state.mode)&&!paused&&!mapOpen&&root.dataset.surface==='playing';
+    const status=eligible?(quayRetryPending?'loading':assets?.status):null;
+    const visible=status==='loading'||status==='error',retry=visible&&status==='error';
+    if(document.activeElement===button&&!retry&&!paused)$('rogueSea').focus({preventScroll:true});
+    const signature=visible?`${status}:${assets?.loaded??0}:${assets?.total??0}`:'hidden';
+    if(signature!==quayAssetSignature){
+      const changed=notice.dataset.status!==(status||'');
+      quayAssetSignature=signature;notice.hidden=!visible;notice.dataset.status=status||'';button.hidden=!retry;button.disabled=quayRetryPending;
+      if(changed&&visible){
+        const message=$('rogueQuayAssetMessage');
+        message.querySelector('.quay-asset-long').textContent=status==='error'?t('항구 이미지를 불러오지 못했어요','Harbor images unavailable'):t('항구 이미지 불러오는 중','Loading harbor images');
+        message.querySelector('.quay-asset-short').textContent=status==='error'?t('항구 이미지','Harbor art'):t('항구 준비','Harbor loading');
+      }
+      $('rogueQuayAssetCount').textContent=status==='loading'&&assets?.total>0?`${Math.max(0,Math.min(assets.total,assets.loaded||0))}/${assets.total}`:'';
+      probe.invalidate();
+    }
+    if(visible&&document.documentElement.dataset.mobileUi==='true'){
+      // Fit the existing top HUD gap; the fallback row stays above thumb controls.
+      const goal=document.getElementById('mobileObjective')?.getBoundingClientRect(),resources=document.getElementById('mobileResources')?.getBoundingClientRect();
+      if(goal&&resources){
+        const left=Math.ceil(goal.right+8),available=Math.floor(resources.left-8)-left,inline=available>=148;
+        const x=inline?left:Math.ceil(goal.left),y=inline?Math.max(6,Math.floor(goal.top)-4):Math.ceil(goal.bottom+6),width=inline?available:Math.min(220,innerWidth-150);
+        const layout=`${inline}:${x}:${y}:${width}`;
+        if(layout!==quayAssetLayout){
+          quayAssetLayout=layout;notice.dataset.mobileRow=inline?'inline':'below';
+          notice.style.setProperty('--quay-asset-left',`${x}px`);
+          notice.style.setProperty('--quay-asset-top',`${y}px`);
+          notice.style.setProperty('--quay-asset-width',`${width}px`);
+          probe.invalidate();
+        }
+      }
+    }
+  }
+  async function retryHarborArt(){
+    const view=lastRogueCamera($('rogueSea'));
+    if(quayRetryPending||paused||state?.generator!==4||!['moored','ashore'].includes(state.mode)||mapOpen||view?.quayAssets?.status!=='error')return;
+    quayRetryPending=true;refreshQuayAssets(view);
+    try{
+      const {retryQuayArt}=await import('./quay-view.js');await retryQuayArt();
+      // Let the next rendered frame replace the old error snapshot before
+      // returning display ownership to its asset status.
+      await new Promise(resolve=>requestAnimationFrame(resolve));
+    }
+    catch{/* Keep the existing playable fallback and expose retry again. */}
+    finally{quayRetryPending=false;if(!closed)refreshQuayAssets(lastRogueCamera($('rogueSea')));}
+  }
+  bind('rogueQuayRetry',()=>{void retryHarborArt();});
   function save(){
     if(!state)return true;
     try{localStorage.setItem(SAVE_KEY,encodeRun(state));saveError=false;saveStatus();return true;}
@@ -203,11 +256,17 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     if(state?.pendingGear){gearChoice();return;}if(state?.pendingCache){cacheChoice();return;}if(state?.salvage?.pending){salvageChoice();return;}
     resultView=null;paused=false;keys.clear();root.dataset.surface='playing';releaseModal($('rogueModal'));$('rogueModal').hidden=true;
     $('rogueSea').focus({preventScroll:true});probe.invalidate();last=performance.now();}
-  const direction=()=>({x:(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0),y:(keys.has('KeyS')||keys.has('ArrowDown')?1:0)-(keys.has('KeyW')||keys.has('ArrowUp')?1:0)});
+  const direction=()=>{
+    const input={x:(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0),y:(keys.has('KeyS')||keys.has('ArrowDown')?1:0)-(keys.has('KeyW')||keys.has('ArrowUp')?1:0)};
+    const view=lastRogueCamera($('rogueSea'));
+    // Desktop keys and mobile's emitted keys share one screen-to-world boundary.
+    return view?.projection?screenVectorToWorld(view,input):input;
+  };
   $('rogueSea').addEventListener('pointerdown',e=>{
     if(paused||!state||mapOpen||e.button!==0||e.pointerType==='touch')return;
-    const rect=$('rogueSea').getBoundingClientRect(),view=lastRogueCamera($('rogueSea'))||rogueCamera($('rogueSea'),state,false,camera);
-    if(interact(state,'ranged',{aim:{x:(e.clientX-rect.left-view.ox)/view.scale,y:(e.clientY-rect.top-view.oy)/view.scale}}))onSound('anchor');
+    const rect=$('rogueSea').getBoundingClientRect(),view=lastRogueCamera($('rogueSea'));
+    if(!view)return;
+    if(interact(state,'ranged',{aim:unproject(view,{x:e.clientX-rect.left,y:e.clientY-rect.top})}))onSound('anchor');
   },options);
   $('rogueSea').addEventListener('wheel',e=>{
     if(paused||mapOpen)return;e.preventDefault();changeZoom(camera.zoom*Math.exp(-e.deltaY*.001));
@@ -255,6 +314,10 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   }
   function key(e,down){
     e.stopImmediatePropagation();
+    if(e.target===$('rogueQuayRetry')&&['Enter','NumpadEnter','Space'].includes(e.code)){
+      e.preventDefault();keys.delete(e.code);if(down&&!e.repeat)void retryHarborArt();return;
+    }
+    if(e.code==='Tab'&&!paused&&!$('rogueQuayAssets').hidden&&!$('rogueQuayRetry').hidden)return;
     if(!down){keys.delete(e.code);return;}
     if(e.code==='Escape'&&!e.repeat&&root.dataset.surface==='preparation'&&preparationReturn){e.preventDefault();end();return;}
     if(['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName))return;
@@ -284,9 +347,10 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   window.addEventListener('beforeunload',save,options);
   function frame(now){
     if(closed)return;const dt=Math.min((now-last)/1000,.05);last=now;
+    const shoreProfile=state?.generator>=4&&['moored','ashore'].includes(state.mode)?'metre':'';
+    if(root.dataset.shoreProfile!==shoreProfile){root.dataset.shoreProfile=shoreProfile;probe.invalidate();}
     if(state){
       if(!paused){
-        const axis=(a,b,c,d)=>(keys.has(a)||keys.has(b)?1:0)-(keys.has(c)||keys.has(d)?1:0);
         const before=state.combat?{...state.combat}:null;
         const impactBefore=state.boss.crane?.impactAt??-1;
         const gateBefore=state.boss.sluice?.hitAt??-1;
@@ -294,7 +358,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
         const shellBefore=state.boss.lighthouse?.impactAt??-1;
         const salvageUses=state.salvage?.uses??0;
         const hitBefore=impactSequence(state);
-        tickRun(state,{x:axis('KeyD','ArrowRight','KeyA','ArrowLeft'),y:axis('KeyS','ArrowDown','KeyW','ArrowUp'),boost:keys.has('ShiftLeft')||keys.has('ShiftRight'),precision:keys.has('KeyC'),brake:keys.has('Space'),melee:keys.has('Space'),ranged:keys.has('KeyV'),recover:keys.has('KeyF'),equipment:keys.has('KeyR')},dt);
+        tickRun(state,{...direction(),boost:keys.has('ShiftLeft')||keys.has('ShiftRight'),precision:keys.has('KeyC'),brake:keys.has('Space'),melee:keys.has('Space'),ranged:keys.has('KeyV'),recover:keys.has('KeyF'),equipment:keys.has('KeyR')},dt);
         const hit=impactSequence(state)>hitBefore?recentImpact(state):null;
         // Play one resolved-loss cue. Proximity, blocked damage and restored
         // hit history cannot produce a hurt sound; scrap theft is a metal cue.
@@ -332,14 +396,19 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
       if(!saveError)$('rogueRadio').textContent=state.radio?.left>0?rogueHudText(state.radio.text,language):'';
       $('rogueControls').dataset.motion=hud.motion;
       setHud('rogueControls',markup.controls);
+      refreshQuayAssets(lastRogueCamera($('rogueSea')));
       if(!paused)hudRects=probe.read(now);
       if(root.dataset.surface==='chart'){
         const chart=$('harborPlanSea'),frame=drawRogue(chart,state,{reduced:true,mapOpen:true,chartPins:true,occupied:[],language});
         root.querySelectorAll('[data-map-x]').forEach(pin=>{
-          pin.style.left=(Number(pin.dataset.mapX)*frame.scale+frame.ox)+'px';
-          pin.style.top=(Number(pin.dataset.mapY)*frame.scale+frame.oy)+'px';
+          const point=project(frame,{x:Number(pin.dataset.mapX),y:Number(pin.dataset.mapY)});
+          pin.style.left=point.x+'px';
+          pin.style.top=point.y+'px';
         });
-      }else drawRogue($('rogueSea'),resultView||state,{reduced,mapOpen,camera,occupied:hudRects,language});
+      }else{
+        const view=drawRogue($('rogueSea'),resultView||state,{reduced,mapOpen,camera,occupied:hudRects,language});
+        refreshQuayAssets(view);
+      }
       if(document.documentElement.dataset.mobileUi==='true'&&now-lastMobileFrame>=100){
         lastMobileFrame=now;
         window.dispatchEvent(new CustomEvent('lastsignal:mobile-frame',{detail:{mode:state.mode,mapOpen,active:!paused,context:rogueContextActions(state),minimap:rogueMinimap(state)}}));

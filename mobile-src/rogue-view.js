@@ -4,7 +4,7 @@ import {gameArt} from './game-art.js';
 import {DEPTHS,waterAt} from './rogue-map.js';
 import {drawHarborTerrain} from './harbor-terrain.js';
 import {workSprite,workRope} from './harbor-work-art.js';
-import {objective,partPosition,berthReadiness,berthAlignment,GEAR} from './rogue-core.js';
+import {objective,shoreSearchStatus,partPosition,berthReadiness,berthAlignment,GEAR} from './rogue-core.js';
 import {dockHint} from './docking-readiness.js';
 import {dockAlignmentPresentation,impactPresentation} from './rogue-hud.js';
 import {recentImpact} from './rogue-impact.js';
@@ -15,6 +15,11 @@ import {drawShoreEncounter} from './shore-animation.js';
 import {FLOOR_TOOLS,SHORE_SITES,toolBerth,hasTool} from './shore-encounters.js';
 import {drawSurvey,visibleAt} from './rogue-vision.js';
 import {playCamera,edgeMarker} from './rogue-camera.js';
+import {quayCamera} from './quay-camera.js';
+import {supplyBoatLayout} from './supply-fleet.js';
+import {drawQuay,prepareQuayArt} from './quay-view.js';
+import {IDENTITY_PROJECTION,project as projectWorld} from './world-projection.js';
+import {shoreScale,shoreRanges} from './shore-scale.js';
 import {waterMotion,waterVelocity} from './ship-motion.js';
 import {towBow,tugStern} from './rogue-tow.js';
 import {floatPose,drawWake} from './sea-surface.js';
@@ -52,18 +57,23 @@ const impactFrames=new WeakMap();
 export const lastRogueImpact=canvas=>impactFrames.get(canvas)||null;
 const dockOverlap=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
 function impactTag(c,hit,frame,s,dockingPanel){
-  const project=p=>({x:p.x*frame.scale+frame.ox,y:p.y*frame.scale+frame.oy}),p=project(hit.point),v=frame.viewport;
+  const project=p=>projectWorld(frame,p),p=project(hit.point),v=frame.viewport;
   if(p.x<v.x||p.y<v.y||p.x>v.x+v.w||p.y>v.y+v.h)return null;
   const body=b=>{
     const q=project(b),a=b.angle||0,hx=(Math.abs(Math.cos(a))*b.length+Math.abs(Math.sin(a))*b.width)*frame.scale/2+8,
       hy=(Math.abs(Math.sin(a))*b.length+Math.abs(Math.cos(a))*b.width)*frame.scale/2+8;
     return {x:q.x-hx,y:q.y-hy,w:hx*2,h:hy*2};
   };
-  const blocks=[...frame.occupied,body(s.boat)];
+  const blocks=[...frame.occupied];
+  if(frame.quay?.ready){
+    blocks.push(...frame.quay.actorBounds,...frame.quay.scenery.map(o=>o.bounds));
+    if(frame.quay.boat?.bounds)blocks.push(frame.quay.boat.bounds);
+    if(frame.quay.tow?.visibleBounds)blocks.push(frame.quay.tow.visibleBounds);
+  }else blocks.push(body(s.boat));
   if(dockingPanel)blocks.push(dockingPanel);
-  if(s.person){const q=project(s.person);blocks.push({x:q.x-24*frame.scale,y:q.y-65*frame.scale,w:48*frame.scale,h:82*frame.scale});}
-  if(s.tow?.hp>0&&visibleAt(s,s.tow))blocks.push(body(s.tow));
-  for(const e of s.combat?.enemies||[]){
+  if(s.person&&!frame.quay?.ready){const q=project(s.person);blocks.push({x:q.x-24*frame.scale,y:q.y-65*frame.scale,w:48*frame.scale,h:82*frame.scale});}
+  if(!frame.quay?.ready&&s.tow?.hp>0&&visibleAt(s,s.tow))blocks.push(body(s.tow));
+  for(const e of frame.quay?.ready?[]:s.combat?.enemies||[]){
     if(e.hp<=0||!visibleAt(s,e))continue;const q=project(e),r=({gull:72,crab:90,dog:60,rat:40}[e.kind]||50)*frame.scale;
     blocks.push({x:q.x-r*.6,y:q.y-r,w:r*1.2,h:r*1.4});
   }
@@ -193,11 +203,17 @@ function craneBucket(c,s,reduced){
   dredgerSprite(c,b.phase==='attack'?'bucket-impact':a.locked?'bucket-falling':'bucket-raised',t.x,t.y-height);
   if(b.phase==='attack'&&a.impact&&age>=0&&age<.31&&!reduced)dredgerSprite(c,age<.07?'impact-fx-1':age<.17?'impact-fx-2':'impact-fx-3',t.x,t.y+10);
 }
-export function rogueCamera(canvas,s,mapOpen=false,options={},previous=null,dt=0,occupied=null){
+export function rogueCamera(canvas,s,mapOpen=false,options={},previous=null,dt=0,occupied=null,quayReady=true){
   const width=canvas.clientWidth,height=canvas.clientHeight;
+  if(s.generator>=4&&['moored','ashore'].includes(s.mode)&&!mapOpen){
+    const berth=s.map.berths.find(b=>b.id===s.mooring);
+    return quayCamera({width,height,focus:s.person||berth.landing,options,previous,dt,occupied:occupied||[],
+      companionBounds:quayReady&&s.tow?.connected&&!s.tow.delivered&&s.tow.hp>0&&visibleAt(s,s.tow)?f=>supplyBoatLayout(s.tow,f).visibleBounds:null,
+      ...(quayReady?{}:{projection:IDENTITY_PROJECTION,projectionId:'quay-map-fallback'})});
+  }
   const target=s.person?objective(s).target:null;
   const attention=target&&Math.hypot(target.x-s.person.x,target.y-s.person.y)<=260?target:null;
-  return playCamera({width,height,world:s.map,focus:s.person||s.boat,partner:s.tow?.connected?s.tow:null,attention,ashore:!!s.person,options,overview:mapOpen,previous,dt,occupied});
+  return playCamera({width,height,world:s.map,focus:s.person||s.boat,partner:s.tow?.connected?s.tow:null,attention,ashore:!!s.person,options,overview:mapOpen,previous:previous?.projection?null:previous,dt,occupied});
 }
 const frames=new WeakMap();
 export const lastRogueCamera=canvas=>frames.get(canvas)?.frame;
@@ -206,7 +222,11 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   // captions would obscure entire quays at this scale.
   const label=chartPins?()=>{}:canvasLabel;
   const old=frames.get(canvas),previous=!reduced&&old?.map===s.map?old.frame:null;
-  const frame=rogueCamera(canvas,s,mapOpen,settings,previous,Math.min(.1,Math.max(0,s.time-(old?.time??s.time))),occupied);
+  // Start only for a new-profile voyage, while still at sea. A slow/broken
+  // illustration must never replace the controlled world with an empty screen.
+  const assets=s.generator>=4?prepareQuayArt():null;
+  const frame=rogueCamera(canvas,s,mapOpen,settings,previous,Math.min(.1,Math.max(0,s.time-(old?.time??s.time))),occupied,assets?.status==='ready');
+  if(assets)frame.quayAssets=assets;
   const alignment=mapOpen?null:berthAlignment(s),dockCopy=dockAlignmentPresentation(alignment,language,s);
   dockFrames.delete(canvas);
   frames.set(canvas,{map:s.map,time:s.time,frame});
@@ -214,6 +234,13 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   const dpr=Math.min(devicePixelRatio||1,2);
   if(canvas.width!==Math.round(width*dpr)||canvas.height!==Math.round(height*dpr)){canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);}
   const c=canvas.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,width,height);
+  if(frame.projectionId==='quay-v1'){
+    exitFrames.delete(canvas);canvas.dataset.dockPanel='false';
+    frame.quay=drawQuay(c,s,frame,{reduced,language,task:objective(s),search:shoreSearchStatus(s)});
+    const impact=impactPresentation(recentImpact(s),language);
+    if(impact)impactFrames.set(canvas,{impact,tag:impactTag(c,impact,frame,s,null)});else impactFrames.delete(canvas);
+    return frame;
+  }
   c.save();c.translate(ox,oy);c.scale(scale,scale);
   gameArt.water(c,s.map.width,s.map.height,reduced?0:s.time);
   if(s.map.version>=2){c.fillStyle='#0b293c44';c.fillRect(0,0,s.map.width,s.map.height);}
@@ -239,11 +266,12 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
     c.strokeStyle=selected||ok?'#a4d7b3':'#d0b875';c.lineWidth=2;
     if(!aligning){c.setLineDash([8,6]);c.strokeRect(berth.x-46,berth.y-19,92,38);c.setLineDash([]);}
     c.beginPath();c.moveTo(berth.landing.x,berth.landing.y);c.lineTo(berth.x,berth.y);c.stroke();
-    workSprite(c,'cleat',berth.landing.x,berth.landing.y+13,20,16);
+    const shoreUnit=shoreScale(s);
+    workSprite(c,'cleat',berth.landing.x,berth.landing.y+13*shoreUnit,20*shoreUnit,16*shoreUnit);
     if(!aligning)label(c,selected?(language==='en'?'Moored':'계류 중'):dockHint(docking,language),berth.x,berth.y+48);
     if(s.combat)label(c,SHORE_SITES[berth.island],berth.landing.x,berth.landing.y-30,'#c4cbb8',15);
     if(!s.claimed.includes(berth.id)&&visibleAt(s,berth.loot)){
-      const l=berth.loot;prop(c,'chest',l.x,l.y+9,28,21);
+      const l=berth.loot;prop(c,'chest',l.x,l.y+9*shoreUnit,28*shoreUnit,21*shoreUnit);
       const island=s.map.islands[berth.island],counter=s.combat&&berth.id===toolBerth(s).id&&!hasTool(s,FLOOR_TOOLS[s.depth].id);
       // The chest remains in the world; its work label matters only on foot
       // when it is the current target, not behind the sailing HUD.
@@ -351,7 +379,7 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   }
   const task=objective(s),target=task.target;
   const alignedTarget=alignment&&target&&target.x===alignment.berth.x&&target.y===alignment.berth.y;
-  if(target&&!alignedTarget)ring(c,target,task.rescue&&target===s.rescue?16:s.mode==='ashore'?32:42,'#ebd59e');
+  if(target&&!alignedTarget)ring(c,target,task.rescue&&target===s.rescue?16*shoreScale(s):s.mode==='ashore'?shoreRanges(s).search:42,'#ebd59e');
   if(alignment)dockGeometry(c,alignment,scale);
   c.restore();
   const panel=alignment?dockPanel(c,alignment,frame,dockCopy,s,language,exitScene):null;

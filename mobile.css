@@ -329,7 +329,11 @@ html,body{height:var(--mobile-height,100dvh);overflow:hidden}
 /* Floating movement and contextual actions share no opaque bottom deck. */
 #mobileActions [hidden]{display:none!important}
 #mobileStick.floating{position:fixed;left:var(--stick-x);top:var(--stick-y);transform:translate(-50%,-50%);margin:0}
+/* A floating stick leaves flex flow. Keep the action hand anchored even when
+   it becomes the only in-flow child, including while another finger holds it. */
+#mobileActions{margin-left:auto}
 html[data-mobile-move-side=right] #mobileControls{flex-direction:row-reverse}
+html[data-mobile-move-side=right] #mobileActions{margin-left:0;margin-right:auto}
 #mobileControls[data-mode=rogue]:not(.expanded) #mobileActions{grid-template-columns:52px 64px;grid-template-areas:'boost more' 'primary attack';gap:8px}
 #mobileControls[data-mode=rogue]:not(.expanded) #mobileActions[data-context-count='2'],#mobileControls[data-mode=rogue]:not(.expanded) #mobileActions[data-context-count='3']{grid-template-columns:52px 64px 64px;grid-template-areas:'boost tertiary more' 'secondary primary attack'}
 #mobileControls[data-mode=rogue]:not(.expanded) #mobileActions>[data-code=Space]{grid-area:attack;width:64px;height:64px;border-width:2px}
@@ -354,3 +358,11 @@ html[lang=en] #mobileActions .mobile-context-action[data-hold=true] span::after{
 #mobileFlightHud.has-reward #mobileNotice{top:124px}
 #mobileContext{max-width:calc(100vw - 320px)}
 @media(max-width:600px){#mobileMinimap{width:96px;height:58px;top:50px}#mobileNotice{max-width:calc(100vw - 240px);font-size:11px}#mobileObjective{max-width:50vw}#mobileContext{font-size:11px;bottom:84px}}
+
+html[data-mobile-ui=true] #rogueQuayAssets{position:fixed;z-index:81;left:var(--quay-asset-left,14px);top:var(--quay-asset-top,56px);right:auto;max-width:var(--quay-asset-width,220px);padding:0 4px;gap:6px;font-size:11px}
+html[data-mobile-ui=true] #rogueQuayAssets .quay-asset-long{display:none}
+html[data-mobile-ui=true] #rogueQuayAssets .quay-asset-short{display:inline}
+html[data-mobile-ui=true] #rogue #rogueQuayRetry{min-width:56px;min-height:44px;padding:6px 8px;font-size:11px}
+html[data-mobile-ui=true]:has(#rogueQuayAssets[data-mobile-row=below]:not([hidden])) #mobileNotice{top:110px}
+html[data-mobile-ui=true]:has(#rogueQuayAssets[data-mobile-row=below]:not([hidden])) #mobileReward{top:110px}
+html[data-mobile-ui=true]:has(#rogueQuayAssets[data-mobile-row=below]:not([hidden])) #mobileFlightHud.has-reward #mobileNotice{top:166px}

@@ -139,3 +139,38 @@
  #rogue .harbor-plan-body{grid-template-columns:minmax(0,1fr) 320px;gap:16px}
  #rogue .harbor-plan-site{padding-top:8px;padding-bottom:8px;gap:2px}
 }
+
+/* The metre-scale dock has separate light instruments and key prompts.
+   Their actual bounds are measured individually by the camera HUD probe. */
+html:not([data-mobile-ui=true]) #rogue[data-shore-profile=metre] .rogue-console{display:contents}
+html:not([data-mobile-ui=true]) #rogue[data-shore-profile=metre] .rogue-top-stack{width:360px;max-width:42%;gap:8px}
+html:not([data-mobile-ui=true]) #rogue[data-shore-profile=metre] #rogueMission{padding:0 0 0 10px;background:none;border-left:2px solid #e9c582;text-shadow:0 1px 3px #07151f,0 0 7px #07151f}
+html:not([data-mobile-ui=true]) #rogue[data-shore-profile=metre] #rogueMission small{font-size:12px;margin-bottom:3px}
+html:not([data-mobile-ui=true]) #rogue[data-shore-profile=metre] #rogueMission strong{font-size:18px}
+html:not([data-mobile-ui=true]) #rogue[data-shore-profile=metre] .rogue-radio{padding:5px 10px;font-size:12px;line-height:1.45;background:linear-gradient(90deg,#10212ccc,#10212c55);border-left:1px solid #8bb9c7;text-shadow:0 1px 3px #07151f}
+html:not([data-mobile-ui=true]) #rogue[data-shore-profile=metre] #rogueReadings{position:absolute;left:20px;bottom:18px;width:max-content;max-width:42%;margin:0;padding:4px 0;gap:8px 22px;text-shadow:0 1px 3px #07151f,0 0 8px #07151f}
+html:not([data-mobile-ui=true]) #rogue[data-shore-profile=metre] [data-rogue-metric]{font-size:12px;gap:5px}
+html:not([data-mobile-ui=true]) #rogue[data-shore-profile=metre] [data-rogue-metric] b{font-size:20px}
+html:not([data-mobile-ui=true]) #rogue[data-shore-profile=metre] .rogue-maximum{font-size:11px}
+html:not([data-mobile-ui=true]) #rogue[data-shore-profile=metre] [data-rogue-metric=boost]{display:none}
+html:not([data-mobile-ui=true]) #rogue[data-shore-profile=metre] [data-rogue-metric=ammo]{padding-bottom:0;align-self:center}
+html:not([data-mobile-ui=true]) #rogue[data-shore-profile=metre] [data-rogue-metric=ammo] .rogue-gauge{display:none}
+html:not([data-mobile-ui=true]) #rogue[data-shore-profile=metre] #rogueControls{position:absolute;left:auto;right:20px;bottom:18px;width:max-content;max-width:53%;display:flex;justify-content:flex-end;align-items:center;gap:6px 12px;margin:0;padding:0;border:0;background:none;font-size:13px;line-height:1.4;text-align:right;text-shadow:0 1px 3px #07151f,0 0 7px #07151f}
+html:not([data-mobile-ui=true]) #rogue[data-shore-profile=metre] [data-rogue-action=primary]:empty{display:none}
+html:not([data-mobile-ui=true]) #rogue[data-shore-profile=metre] [data-rogue-action=primary]{padding:5px 9px;border-left:2px solid #e9c582;background:#10212c80;color:#f5e2b9}
+html:not([data-mobile-ui=true]) #rogue[data-shore-profile=metre] [data-rogue-context=defense]{flex-basis:auto;font-size:12px}
+html:not([data-mobile-ui=true]) #rogue[data-shore-profile=metre] .rogue-work{font-size:12px;gap:8px}
+html:not([data-mobile-ui=true]) #rogue[data-shore-profile=metre] .rogue-work progress{width:80px;height:4px}
+html:not([data-mobile-ui=true]) #rogue[data-shore-profile=metre] #rogueConditions{position:absolute;left:20px;bottom:70px;width:max-content;max-width:calc(100% - 40px);margin:0;gap:4px 16px;font-size:12px;line-height:1.4;text-shadow:0 1px 3px #07151f,0 0 8px #07151f}
+html:not([data-mobile-ui=true]) #rogue[data-shore-profile=metre] .rogue-impact:empty{display:none}
+html:not([data-mobile-ui=true]) #rogue[data-shore-profile=metre] #rogueSkill{display:none}
+
+/* A recoverable scenery download never opens a menu or covers play controls. */
+#rogueQuayAssets{position:absolute;z-index:40;top:72px;right:16px;display:flex;align-items:center;gap:8px;max-width:310px;padding:3px 7px;color:#c5d3d9;background:linear-gradient(90deg,#10212cb3,#10212c55);font:500 12px/1.35 Pretendard,sans-serif;text-shadow:0 1px 3px #07151f;pointer-events:none}
+#rogueQuayAssets[hidden],#rogueQuayAssets [hidden]{display:none!important}
+#rogueQuayAssets .quay-asset-short{display:none}
+#rogueQuayAssetCount{color:#a7bec7;font-size:11px;white-space:nowrap;font-variant-numeric:tabular-nums}
+#rogueQuayAssets[data-status=error]{color:#e5c28d}
+#rogue #rogueQuayRetry{flex:none;min-height:32px;margin:0;padding:5px 9px;border:1px solid #b89b65;border-radius:3px;background:#10212c;color:#f1d69f;font:600 12px/1.2 Pretendard,sans-serif;pointer-events:auto;touch-action:manipulation;cursor:pointer}
+#rogue #rogueQuayRetry:focus-visible{outline:2px solid #f2cb7f;outline-offset:3px}
+#rogue #rogueQuayRetry:disabled{opacity:.5;cursor:default}

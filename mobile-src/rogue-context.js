@@ -1,6 +1,7 @@
-import {berthReadiness,shoreSearchStatus,SHORE_RANGE,bossLinkCandidate} from './rogue-core.js';
+import {berthReadiness,shoreSearchStatus,bossLinkCandidate} from './rogue-core.js';
 import {rescueStatus} from './shore-rescue.js';
 import {visibleAt,SURVEY_COLS,SURVEY_CELL} from './rogue-vision.js';
+import {shoreRanges} from './shore-scale.js';
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const action=(id,code,labelKo,labelEn,enabled=true,hold=false,progress=0)=>({id,code,labelKo,labelEn,enabled,hold,progress});
 // Read-only affordances. Inputs still pass through interact/tickRun; no UI can
@@ -15,7 +16,7 @@ export function rogueContextActions(s){
       result.primary=action('search','KeyF',search.choiceMode?'수색':'보급 회수',search.choiceMode?'Search':'Supplies',!['choice','hit'].includes(search.blocked),true,search.progress/search.required);
       if(!search.choiceMode)result.secondary.push(action('equipment','KeyR','장비 회수','Equipment',result.primary.enabled,true,result.primary.progress));
     }
-    if(b&&distance(s.person,b.landing)<SHORE_RANGE.boarding){
+    if(b&&distance(s.person,b.landing)<shoreRanges(s).boarding){
       const board=action('board','KeyE','승선','Board');
       if(result.primary)result.secondary.push(board);else result.primary=board;
     }

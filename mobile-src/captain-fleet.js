@@ -5,10 +5,17 @@ export const FLEET_FRAMES={
   han:{top:[18,552,754,304],body:[0,88,754,216],menu:[16,534,756,406]},
   jeong:{top:[805,500,714,400],body:[0,90,714,310],menu:[759,514,757,479]}
 };
-const images=new Map(),sprites=new Map();
-function imageFor(view){
-  if(!images.has(view)){const image=new Image();image.src='assets/art/captain-fleet-'+view+'-v1.png';images.set(view,image);}
+const images=new Map(),sprites=new Map();let retryAttempt=0;
+function imageFor(view,retry=0){
+  if(!images.has(view)){const image=new Image();image.src='assets/art/captain-fleet-'+view+'-v1.png'+(retry?'?quayRetry='+retry:'');images.set(view,image);}
   return images.get(view);
+}
+// Share the menu atlas with docked rendering so readiness includes the actual
+// image used by drawDockedCaptainBoat, not a separate cached request.
+export function prepareDockedFleet(retry=false){
+  const image=imageFor('menu');
+  if(retry&&!(image.complete&&image.naturalWidth)){images.delete('menu');return imageFor('menu',++retryAttempt);}
+  return image;
 }
 function sprite(view,captain,paint){
   const image=imageFor(view);
@@ -44,6 +51,16 @@ export function drawCaptainBoat(c,b,captain,paint='harbor'){
   c.save();c.translate(b.x,b.y);c.rotate(b.angle);
   c.fillStyle='#061c2680';c.beginPath();c.ellipse(0,2,b.length*.52,b.width*.53,0,0,Math.PI*2);c.fill();
   c.drawImage(art,-b.length/2,-(by+bh/2)*sy,art.width*sx,art.height*sy);c.restore();return true;
+}
+// Fixed berth pose only. Keep each captain's existing hull and live paint.
+// This is a waterline fit of the menu atlas, never a rotated overhead sprite.
+export function drawDockedCaptainBoat(c,point,length,captain,paint='harbor'){
+  const art=sprite('menu',captain,paint);if(!art)return null;
+  const scale=length/art.width;
+  const pivot={x:art.width*.5,y:art.height*.79};
+  const bounds={x:point.x-pivot.x*scale,y:point.y-pivot.y*scale,w:art.width*scale,h:art.height*scale};
+  c.drawImage(art,bounds.x,bounds.y,bounds.w,bounds.h);
+  return bounds;
 }
 export function drawDepartureShip(canvas,captain,paint='harbor'){
   const image=imageFor('menu'),identity=captain+'-'+paint;

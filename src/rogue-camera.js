@@ -1,3 +1,5 @@
+import {project,unproject} from './world-projection.js';
+export {project,unproject,screenVectorToWorld} from './world-projection.js';
 export const CAMERA_KEY='lastsignal.rogue.camera.v1';
 export const DEFAULT_CAMERA={autoZoom:false,zoom:1};
 export function cameraSettings(value){
@@ -49,8 +51,6 @@ export function clearViewport(width,height,occupied=[],previous=null,preferred=n
     !blocks.some(r=>overlaps(r,previous))&&(!bestFits||fits(previous))&&score(previous)>=bestScore*.9)return {...previous,obstructed:false};
   return best?{...best,obstructed:false}:{...outer,obstructed:true};
 }
-export const project=(frame,p)=>({x:p.x*frame.scale+frame.ox,y:p.y*frame.scale+frame.oy});
-export const unproject=(frame,p)=>({x:(p.x-frame.ox)/frame.scale,y:(p.y-frame.oy)/frame.scale});
 function bodyBounds(b){
   const a=b.angle||0,l=b.length||70,w=b.width||34;
   return {x:Math.abs(Math.cos(a))*l/2+Math.abs(Math.sin(a))*w/2,y:Math.abs(Math.sin(a))*l/2+Math.abs(Math.cos(a))*w/2};

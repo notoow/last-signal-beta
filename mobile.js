@@ -1247,7 +1247,9 @@ function refresh() {
 }
 setInterval(refresh, 100);
 refresh();
-window.addEventListener("blur", release, { capture: true });
+window.addEventListener("blur", (event) => {
+  if (event.target === window) release();
+}, { capture: true });
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) release();
 }, { capture: true });
