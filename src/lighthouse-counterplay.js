@@ -72,11 +72,14 @@ export function lighthouseStatus(s){
   const clear=lighthouseSight(s,boat);
   const linked=b.hook>=0,ready=linked&&inRange&&aligned&&speed<=LIGHTHOUSE.signalSpeed&&clear;
   const canConnect=!linked&&index>=0&&inRange&&!s.tow?.connected&&s.mode==='sailing'&&s.status==='playing'&&b.active&&!b.cleared;
+  const pendingImpact=s.status==='playing'&&b.active&&!b.cleared&&b.phase==='attack'&&!l.impact&&!!l.target;
   return {index,linked,inRange,canConnect,towBlocked:!!s.tow?.connected,aligned,clear,speed,maxSpeed:LIGHTHOUSE.signalSpeed,angle,ready,
     progress:index<0?0:l.progress[index],required:LIGHTHOUSE.signalTime,
     sent:b.parts.filter(h=>h===0).length,total:3,phase:b.phase,remaining:Math.max(0,b.timer),
     exposure:l.exposure,detection:LIGHTHOUSE.detection+(s.tools.includes('shutter')?.7:0),
     visible:lighthouseVisible(s),target:l.target,impact:l.impact,hit:l.hit,
+    pendingImpact,impactIn:pendingImpact?Math.max(0,b.timer-LIGHTHOUSE.impactTail):0,
+    targetThreatensHull:pendingImpact&&hullHitsCircle(l.target,boat,LIGHTHOUSE.radius),
     hitAge:l.impactAt<0?Infinity:s.time-l.impactAt,lastSent:l.lastSent,sentAge:l.sentAt<0?Infinity:s.time-l.sentAt,
     canBurst:s.build==='winch'&&linked&&b.tension>.1&&s.charge>=35&&s.fuel>3};
 }

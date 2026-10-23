@@ -29,17 +29,26 @@ export function drawLighthouse(c,s,{label,reduced=false,language='ko'}={}){
     }
   }
   if(b.active&&!b.cleared&&b.phase==='attack'&&l.target){
-    const t=l.target;
-    if(!l.impact){
-      c.strokeStyle='#f29f71';c.fillStyle='#d05e4424';c.lineWidth=2;
-      c.beginPath();c.arc(t.x,t.y,LIGHTHOUSE.radius,0,Math.PI*2);c.fill();c.stroke();
-      const left=Math.max(0,b.timer-LIGHTHOUSE.impactTail)/(LIGHTHOUSE.warning-LIGHTHOUSE.impactTail);
-      c.lineWidth=3;c.beginPath();c.arc(t.x,t.y,LIGHTHOUSE.radius+6,-Math.PI/2,-Math.PI/2+Math.PI*2*left);c.stroke();
-      label(c,en?'LOCKED · leave the circle':'표적 고정 · 원 밖으로',t.x,t.y-85,'#f2bc8b',14);
-    }else if(!reduced){
+    const t=l.target,transform=c.getTransform(),scale=Math.hypot(transform.a,transform.b)/Math.min(globalThis.devicePixelRatio||1,2);
+    if(a.pendingImpact){
+      // Stroke weight stays readable on small screens. The circle and capsule
+      // paths remain the exact world geometry used by hullHitsCircle.
+      c.fillStyle='#d05e4424';c.beginPath();c.arc(t.x,t.y,LIGHTHOUSE.radius,0,Math.PI*2);c.fill();
+      c.strokeStyle='#071c20';c.lineWidth=5/scale;c.stroke();c.strokeStyle='#f29f71';c.lineWidth=2/scale;c.stroke();
+      const left=Math.min(1,a.impactIn/(LIGHTHOUSE.warning-LIGHTHOUSE.impactTail));
+      c.lineWidth=3/scale;c.beginPath();c.arc(t.x,t.y,LIGHTHOUSE.radius+6/scale,-Math.PI/2,-Math.PI/2+Math.PI*2*left);c.stroke();
+      const boat=s.boat,r=boat.width/2,end=(boat.length-boat.width)/2;
+      c.save();c.translate(boat.x,boat.y);c.rotate(boat.angle);c.beginPath();
+      c.moveTo(-end,-r);c.lineTo(end,-r);c.arc(end,0,r,-Math.PI/2,Math.PI/2);
+      c.lineTo(-end,r);c.arc(-end,0,r,Math.PI/2,Math.PI*1.5);c.closePath();
+      c.strokeStyle='#071c20';c.lineWidth=6/scale;c.stroke();c.strokeStyle=a.targetThreatensHull?'#ffd19a':'#d4e6e8';c.lineWidth=2.5/scale;c.stroke();c.restore();
+      label(c,`${en?'Impact':'착탄'} ${a.impactIn.toFixed(1)}${en?'s':'초'}`,t.x,t.y-LIGHTHOUSE.radius-16/scale,'#f2bc8b',14);
+    }else if(l.impact&&!reduced){
       const age=Math.max(0,s.time-l.impactAt);
       c.strokeStyle='#f7dbb5';c.globalAlpha=Math.max(0,1-age/.25);c.lineWidth=5;
       c.beginPath();c.arc(t.x,t.y,20+age*200,0,Math.PI*2);c.stroke();c.globalAlpha=1;
+    }else if(l.impact){
+      c.strokeStyle='#f7dbb5';c.lineWidth=2/scale;c.beginPath();c.arc(t.x,t.y,LIGHTHOUSE.radius,0,Math.PI*2);c.stroke();
     }
   }
   for(const cover of BREAKWATERS)sprite(c,'breakwater',cover.x,cover.y);
@@ -47,13 +56,12 @@ export function drawLighthouse(c,s,{label,reduced=false,language='ko'}={}){
     const r=RELAYS[i],sent=b.parts[i]===0,near=Math.hypot(s.boat.x-r.x,s.boat.y-r.y)<180;
     sprite(c,sent?'relay-on':'relay-off',r.x,r.y);
     label(c,`${String(i+1).padStart(2,'0')} · ${sent?(en?'ACKNOWLEDGED':'수신 확인'):en?'RELAY':'중계기'}`,r.x,r.y-48,sent?'#afd8ad':'#e5d3a2',13);
-    if(!sent&&near){
+    if(!sent&&near&&!a.pendingImpact){
       const dock=relayApproach(s,i),angle=dock.angle;
       c.strokeStyle=b.hook===i?'#bddaba':'#bcac80';c.lineWidth=2;
       c.save();c.translate(dock.x,dock.y);c.rotate(angle);
       c.beginPath();c.moveTo(-15,-10);c.lineTo(15,0);c.lineTo(-15,10);c.stroke();c.restore();
-      const action=b.phase==='attack'&&!l.impact?(en?'Leave the circle':'원 밖으로 회피'):
-        a.towBlocked?(en?'T · release supply tow':'T · 보급정 견인 분리'):
+      const action=a.towBlocked?(en?'T · release supply tow':'T · 보급정 견인 분리'):
         b.hook===i?(en?'Bow toward lighthouse · brake':'선수를 등대로 · 감속'):
         a.index===i&&a.canConnect?(en?'E · connect cable':'E · 케이블 접속'):(en?'Approach the relay':'중계기에 접근');
       label(c,action,r.x,r.y+57,'#e4d5ae',13);

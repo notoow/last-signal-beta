@@ -11,7 +11,7 @@ import {rigEffects} from './rogue-salvage.js';
 import {harborPlanSummary,pendingRescueDestination} from './harbor-plan-ui.js';
 import {harborDestination} from './harbor-plan.js';
 import {usesSluice,sluiceStatus} from './sluice-counterplay.js';
-import {usesLighthouse,lighthouseStatus,LIGHTHOUSE} from './lighthouse-counterplay.js';
+import {usesLighthouse,lighthouseStatus} from './lighthouse-counterplay.js';
 import {rescueStatus,rescueBerth} from './shore-rescue.js';
 import {visibleAt} from './rogue-vision.js';
 import {recentImpact,gateImpactText} from './rogue-impact.js';
@@ -469,8 +469,14 @@ export function rogueHudModel(s,language='ko'){
       a.speed>a.maxSpeed?(en?`Space Brake · speed ≤${a.maxSpeed}`:`Space 감속 · 속도 ${a.maxSpeed} 이하`):
       (en?'Hold heading and low speed · E Disconnect':'방향·저속 유지 · E 접속 해제');
     if(a.phase==='attack'){
-      model.mission=a.impact?(en?'Impact · stay clear':'충격탄 폭발 · 이탈 유지'):(en?'Target locked · dodge now':'표적 고정 · 지금 회피');
-      model.action=a.linked?(en?'E Disconnect · leave the marked circle':'E 접속 해제 · 표적 원 밖으로'):(en?'Leave the marked circle':'표적 원 밖으로 이동');
+      if(a.pendingImpact){
+        const clearance=a.targetThreatensHull?(en?'Clear the whole hull':'배 전체를 원 밖으로'):(en?'Outside · stay out':'원 밖 · 재진입 주의');
+        model.mission=`${clearance} · ${a.impactIn.toFixed(1)}${en?'s':'초'}`;
+        model.action=(a.linked?(en?'E Disconnect · ':'E 접속 해제 · '):'')+(a.targetThreatensHull?(en?'Move the whole hull outside the target circle':'배 전체를 표적 원 밖으로'):(en?'Outside now · avoid re-entering':'현재 원 밖 · 재진입 주의'));
+      }else if(a.impact){
+        model.mission=en?'Impact · stay clear':'충격탄 폭발 · 이탈 유지';
+        model.action=en?'Wait for reload · check the next relay':'재정비 대기 · 다음 중계기 확인';
+      }
     }else if(a.phase==='warn'&&a.visible){
       model.mission=en?'Spotted · leave the beam':'빛에 노출 · 탐조등 회피';
       model.action=a.linked?(en?'E Disconnect · move out of the light':'E 접속 해제 · 빛 밖으로 이동'):(en?'Leave the beam or use breakwater cover':'빛 밖으로 이동하거나 방파제 뒤로');
@@ -534,7 +540,7 @@ export function rogueHudModel(s,language='ko'){
     }
     if(lighthouse){
       const a=lighthouse,phase=a.phase==='attack'?(a.impact?(en?'Impact':'폭발'):(en?'Locked':'표적 고정')):a.phase==='recover'?(en?'Resetting':'재정비'):(en?'Searching':'탐색');
-      const countdown=a.phase==='attack'&&!a.impact?Math.max(0,a.remaining-LIGHTHOUSE.impactTail):a.remaining;
+      const countdown=a.pendingImpact?a.impactIn:a.remaining;
       model.boss=`${phase}${a.phase==='warn'?'':` ${countdown.toFixed(1)}${en?'s':'초'}`} · ${en?'Sent':'전송'} ${a.sent}/${a.total}`;
     }
   }

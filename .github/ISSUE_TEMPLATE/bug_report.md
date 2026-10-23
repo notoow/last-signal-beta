@@ -9,7 +9,7 @@ title: '[Web beta] '
 ## Steps / 재현 방법
 
 ## Environment
-- Version: 0.69.0
+- Version: 0.70.0
 - Browser / OS:
 - Seed:
 
