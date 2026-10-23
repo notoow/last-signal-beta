@@ -32,6 +32,13 @@ function crewSprite(c,s,p,reduced,unit=1){
     c.restore();return;
   }
   c.save();c.translate(p.x,p.y);c.scale(flip?-1:1,1+breath);
+  if(row===2&&col===1){
+    // Neighboring atlas pixels enter this cell's upper-right corner. Preserve
+    // the original pivot and lower-right tool; never recenter the cut pieces.
+    // Reviewed source contract: local notch [300,0,12,110].
+    c.beginPath();c.rect(-w*.5*scale,(y-anchors[row])*scale,300*scale,h*scale);
+    c.rect((300-w*.5)*scale,(y+110-anchors[row])*scale,(w-300)*scale,(h-110)*scale);c.clip();
+  }
   c.drawImage(img,x,y,w,h,-w*.5*scale,(y-anchors[row])*scale,w*scale,h*scale);c.restore();
 }
 function workerSprite(c,s,p,reduced,unit=1){

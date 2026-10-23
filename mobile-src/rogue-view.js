@@ -49,6 +49,18 @@ function canvasLabel(c,text,x,y,color='#f1e6c4',size=15){
   c.strokeText(text,x,y);c.fillStyle=color;c.fillText(text,x,y);
 }
 function ring(c,p,r,color){c.strokeStyle=color;c.lineWidth=2;c.beginPath();c.arc(p.x,p.y,r,0,Math.PI*2);c.stroke();}
+function relayEdgeLabel(c,text,mark,frame){
+  c.save();c.font='600 12px Pretendard, sans-serif';
+  const half=c.measureText(text).width/2+5;c.restore();
+  const clampX=x=>Math.max(half+4,Math.min(frame.width-half-4,x));
+  const candidates=[{x:mark.x,y:mark.y-17},{x:mark.x-half-16,y:mark.y+4},{x:mark.x+half+16,y:mark.y+4},{x:mark.x,y:mark.y+29}];
+  for(const point of candidates){
+    const x=clampX(point.x),y=point.y,box={x:x-half,y:y-15,w:half*2,h:18};
+    if(box.y<4||box.y+box.h>frame.height-4)continue;
+    if(!frame.occupied.some(r=>box.x<r.x+r.w&&box.x+box.w>r.x&&box.y<r.y+r.h&&box.y+box.h>r.y))return {x,y};
+  }
+  return {x:clampX(mark.x),y:mark.y-17};
+}
 const dockFrames=new WeakMap();
 export const lastRogueDocking=canvas=>dockFrames.get(canvas)||null;
 const exitFrames=new WeakMap();
@@ -222,6 +234,7 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   // The compact planning chart has accessible DOM pins; world-size action
   // captions would obscure entire quays at this scale.
   const label=chartPins?()=>{}:canvasLabel;
+  const task=objective(s),target=task.target;
   const old=frames.get(canvas),previous=!reduced&&old?.map===s.map?old.frame:null;
   // Start only for a new-profile voyage, while still at sea. A slow/broken
   // illustration must never replace the controlled world with an empty screen.
@@ -296,7 +309,7 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   const sluice=usesSluice(s);
   const lighthouse=usesLighthouse(s);
   if(sluice)drawSluice(c,s,{label,reduced,language});
-  if(lighthouse)drawLighthouse(c,s,{label,reduced,language});
+  const connectionMarker=lighthouse?drawLighthouse(c,s,{label,reduced,language,task}):null;
   if(dredger&&boss.active&&!boss.cleared)craneWarning(c,s);
   if(!dredger&&!sluice&&!lighthouse&&boss.active&&!boss.cleared&&(boss.phase==='warn'||boss.phase==='attack')){
     c.fillStyle=boss.phase==='attack'?'#c44e3a70':'#e3ad3d35';c.strokeStyle=boss.phase==='attack'?'#ed7459':'#e4c682';c.lineWidth=2;
@@ -378,9 +391,8 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
     label(c,language==='en'?'Exit berth · radio coordinates':'탈출 부두 · 무전 좌표',s.map.exit.x-100,s.map.exit.y+75,'#c9c2a7',20);
     ring(c,s.person||s.boat,20,'#f0d98f');
   }
-  const task=objective(s),target=task.target;
   const alignedTarget=alignment&&target&&target.x===alignment.berth.x&&target.y===alignment.berth.y;
-  if(target&&!alignedTarget)ring(c,target,task.rescue&&target===s.rescue?16*shoreScale(s):s.mode==='ashore'?shoreRanges(s).search:42,'#ebd59e');
+  if(target&&!alignedTarget&&!connectionMarker)ring(c,target,task.rescue&&target===s.rescue?16*shoreScale(s):s.mode==='ashore'?shoreRanges(s).search:42,'#ebd59e');
   if(alignment)dockGeometry(c,alignment,scale);
   c.restore();
   const panel=alignment?dockPanel(c,alignment,frame,dockCopy,s,language,exitScene):null;
@@ -393,14 +405,15 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   if(impact)impactFrames.set(canvas,{impact,tag:impactTag(c,impact,frame,s,panel)});else impactFrames.delete(canvas);
   if(!mapOpen){
     const points=[];
-    if(target)points.push({p:target,text:task.rescue?(language==='en'?'Escort / ladder':'정비공 / 사다리'):task.planSite?(language==='en'?'Planned quay':'선택한 부두'):task.planBoss?(language==='en'?'Outer approach':'바깥 해역 입구'):language==='en'?(s.person?'Search / return':'Target'):(s.person?'수색 / 귀환':'목표'),color:'#f6dda2'});
+    if(target)points.push({p:target,text:connectionMarker?.text||(task.rescue?(language==='en'?'Escort / ladder':'정비공 / 사다리'):task.planSite?(language==='en'?'Planned quay':'선택한 부두'):task.planBoss?(language==='en'?'Outer approach':'바깥 해역 입구'):language==='en'?(s.person?'Search / return':'Target'):(s.person?'수색 / 귀환':'목표')),color:connectionMarker?.color||'#f6dda2'});
     if(s.tow?.connected&&!s.person)points.push({p:s.tow,text:language==='en'?'Supply tow':'견인선',color:'#adc8c3'});
     if(!sluice&&!lighthouse&&s.boss.active&&!s.boss.cleared)points.push({p:s.map.boss,text:boss.phase==='warn'?'보스 · 공격 예고':'보스',color:boss.phase==='warn'?'#f4ad7d':'#e4ca9b'});
     for(const {p,text,color} of points){
       const mark=edgeMarker(frame,p);if(!mark)continue;
       c.save();c.translate(mark.x,mark.y);c.rotate(mark.angle);c.fillStyle=color;
       c.beginPath();c.moveTo(11,0);c.lineTo(-7,-6);c.lineTo(-7,6);c.closePath();c.fill();c.restore();
-      label(c,text,Math.max(74,Math.min(width-74,mark.x)),mark.y-17,color,12);
+      const caption=connectionMarker&&p===target?relayEdgeLabel(c,text,mark,frame):{x:Math.max(74,Math.min(width-74,mark.x)),y:mark.y-17};
+      label(c,text,caption.x,caption.y,color,12);
     }
   }
   return frame;

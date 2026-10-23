@@ -43,7 +43,7 @@ export function quayCamera({width,height,focus,previous=null,options={},occupied
   const fitX=fits(group,viewport)?group:actor,fitY=fitX;
   ox=fitX.w+margin*2<=viewport.w?clamp(ox,viewport.x+margin-fitX.x,viewport.x+viewport.w-margin-fitX.x-fitX.w):viewport.x+viewport.w/2-actor.x-actor.w/2;
   oy=fitY.h+margin*2<=viewport.h?clamp(oy,viewport.y+margin-fitY.y,viewport.y+viewport.h-margin-fitY.y-fitY.h):viewport.y+viewport.h/2-actor.y-actor.h/2;
-  const frame={...base,width,height,viewport,occupied,ox,oy,zoom:settings.zoom,overview:false,
+  const frame={...base,width,height,viewport,occupied,occlusionKnown:true,ox,oy,zoom:settings.zoom,overview:false,
     projectionId,worldUnitsPerMetre:M,pixelsPerMetre:scale*M};
   const corners=[{x:0,y:0},{x:width,y:0},{x:width,y:height},{x:0,y:height}].map(p=>unproject(frame,p));
   const xs=corners.map(p=>p.x),ys=corners.map(p=>p.y);

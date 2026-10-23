@@ -305,12 +305,13 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     // Rendering discovers visible terrain. Keep the completed save immutable
     // while its backdrop is drawn or the player cancels a new preparation.
     resultView=structuredClone(state);
+    const preparation=voyagePreparationText(state,language);
     modalSurface('result',resultMarkup({outcome:won?'success':'failure',title:won?ui.rogueComplete:ui.failed,
       kicker:CAPTAINS[state.captain].name+' · '+(en?'Voyage no. ':'항해 번호 ')+state.seed,summary:won?ui.rogueSummary:rogueFailureText(state.reason,language),
       facts:[{label:ui.regions,value:(state.depth+1)+' / 3'},{label:ui.hull,value:Math.ceil(state.hp)+' / '+maxHp(state)},{label:ui.equipment,value:state.equipment.length+' / 6'}],
-      reward:voyageRecordMarkup(state,language)+'<p id="rogueSaveStatus" class="session-save" role="status" data-save-state="'+(saveError?'failed':'saved')+'">'+(saveError?ui.saveFailed:ui.saved)+'</p>',
+      reward:'<p class="rogue-retry-note" id="rogueRetryNote">'+esc(preparation.retryDetail)+(preparation.chartDetail?' '+esc(preparation.chartDetail):'')+'</p>'+voyageRecordMarkup(state,language)+'<p id="rogueSaveStatus" class="session-save" role="status" data-save-state="'+(saveError?'failed':'saved')+'">'+(saveError?ui.saveFailed:ui.saved)+'</p>',
       details:state.log.map(l=>'<p>'+esc(rogueHudText(l.text,language))+'</p>').join(''),
-      actions:'<button id="rogueReprepare" class="primary">'+esc(voyagePreparationText(state,language).button)+'</button><button id="rogueRetry">'+t('바로 재도전','Retry immediately')+'</button><button id="rogueNew">'+t('새 해도 준비','New random chart')+'</button><button id="rogueHome" class="secondary">'+ui.harbor+'</button>',language}));
+      actions:'<button id="rogueReprepare" class="primary" aria-describedby="rogueRetryNote">'+esc(preparation.button)+'</button><button id="rogueRetry" aria-describedby="rogueRetryNote">'+esc(preparation.retry)+'</button><button id="rogueNew">'+t('새 해도 준비','New random chart')+'</button><button id="rogueHome" class="secondary">'+ui.harbor+'</button>',language}));
     const result=root.querySelector('.session-result');result.classList.add('rogue-debrief-result');
     if(document.documentElement.dataset.mobileUi==='true'){
       // Keep the title and decisions outside the scrollable record on mobile.

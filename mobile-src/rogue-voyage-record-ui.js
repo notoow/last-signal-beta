@@ -13,7 +13,10 @@ const sources={ko:{collision:'충돌',sluice:'수문 충돌',crane:'크레인',l
 export function voyagePreparationText(s,language='ko'){
   const en=language==='en',sameLayout=s.generator===GENERATOR_VERSION;
   return {sameLayout,
-    button:sameLayout?(en?'Same chart · new loadout':'같은 해도 · 다른 준비'):(en?'Same seed · new chart':'같은 시드 · 새 해도 준비'),
+    button:en?'Change setup & retry':'준비 바꿔 재도전',
+    retry:en?'Retry this setup':'같은 준비로 재도전',
+    retryDetail:en?'Retry keeps the voyage number; this setup keeps captain and build. Acquired gear and progress reset.':'재도전은 항해 번호 유지 · 같은 준비는 선장·빌드 유지 · 획득 장비·진행 초기화',
+    chartDetail:sameLayout?'':(en?'Updated chart rules change the layout.':'새 해도 생성 규칙으로 지도 배치는 달라집니다.'),
     heading:sameLayout?(en?'Same chart · seed ':'같은 해도 · 시드 ')+s.seed:(en?`Same seed ${s.seed} · new chart`:`같은 시드 ${s.seed} · 새 해도 준비`),
     detail:sameLayout?(en?'The layout stays the same. Equipment offers can change with your loadout.':'지도 배치는 유지됩니다. 준비에 따라 장비 선택지는 달라질 수 있습니다.'):(en?'Uses the previous voyage’s seed. New terrain generation rules apply, so the layout will change.':'이전 항해의 시드를 사용합니다. 새 지형 생성 규칙이 적용되어 배치는 달라집니다.')};
 }

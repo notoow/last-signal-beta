@@ -11,8 +11,20 @@ function sprite(c,id,x,y,angle=0){
   c.save();c.translate(x,y);c.rotate(angle);
   c.drawImage(img,-pivot[0]*scale,-pivot[1]*scale,img.naturalWidth*scale,img.naturalHeight*scale);c.restore();
 }
-export function drawLighthouse(c,s,{label,reduced=false,language='ko'}={}){
+// Only the active relay objective owns this cue. Planned quays, rescue and
+// final docking keep their own world/edge markers.
+export function lighthouseConnectionMarker(s,task,language='ko'){
+  const a=lighthouseStatus(s),target=task?.target;
+  if(!s.boss.active||s.boss.cleared||a.pendingImpact||a.index<0||!target||task.planSite||task.planBoss||task.rescue)return null;
+  const relay=RELAYS[a.index],point=a.linked?relay:relayApproach(s,a.index);
+  if(target.x!==point.x||target.y!==point.y)return null;
+  const number=String(a.index+1).padStart(2,'0'),en=language==='en';
+  return {index:a.index,point,relay,linked:a.linked,canConnect:a.canConnect,color:'#8de1e3',
+    text:`${number} · ${a.linked?(en?'CONNECTED':'접속 중'):(en?'LINK POINT':'접속 위치')}`};
+}
+export function drawLighthouse(c,s,{label,reduced=false,language='ko',task=null}={}){
   const b=s.boss,l=b.lighthouse,p=s.map.boss,a=lighthouseStatus(s),en=language==='en';
+  const marker=lighthouseConnectionMarker(s,task,language);
   c.save();
   if(b.active&&!b.cleared&&b.phase==='warn'){
     // The visible beam uses the same occluders as detection, including their
@@ -53,18 +65,21 @@ export function drawLighthouse(c,s,{label,reduced=false,language='ko'}={}){
   }
   for(const cover of BREAKWATERS)sprite(c,'breakwater',cover.x,cover.y);
   for(let i=0;i<RELAYS.length;i++){
-    const r=RELAYS[i],sent=b.parts[i]===0,near=Math.hypot(s.boat.x-r.x,s.boat.y-r.y)<180;
+    const r=RELAYS[i],sent=b.parts[i]===0;
     sprite(c,sent?'relay-on':'relay-off',r.x,r.y);
     label(c,`${String(i+1).padStart(2,'0')} · ${sent?(en?'ACKNOWLEDGED':'수신 확인'):en?'RELAY':'중계기'}`,r.x,r.y-48,sent?'#afd8ad':'#e5d3a2',13);
-    if(!sent&&near&&!a.pendingImpact){
-      const dock=relayApproach(s,i),angle=dock.angle;
-      c.strokeStyle=b.hook===i?'#bddaba':'#bcac80';c.lineWidth=2;
-      c.save();c.translate(dock.x,dock.y);c.rotate(angle);
-      c.beginPath();c.moveTo(-15,-10);c.lineTo(15,0);c.lineTo(-15,10);c.stroke();c.restore();
-      const action=a.towBlocked?(en?'T · release supply tow':'T · 보급정 견인 분리'):
-        b.hook===i?(en?'Bow toward lighthouse · brake':'선수를 등대로 · 감속'):
-        a.index===i&&a.canConnect?(en?'E · connect cable':'E · 케이블 접속'):(en?'Approach the relay':'중계기에 접근');
-      label(c,action,r.x,r.y+57,'#e4d5ae',13);
+    if(marker?.index===i){
+      const transform=c.getTransform(),scale=Math.hypot(transform.a,transform.b)/Math.min(globalThis.devicePixelRatio||1,2),dock=relayApproach(s,i);
+      // Open cyan corners identify a connection point; the orange danger
+      // circle remains an exact collision area. Both retain screen stroke size.
+      c.save();c.strokeStyle=marker.color;c.lineWidth=1.5/scale;c.setLineDash([3/scale,5/scale]);
+      c.beginPath();c.moveTo(dock.x,dock.y);c.lineTo(r.x,r.y);c.stroke();c.setLineDash([]);
+      c.translate(marker.point.x,marker.point.y);c.rotate(dock.angle);
+      const size=18/scale,arm=7/scale;c.beginPath();
+      for(const x of [-1,1])for(const y of [-1,1]){c.moveTo(x*(size-arm),y*size);c.lineTo(x*size,y*size);c.lineTo(x*size,y*(size-arm));}
+      c.strokeStyle='#071c20';c.lineWidth=4/scale;c.stroke();c.strokeStyle=marker.color;c.lineWidth=2/scale;c.stroke();
+      c.beginPath();c.moveTo(size+3/scale,-4/scale);c.lineTo(size+8/scale,0);c.lineTo(size+3/scale,4/scale);c.stroke();c.restore();
+      label(c,marker.text,marker.point.x,marker.point.y+34/scale,marker.color,13);
     }
     if(l.progress[i]>0&&!sent){
       c.fillStyle='#102c31';c.fillRect(r.x-25,r.y+29,50,5);
@@ -81,4 +96,5 @@ export function drawLighthouse(c,s,{label,reduced=false,language='ko'}={}){
     c.setLineDash([]);
   }
   c.restore();
+  return marker;
 }

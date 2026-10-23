@@ -110,11 +110,17 @@ export function playCamera({width,height,world,focus,partner=null,attention=null
     target.y=world.height<=half.y*2?world.height/2:clamp(target.y,half.y,world.height-half.y);
   }
   const ox=mid.x-target.x*scale,oy=mid.y-target.y*scale;
-  return {width,height,viewport,occupied:occupied||[],scale,camera:target,ox,oy,overview,zoom:settings.zoom,
+  return {width,height,viewport,occupied:occupied||[],occlusionKnown:Array.isArray(occupied),scale,camera:target,ox,oy,overview,zoom:settings.zoom,
     hw:width/scale/2,hh:height/scale/2,bounds:{x:-ox/scale,y:-oy/scale,w:width/scale,h:height/scale}};
 }
 export function edgeMarker(frame,p,inset=26){
   const q=project(frame,p),v=frame.viewport;
+  // The framing rectangle keeps the controlled actor clear of the HUD; it
+  // does not crop the rest of the sea. Do not point at an already visible
+  // target beside that rectangle. Legacy callers without HUD geometry retain
+  // their conservative framing-only behaviour.
+  if(frame.occlusionKnown&&q.x>=inset&&q.x<=frame.width-inset&&q.y>=inset&&q.y<=frame.height-inset&&
+    !frame.occupied.some(r=>q.x>=r.x-inset&&q.x<=r.x+r.w+inset&&q.y>=r.y-inset&&q.y<=r.y+r.h+inset))return null;
   const x=clamp(q.x,v.x+inset,v.x+v.w-inset),y=clamp(q.y,v.y+inset,v.y+v.h-inset);
   return x===q.x&&y===q.y?null:{x,y,angle:Math.atan2(q.y-y,q.x-x)};
 }

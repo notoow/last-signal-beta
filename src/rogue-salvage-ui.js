@@ -48,13 +48,16 @@ export function salvageChoiceMarkup(s,language='ko'){
   const fuelOffered=55+(carried?0:30)+(previews.fuel.cargoDelivered?20:0);
   const fuelOverflow=Math.max(0,fuelOffered-fuelAdded);
   const delta=value=>value>1e-6&&value<.1?'<0.1':amount(value);
+  const common=salvageChoicePreview(s,null),repair=previews.repair;
+  const hullAdded=Math.max(0,repair.hp-s.hp),extraHull=Math.max(0,repair.hp-common.hp),extraDrain=Math.max(0,common.flood-repair.flood);
   const choices=[
     {id:'rig',number:'01',title:en?'Modify the rig':'장치 개조',gain:'II',unit:copy.name,
       effect:rank>0?copy.upgrade:copy.install,
       note:rank>0?(en?'Prototype I → Modified II':'시제품 I → 개조 II'):(en?'Install directly · no prototype required':'시제품 없이 바로 설치'),
       action:en?'Fit rig & sail':'개조하고 출항'},
-    {id:'repair',number:'02',title:en?'Repair the hull':'선체 수리',gain:'+45',unit:en?'Hull':'선체 내구도',
-      effect:en?'Remove 30% flooding':'침수 30% 추가 제거',
+    {id:'repair',number:'02',title:en?'Repair the hull':'선체 수리',gain:`+${delta(hullAdded)}`,unit:en?'Total hull restored':'총 선체 회복',
+      effect:en?`Choice adds: hull +${delta(extraHull)} · drain ${delta(extraDrain)}%`:`선택 추가: 선체 +${delta(extraHull)} · 배수 ${delta(extraDrain)}%`,
+      detail:extraHull<1e-6&&extraDrain<1e-6?(en?'No extra effect after common supplies.':'공통 보급 후 추가 효과 없음'):(en?'Actual gains after common supplies and caps.':'공통 보급·최대치를 반영한 실제 증가량'),
       note:rank>0?(en?'Keep your current rig':'현재 장치 유지'):(en?'Rig remains uninstalled':'장치 미장착 유지'),
       action:en?'Repair & sail':'수리하고 출항'},
     {id:'fuel',number:'03',title:en?'Take on fuel':'연료 보충',gain:`+${delta(fuelAdded)}`,unit:en?'Total fuel added':'총 연료 증가',
