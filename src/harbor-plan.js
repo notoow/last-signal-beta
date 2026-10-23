@@ -2,6 +2,9 @@ import {cacheOffer} from './rogue-cache.js';
 import {visibleAt} from './rogue-vision.js';
 import {toolBerth,FLOOR_TOOLS,hasTool,FAUNA} from './shore-encounters.js';
 import {rescuePendingAt,rescueBerth} from './shore-rescue.js';
+import {usesDredger,CRANE} from './dredger-counterplay.js';
+import {usesSluice,SLUICE} from './sluice-counterplay.js';
+import {usesLighthouse,lighthouseStatus,LIGHTHOUSE} from './lighthouse-counterplay.js';
 
 export const newHarborIntel=()=>({sites:[],target:null});
 const scans=new WeakMap();
@@ -9,7 +12,7 @@ const scans=new WeakMap();
 // cache's second choice. Threat records mean "seen here", never "still alive".
 export function refreshHarborIntel(s){
   const intel=s.harborIntel;
-  if(!intel||!s.combat||s.status!=='playing'||s.boss.active&&!s.boss.cleared)return;
+  if(!intel||!s.combat||s.status!=='playing')return;
   const old=scans.get(s),origin=s.person||s.boat;
   if(old&&old.intel===intel&&s.time-old.time<.25&&old.mode===s.mode&&Math.hypot(old.x-origin.x,old.y-origin.y)<12)return;
   scans.set(s,{intel,time:s.time,mode:s.mode,x:origin.x,y:origin.y});
@@ -27,7 +30,7 @@ export function refreshHarborIntel(s){
 export function harborPlan(s){
   if(!s.harborIntel)return null;
   const intel=s.harborIntel,tool=toolBerth(s),missing=!hasTool(s,FLOOR_TOOLS[s.depth].id);
-  const enabled=s.status==='playing'&&(!s.boss.active||s.boss.cleared)&&!s.pendingCache&&!s.pendingGear&&!s.salvage?.pending;
+  const enabled=s.status==='playing'&&!s.pendingCache&&!s.pendingGear&&!s.salvage?.pending;
   return {target:intel.target,sites:s.map.berths.map(berth=>{
     const record=intel.sites.find(x=>x.id===berth.id),known=!!record,radio=missing&&berth.id===tool.id;
     const claimed=s.claimed.includes(berth.id),offer=known?cacheOffer(s,berth.id):null;
@@ -36,7 +39,7 @@ export function harborPlan(s){
     return {id:berth.id,island:berth.island,known,radio,claimed,rescue,selectable:enabled&&(!claimed||rescuePendingAt(s,berth.id))&&(known||radio||!!rescue),
       gear,supply:offer?.supply??null,threats:record?[...record.threats]:[],
       stack:gear?s.equipment.filter(id=>id===gear).length:0,tool:radio?FLOOR_TOOLS[s.depth].id:null,selected:intel.target===berth.id};
-  }),boss:{id:'boss',selectable:enabled&&!s.boss.cleared,selected:intel.target==='boss',toolMissing:missing}};
+  }),boss:{id:'boss',selectable:enabled&&!s.boss.cleared,selected:intel.target==='boss'||s.boss.active&&!s.boss.cleared&&intel.target===null,toolMissing:missing}};
 }
 export function planHarbor(s,id){
   const plan=harborPlan(s);
@@ -44,14 +47,34 @@ export function planHarbor(s,id){
   if(id===null){s.harborIntel.target=null;return true;}
   const target=id==='boss'?plan.boss:plan.sites.find(b=>b.id===id);
   if(!target?.selectable)return false;
-  s.harborIntel.target=id;return true;
+  // Returning to an engaged boss restores its live objective (remaining
+  // drive, lane or relay); it does not replay the arena entrance or reset it.
+  s.harborIntel.target=id==='boss'&&s.boss.active?null:id;return true;
 }
 export function harborDestination(s){
   const id=s.harborIntel?.target;
-  if(!id||s.boss.active&&!s.boss.cleared)return null;
-  if(id==='boss')return s.boss.cleared?null:{id,point:s.map.nodes?.find(n=>n.id==='sea-gate')||{x:2180,y:900}};
+  if(!id)return null;
+  if(id==='boss')return s.boss.active||s.boss.cleared?null:{id,point:s.map.nodes?.find(n=>n.id==='sea-gate')||{x:2180,y:900}};
   const berth=s.map.berths.find(b=>b.id===id);
   return berth&&(!s.claimed.includes(id)||rescuePendingAt(s,id))?{id,point:berth}:null;
+}
+// A selected detour can be marked during combat. The primary HUD switches
+// to it outside the immediate attack/jet guidance area. Currents and other
+// dangers remain: this query grants no safety, travel, healing or boss reset.
+export function harborRoutePriority(s){
+  const d=harborDestination(s);
+  if(s.status!=='playing'||!d||d.id==='boss')return false;
+  if(!s.boss.active||s.boss.cleared)return true;
+  if(s.mode!=='sailing')return false;
+  const range=Math.hypot(s.boat.x-s.map.boss.x,s.boat.y-s.map.boss.y),half=s.boat.length/2;
+  if(usesDredger(s))return range>CRANE.reach+CRANE.radius+half;
+  if(usesSluice(s))return s.boat.x+half<SLUICE.left;
+  if(usesLighthouse(s)){
+    const a=lighthouseStatus(s);
+    return range>LIGHTHOUSE.range+half&&a.phase!=='attack'&&!a.visible;
+  }
+  // Earlier profiles retain their cone warnings near the blockade.
+  return range>850;
 }
 export function validHarborIntel(s){
   const intel=s.harborIntel;if(intel===null)return true;
@@ -60,8 +83,7 @@ export function validHarborIntel(s){
   if(new Set(ids).size!==ids.length||intel.sites.some(x=>!s.map.berths.some(b=>b.id===x?.id)||
     !Array.isArray(x.threats)||new Set(x.threats).size!==x.threats.length||x.threats.some(k=>!Object.hasOwn(FAUNA,k))))return false;
   if(intel.target===null)return true;
-  if(s.boss.active&&!s.boss.cleared)return false;
-  if(intel.target==='boss')return !s.boss.cleared;
+  if(intel.target==='boss')return !s.boss.active&&!s.boss.cleared;
   return s.map.berths.some(b=>b.id===intel.target)&&(!s.claimed.includes(intel.target)||rescuePendingAt(s,intel.target))&&
     (ids.includes(intel.target)||rescuePendingAt(s,intel.target)||toolBerth(s).id===intel.target&&!hasTool(s,FLOOR_TOOLS[s.depth].id));
 }

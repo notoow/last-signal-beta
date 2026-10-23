@@ -28,8 +28,9 @@ function supplyCopy(s,supply,en,actual=false){
 // Unseen cache alternatives and live enemy counts never enter the markup.
 export function harborPlanModel(s,language='ko'){
   const plan=harborPlan(s);if(!plan)return null;
-  const en=language==='en',lang=en?'en':'ko';
-  return {...plan,fighting:s.boss.active&&!s.boss.cleared,region:en?['Abandoned harbor','Sluice channel','Lighthouse waters'][s.depth]:DEPTHS[s.depth].name,
+  const en=language==='en',lang=en?'en':'ko',fighting=s.boss.active&&!s.boss.cleared;
+  const editable=s.status==='playing'&&!s.pendingCache&&!s.pendingGear&&!s.salvage?.pending;
+  return {...plan,fighting,canClear:editable&&!!plan.target,region:en?['Abandoned harbor','Sluice channel','Lighthouse waters'][s.depth]:DEPTHS[s.depth].name,
     sites:plan.sites.map(site=>{
       const known=site.known,visible=known||site.radio||!!site.rescue;
       const supply=known?supplyCopy(s,site.supply,en):'',actual=known?supplyCopy(s,site.supply,en,true):'';
@@ -41,7 +42,7 @@ export function harborPlanModel(s,language='ko'){
         toolText:site.tool?(en?toolNames[FLOOR_TOOLS.findIndex(t=>t.id===site.tool)]:FLOOR_TOOLS.find(t=>t.id===site.tool)?.name):'',
         threatText:known?site.threats.map(t=>threatNames[lang][t]).filter(Boolean).join(' · '):'',
         point:visible?s.map.berths.find(b=>b.id===site.id):null};
-    }),boss:{...plan.boss,name:en?'Blockade entrance':'봉쇄 해역 입구',point:s.map.nodes?.find(n=>n.id==='sea-gate')||{x:2180,y:900}}};
+    }),boss:{...plan.boss,name:fighting?(en?'Return to encounter':'교전으로 복귀'):(en?'Blockade entrance':'봉쇄 해역 입구'),point:fighting?s.map.boss:s.map.nodes?.find(n=>n.id==='sea-gate')||{x:2180,y:900}}};
 }
 
 export function harborPlanSummary(s,guide,language='ko'){
@@ -61,9 +62,9 @@ export function harborPlanMarkup(s,language='ko'){
   const en=language==='en';
   const point=(site,label)=>site.point&&site.selectable?`<button class="harbor-plan-pin" data-harbor-target="${esc(site.id)}" data-map-x="${site.point.x}" data-map-y="${site.point.y}" aria-label="${esc(site.name)}" aria-pressed="${site.selected}" tabindex="-1">${label}</button>`:'';
   return `<section class="harbor-plan" data-harbor-mode="${m.fighting?'combat':'planning'}">
-    <header class="harbor-plan-header"><div><p>${s.depth+1} / 3 · ${esc(m.region)}</p><h2>${m.fighting?(en?'Chart · in combat':'교전 중 해도'):(en?'Plot your next stop':'다음 목적지')}</h2></div><span class="harbor-plan-paused">${en?'VOYAGE PAUSED':'항해 일시정지'}</span><button id="harborPlanClose">M / Esc · ${m.fighting?(en?'Back to combat':'전투로'):(en?'Close':'닫기')}</button></header>
+    <header class="harbor-plan-header"><div><p>${s.depth+1} / 3 · ${esc(m.region)}</p><h2>${en?'Plot your next stop':'다음 목적지'}</h2></div><span class="harbor-plan-paused">${en?'VOYAGE PAUSED':'항해 일시정지'}</span><button id="harborPlanClose">M / Esc · ${en?'Resume':'계속'}</button></header>
     <div class="harbor-plan-body"><div class="harbor-plan-map"><canvas id="harborPlanSea" aria-label="${en?'Explored harbor and known destinations':'탐사한 항구와 알려진 목적지'}"></canvas>${m.sites.map(site=>point(site,String(site.island+1))).join('')}${point(m.boss,'↗')}<span class="harbor-plan-you" data-map-x="${(s.person||s.boat).x}" data-map-y="${(s.person||s.boat).y}">● <small>${en?'You':'현재 위치'}</small></span><div class="harbor-plan-legend">${m.fighting?(en?'Explored terrain · dark water is unexplored':'탐사한 지형 · 어두운 곳은 미탐사'):(en?'Numbers match the quay list · dark water is unexplored':'번호는 오른쪽 부두와 연결됩니다 · 어두운 곳은 미탐사')}</div></div>
-    <nav class="harbor-plan-sites" aria-label="${m.fighting?(en?'Exploration record':'탐사 기록'):(en?'Choose destination':'목적지 선택')}"><p class="harbor-plan-list-label">${m.fighting?(en?'EXPLORATION RECORD':'탐사 기록'):(en?'SELECT A DESTINATION':'목적지 선택')}</p>
+    <nav class="harbor-plan-sites" aria-label="${en?'Choose destination':'목적지 선택'}"><p class="harbor-plan-list-label">${en?'SELECT A DESTINATION':'목적지 선택'}</p>
     ${m.sites.map(site=>`<button class="harbor-plan-site" data-harbor-target="${esc(site.id)}" aria-pressed="${site.selected}" ${site.selectable?'':'disabled'}><span class="harbor-plan-site-heading"><b><small>0${site.island+1}</small> ${esc(site.name)}</b><span>${site.selected?(en?'Selected':'선택됨'):site.status}</span></span>
       ${site.claimed?`<span class="harbor-plan-muted">${en?'Supplies already recovered':'물품 회수 완료'}</span>`:site.known?`<span class="harbor-plan-gear">${esc(site.gearText)} <small>${en?'aboard':'보유'} ${site.stack}</small></span><span>${en?'or ':'또는 '}${esc(site.supplyText)}${site.limited?`<small class="harbor-plan-actual">${en?'Now: ':'현재: '}${esc(site.actualSupplyText)}</small>`:''}</span>`:`<span class="harbor-plan-muted">${site.radio?(en?'Contents unconfirmed':'내용물 미확인'):(en?'Approach to discover':'접근하면 정보를 기록합니다')}</span>`}
       ${site.toolText?`<span class="harbor-plan-tool">${en?'Radio: ':'무전: '}${esc(site.toolText)}</span>`:''}
@@ -72,6 +73,6 @@ export function harborPlanMarkup(s,language='ko'){
     </button>`).join('')}
     <button class="harbor-plan-site harbor-plan-boss" data-harbor-target="boss" aria-pressed="${m.boss.selected}" ${m.boss.selectable?'':'disabled'}><span class="harbor-plan-site-heading"><b>↗ ${m.boss.name}</b><span>${m.boss.selected?(en?'Selected':'선택됨'):s.boss.cleared?(en?'Cleared':'봉쇄 해제'):s.boss.active?(en?'Engaged':'교전 중'):en?'Optional':'직접 진입'}</span></span><span>${s.boss.cleared?(en?'Blockade cleared · quays remain accessible':'봉쇄 해제 완료 · 부두로 돌아갈 수 있습니다'):m.boss.toolMissing?(en?'Counter-tool not recovered':'대응 도구 미회수'):(en?'Counter-tool aboard':'대응 도구 보유')}</span></button>
     </nav></div>
-    <footer class="harbor-plan-footer"><button id="harborPlanClear" ${m.target&&!m.fighting?'':'disabled'}>${en?'Clear destination':'목적지 해제'}</button><p>${m.fighting?(en?'Destinations cannot change during combat. M / Esc returns to battle.':'교전 중에는 목적지를 바꿀 수 없습니다. M / Esc로 전투에 복귀합니다.'):(en?'Select to return · steer the boat yourself':'선택하면 항해로 복귀 · 배는 직접 조종하세요')}<small class="harbor-plan-record-note">${en?'Supply amounts are maxima. Sightings are past records.':'보급은 최대 제공량입니다. 목격은 과거 기록입니다.'}</small></p><span id="harborPlanSaveError" role="status" hidden></span></footer>
+    <footer class="harbor-plan-footer"><button id="harborPlanClear" ${m.canClear?'':'disabled'}>${en?'Clear destination':'목적지 해제'}</button><p>${en?'Select to resume · steer the boat yourself':'선택하면 항해로 복귀 · 배는 직접 조종하세요'}<small class="harbor-plan-record-note">${en?'Supply amounts are maxima. Sightings are past records.':'보급은 최대 제공량입니다. 목격은 과거 기록입니다.'}</small></p><span id="harborPlanSaveError" role="status" hidden></span></footer>
   </section>`;
 }

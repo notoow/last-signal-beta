@@ -14,7 +14,7 @@ import {LIGHTHOUSE_MODEL,LIGHTHOUSE,usesLighthouse,newLighthouse,relayPosition,r
 import {CACHE_MODEL,cacheOffer,validCache} from './rogue-cache.js';
 import {CREW_UPGRADES,crewEffects,validCrewUpgrades} from './crew-upgrades.js';
 import {shoreScale,crewRadius,shoreRanges,crewSpeed} from './shore-scale.js';
-import {newHarborIntel,refreshHarborIntel,harborPlan,harborDestination,planHarbor,validHarborIntel} from './harbor-plan.js';
+import {newHarborIntel,refreshHarborIntel,harborPlan,harborDestination,harborRoutePriority,planHarbor,validHarborIntel} from './harbor-plan.js';
 import {newVoyageRecord,recordVoyage,recordHit,resourceSnapshot,resourceGains,validVoyageRecord} from './rogue-voyage-record.js';
 import {newShoreRescue,rescueStatus,rescueBerth,rescuePendingAt,orderRescue,tickRescue,boardRescue,leaveRescue,validRescue} from './shore-rescue.js';
 export {planHarbor};
@@ -113,7 +113,7 @@ function vesselContact(s,pose){
 const vesselBlocked=(s,pose)=>!!vesselContact(s,pose);
 // Presentation query only. It never selects a destination or changes a save.
 export function berthAlignment(s){
-  if(s.status!=='playing'||s.mode!=='sailing'||s.boss.active&&!s.boss.cleared||
+  if(s.status!=='playing'||s.mode!=='sailing'||s.boss.active&&!s.boss.cleared&&!harborRoutePriority(s)||
     s.boss.hook>=0||s.pendingGear||s.pendingCache||s.salvage?.pending)return null;
   const candidates=s.boss.cleared?[...s.map.berths,s.map.exit]:s.map.berths;
   const berth=candidates.filter(b=>visibleAt(s,b)).sort((a,b)=>distance(s.boat,a)-distance(s.boat,b))[0];
@@ -184,7 +184,7 @@ export function objective(s){
     const docking=berthReadiness(s,s.map.exit);
     return {text:docking.near?dockHint(docking,'ko',true):usesLighthouse(s)?'명부 확인 완료 · 등대 부두에 접안해 최종 전송 · E':'탈출 부두에 세로로 천천히 접안 · E',target:s.map.exit};
   }
-  if(s.boss.active){
+  if(s.boss.active&&!harborRoutePriority(s)){
     if(usesLighthouse(s)){
       const a=lighthouseStatus(s);
       if(a.phase==='attack'&&!a.impact)return {text:'충격탄 표적 고정 · 원 밖으로 회피',target:null};
@@ -571,7 +571,7 @@ export function tickRun(s,input,elapsed){
   if(s.status==='playing')tickRescue(s,clamp(elapsed,0,.1));
   updateSurvey(s);
   refreshHarborIntel(s);
-  if(s.harborIntel&&s.status==='playing'&&s.mode==='sailing'&&(!s.boss.active||s.boss.cleared)&&!(s.radio?.left>0)){
+  if(s.harborIntel&&s.status==='playing'&&s.mode==='sailing'&&(!s.boss.active||s.boss.cleared||harborRoutePriority(s))&&!(s.radio?.left>0)){
     const site=harborPlan(s).sites.find(b=>b.known&&!b.claimed&&!s.log.some(l=>l.id==='scout-'+s.depth+'-'+b.id));
     if(site)say(s,'scout-'+s.depth+'-'+site.id,'Park: '+SHORE_SITES[site.island]+' 표식에 '+GEAR[site.gear]+'가 있어. M 해도에 남겨둘게.');
   }

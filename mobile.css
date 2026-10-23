@@ -423,6 +423,8 @@ html[data-mobile-move-side=right] #mobileTools{left:max(10px,env(safe-area-inset
 #mobileFlightHud.has-reward #mobileNotice{top:124px}
 #mobileContext{max-width:calc(100vw - 320px)}
 @media(max-width:600px){#mobileMinimap{width:96px;height:58px;top:50px}#mobileNotice{max-width:calc(100vw - 240px);font-size:11px}#mobileObjective{max-width:50vw}#mobileContext{font-size:11px;bottom:84px}}
+/* Keep temporary docking checks above either hand's boost/action cluster. */
+@media(max-width:600px){#mobileContext:has(>.flight-dock){bottom:148px}}
 
 html[data-mobile-ui=true] #rogueQuayAssets{position:fixed;z-index:81;left:var(--quay-asset-left,14px);top:var(--quay-asset-top,56px);right:auto;max-width:var(--quay-asset-width,220px);padding:0 4px;gap:6px;font-size:11px}
 html[data-mobile-ui=true] #rogueQuayAssets .quay-asset-long{display:none}

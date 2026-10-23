@@ -8,7 +8,7 @@ import {towBow} from './rogue-tow.js';
 import {salvageHudCondition,salvageDeviceName} from './rogue-salvage-ui.js';
 import {rigEffects} from './rogue-salvage.js';
 import {harborPlanSummary,pendingRescueDestination} from './harbor-plan-ui.js';
-import {harborDestination} from './harbor-plan.js';
+import {harborDestination,harborRoutePriority} from './harbor-plan.js';
 import {usesSluice,sluiceStatus} from './sluice-counterplay.js';
 import {usesLighthouse,lighthouseStatus} from './lighthouse-counterplay.js';
 import {rescueStatus,rescueBerth} from './shore-rescue.js';
@@ -318,6 +318,7 @@ export function rogueHudModel(s,language='ko'){
   const sluice=usesSluice(s)?sluiceStatus(s):null;
   const lighthouse=usesLighthouse(s)?lighthouseStatus(s):null;
   const fighting=s.boss.active&&!s.boss.cleared;
+  const combatPriority=fighting&&!harborRoutePriority(s);
   const model={language,mode:s.mode,mission:tr(guide.text),fullObjective:tr(guide.text),
     region:`${s.depth+1}/3 · ${tr(DEPTHS[s.depth].name)} · ${CAPTAINS[s.captain].name}`,
     metrics:[],conditions:[],action:'',context:[],work:null,boss:null,
@@ -345,7 +346,7 @@ export function rogueHudModel(s,language='ko'){
       model.mission=tr(site)+(en?' · Search':' 수색');
     }else if(guide.text.includes('장비 없이 보스')){
       model.mission=en?'Explore the harbor':'항구 탐색';
-    }else if(s.boss.active&&!s.boss.cleared&&!sluice&&!lighthouse){
+    }else if(combatPriority&&!sluice&&!lighthouse){
       model.mission=s.boss.hook>=0?(en?'Pull the exposed drive':'노출된 구동부 견인'):
         s.boss.phase==='recover'?(en?'Connect an exposed hook':'노출된 고리 연결'):tr(guide.text);
       if(s.boss.hook>=0){
@@ -368,7 +369,7 @@ export function rogueHudModel(s,language='ko'){
   // quay. Read the explicit chart destination separately for the voyage goal.
   const destination=sailing&&s.status==='playing'&&!s.pendingCache&&!s.pendingGear&&!s.salvage?.pending?harborDestination(s):null;
   const planGuide=destination?{target:destination.point,...(destination.id==='boss'?{planBoss:true}:{planSite:destination.id})}:guide;
-  const planned=harborPlanSummary(s,planGuide,language);
+  const planned=combatPriority?null:harborPlanSummary(s,planGuide,language);
   if(planned){
     model.mission=planned.title;
     model.plan=planned.detail;
@@ -376,7 +377,7 @@ export function rogueHudModel(s,language='ko'){
   }
   // The locked circle takes priority over a lingering tow prompt. Recovery
   // still uses the existing hook, tension and captain-skill eligibility.
-  if(crane&&sailing&&fighting){
+  if(crane&&sailing&&combatPriority){
     if(s.boss.phase==='warn'){
       model.mission=crane.locked?(en?'Target locked · dodge now':'표적 고정 · 지금 회피'):
         crane.target?(en?'Lure the crane over a drive':'크레인을 구동부로 유인'):(en?'Crane preparing':'크레인 낙하 준비');
@@ -400,7 +401,7 @@ export function rogueHudModel(s,language='ko'){
     const broken=[0,1].filter(i=>s.boss.parts[i]<=0&&!(hit&&crane.lastHit===i));
     if(fighting&&broken.length)condition('dredger-effect',broken.map(i=>effects[i]).join(' · '));
   }
-  if(sluice&&sailing&&fighting){
+  if(sluice&&sailing&&combatPriority){
     const lane=sluice.lane+1;
     metric('east-speed',`${en?'East speed':'동쪽 속도'} (${sluice.requiredSpeed}+)`,Math.floor(sluice.speed));
     if(sluice.hooked){
@@ -442,7 +443,7 @@ export function rogueHudModel(s,language='ko'){
     };
     if(impacts[sluice.lastImpact])condition('sluice-impact',impacts[sluice.lastImpact],sluice.lastImpact==='opened'?'ready':'warning',{emphasis:true});
   }
-  if(lighthouse&&sailing&&fighting){
+  if(lighthouse&&sailing&&combatPriority){
     const a=lighthouse,relay=a.index+1;
     // Round up at the speed limit: 18.01 must not appear to satisfy <=18.
     metric('signal-speed',`${en?'Speed':'속도'} (≤${a.maxSpeed})`,Math.ceil(a.speed));
