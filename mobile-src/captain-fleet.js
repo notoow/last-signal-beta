@@ -54,11 +54,15 @@ export function drawCaptainBoat(c,b,captain,paint='harbor'){
 }
 // Fixed berth pose only. Keep each captain's existing hull and live paint.
 // This is a waterline fit of the menu atlas, never a rotated overhead sprite.
+export function dockedCaptainBoatBounds(point,length,captain){
+  // The full crop is a conservative envelope for its painted silhouette.
+  // Share these exact dimensions with camera framing before drawing the atlas.
+  const [, ,width,height]=FLEET_FRAMES[captain].menu,scale=length/width;
+  return {x:point.x-length*.5,y:point.y-height*.79*scale,w:length,h:height*scale};
+}
 export function drawDockedCaptainBoat(c,point,length,captain,paint='harbor'){
   const art=sprite('menu',captain,paint);if(!art)return null;
-  const scale=length/art.width;
-  const pivot={x:art.width*.5,y:art.height*.79};
-  const bounds={x:point.x-pivot.x*scale,y:point.y-pivot.y*scale,w:art.width*scale,h:art.height*scale};
+  const bounds=dockedCaptainBoatBounds(point,length,captain);
   c.drawImage(art,bounds.x,bounds.y,bounds.w,bounds.h);
   return bounds;
 }

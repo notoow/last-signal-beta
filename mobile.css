@@ -299,6 +299,17 @@ html,body{height:var(--mobile-height,100dvh);overflow:hidden}
 .flight-vital.fuel svg{width:17px!important;height:17px!important;margin-left:5px}
 .flight-vital.fuel .flight-vital-label b{font-size:12px}
 .flight-vital.fuel i{height:3px}
+/* Aboard only: retain the main numbers and use one inline fuel row. */
+#mobileVitals[data-layout=aboard]{height:38px;grid-template-rows:22px 14px;gap:2px}
+#mobileVitals[data-layout=aboard] .flight-vital-label{margin-bottom:0}
+#mobileVitals[data-layout=aboard] .flight-vital i{height:5px}
+#mobileVitals[data-layout=aboard] .fuel{height:14px;gap:5px}
+#mobileVitals[data-layout=aboard] .fuel svg{width:12px!important;height:12px!important;margin-left:10px}
+#mobileVitals[data-layout=aboard] .fuel>div{display:flex;align-items:center;gap:6px}
+#mobileVitals[data-layout=aboard] .fuel .flight-vital-label{flex:none}
+#mobileVitals[data-layout=aboard] .fuel .flight-vital-label span{display:none}
+#mobileVitals[data-layout=aboard] .fuel .flight-vital-label b{font-size:12px;line-height:14px}
+#mobileVitals[data-layout=aboard] .fuel i{height:3px;flex:1}
 .danger,.flight-vital.danger{color:#ff967c!important}
 #mobileNotice{position:absolute;top:68px;left:50%;transform:translateX(-50%);display:grid;gap:5px;max-width:56vw;text-align:center;color:#ffcc8b;font-size:13px;font-weight:650}
 #mobileNotice span{background:linear-gradient(90deg,transparent,#1d171ba6,transparent);padding:3px 10px}

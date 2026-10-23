@@ -8,7 +8,7 @@ import {dockAlignmentPresentation,impactPresentation} from './rogue-hud.js';
 import {recentImpact} from './rogue-impact.js';
 import {drawExitQuay,exitQuayLabel} from './exit-quay-view.js';
 import {crewImage} from './departure-art.js';
-import {drawCaptainBoat} from './captain-fleet.js';
+import {drawCaptainBoat,dockedCaptainBoatBounds} from './captain-fleet.js';
 import {drawShoreEncounter} from './shore-animation.js';
 import {FLOOR_TOOLS,SHORE_SITES,toolBerth,hasTool} from './shore-encounters.js';
 import {drawSurvey,visibleAt} from './rogue-vision.js';
@@ -17,7 +17,7 @@ import {quayCamera} from './quay-camera.js';
 import {supplyBoatLayout} from './supply-fleet.js';
 import {drawQuay,prepareQuayArt} from './quay-view.js';
 import {IDENTITY_PROJECTION,project as projectWorld} from './world-projection.js';
-import {shoreScale,shoreRanges} from './shore-scale.js';
+import {shoreScale,shoreRanges,WORLD_UNITS_PER_METRE as M} from './shore-scale.js';
 import {waterMotion,waterVelocity} from './ship-motion.js';
 import {towBow,tugStern} from './rogue-tow.js';
 import {floatPose,drawWake} from './sea-surface.js';
@@ -204,6 +204,7 @@ export function rogueCamera(canvas,s,mapOpen=false,options={},previous=null,dt=0
   if(s.generator>=4&&['moored','ashore'].includes(s.mode)&&!mapOpen){
     const berth=s.map.berths.find(b=>b.id===s.mooring);
     return quayCamera({width,height,focus:s.person||berth.landing,options,previous,dt,occupied:occupied||[],
+      focusBounds:quayReady&&!s.person?f=>dockedCaptainBoatBounds(projectWorld(f,s.boat,-.8*M),s.boat.length*f.scale,s.captain):null,
       companionBounds:quayReady&&s.tow?.connected&&!s.tow.delivered&&s.tow.hp>0&&visibleAt(s,s.tow)?f=>supplyBoatLayout(s.tow,f).visibleBounds:null,
       ...(quayReady?{}:{projection:IDENTITY_PROJECTION,projectionId:'quay-map-fallback'})});
   }

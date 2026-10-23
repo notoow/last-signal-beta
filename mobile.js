@@ -775,6 +775,8 @@ function createMobileHud({ onMap = () => {
       return `<div class="flight-vital ${m.id} ${danger ? "danger" : ""}" role="meter" aria-label="${escape2(m.label)}" aria-valuemin="0" aria-valuemax="${escape2(m.max || 100)}" aria-valuenow="${escape2(m.raw ?? m.value)}">${icon(m.id)}<div><div class="flight-vital-label"><span>${escape2(m.label)}</span><b>${escape2(m.value)}</b></div><i><em style="width:${ratio * 100}%"></em></i></div></div>`;
     };
     set(nodes.mobileVitals, metrics.filter((m) => ["hull", "crew", "fuel"].includes(m.id)).map(vital).join(""));
+    const layout = rogue && metrics.some((m) => m.id === "hull") && metrics.some((m) => m.id === "fuel") && !metrics.some((m) => m.id === "crew") ? "aboard" : "default";
+    if (nodes.mobileVitals.dataset.layout !== layout) nodes.mobileVitals.dataset.layout = layout;
     set(nodes.mobileResources, metrics.filter((m) => !["hull", "crew", "fuel"].includes(m.id)).map((m) => `<span class="flight-resource ${m.impact ? "danger" : ""}" aria-label="${escape2(m.label + " " + m.value)}" title="${escape2(m.label)}">${icon(m.id)}<b>${escape2(m.value)}</b></span>`).join(""));
     const notices = rogue ? [...document.querySelectorAll("#rogueConditions>[data-tone=warning],#rogueConditions>.rogue-impact[data-impact-id],#rogueMission .rogue-boss-state")] : [...document.querySelectorAll("#hud .compact-risks>*,#hud .compact-environment>[data-tone=warning]")];
     set(nodes.mobileNotice, notices.map((el) => `<span>${escape2(text(el))}</span>`).join(""));
