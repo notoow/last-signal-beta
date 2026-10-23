@@ -1,0 +1,43 @@
+import {drawDockingDrift} from './docking-guidance.js';
+import {edgeMarker} from './rogue-camera.js';
+import {towAction,towBody,bodyPoint,towMission,bodyMoorings,temporaryMooringStatus} from './tow-core.js';
+const copy={ko:{goal:'승객선을 남쪽 안전 부두로 데려오세요',iceWhy:'앞의 빈 얼음선이 서쪽 길을 막고 있습니다. 옆 정박칸으로 옮기거나, 동쪽으로 돌아 승객선에 접근하세요.',cutIce:'선택 작업 · 얼음선을 옮기려면 표시된 계류 지점 주변을 돌며 Q로 부표 3개를 놓으세요.',cutBus:'승객선을 붙잡은 계류 지점입니다. 주변을 돌며 Q로 부표 3개를 놓아 삼각형 안에 넣으세요.',one:'첫 부표를 놓았습니다. 계류 지점의 다른 쪽으로 이동해 Q, 다시 방향을 바꿔 Q로 삼각형을 닫으세요.',connectIce:'줄이 풀렸습니다. 얼음선의 둥근 고리로 다가가 E로 예인줄을 연결하세요.',connectBus:'이제 승객선을 움직일 수 있습니다. 둥근 고리로 다가가 E로 예인줄을 연결하세요.',towIce:'얼음선을 왼쪽 정박칸으로 끌어오세요. 표시된 배 모양처럼 선수를 왼쪽으로 맞춥니다.',slow:'얼음선이 아직 움직입니다. 이동 키를 놓고 기다리세요. 지금 E를 누르면 줄만 분리됩니다.',heading:'선수를 왼쪽으로 돌려 배 모양과 맞추세요. 아직 E를 누르면 줄만 분리됩니다.',fit:'배 전체를 정박칸에 넣고 선수 고리를 왼쪽 계선주 가까이 가져오세요.',moor:'자세가 맞았습니다. E로 묶으면 예인줄이 풀리고 서쪽 길을 사용할 수 있습니다.',done:'얼음선 정리가 끝났습니다. 이제 북쪽 승객선을 데려오세요.',route:'얼음선 옆 서쪽 길을 이용하거나 넓은 동쪽으로 우회할 수 있습니다. 도착 전 이동 키를 놓고 감속하세요.',leak:'승객선이 가라앉고 있습니다. 먼저 접근해 멈춘 뒤 F를 4초 유지해 봉합하세요. 부품 1개가 필요합니다.',mooring:'Q · 계류 지점을 감싸기',ring:'E · 예인 연결 고리',pocket:'선택 · 얼음선 정박 위치',passenger:'구조 대상 · 승객선',ice:'선택 · 길을 막는 빈 배',berth:'승객선 도착 부두',wait:'계류 준비 · 감속 / 정렬',hull:'배 전체가 정박칸 안',headingCheck:'선수가 왼쪽',still:'배가 멈춤',bow:'선수 고리가 계선주 근처'},en:{goal:'Bring the passengers to the southern safe pier',iceWhy:'The empty ice carrier blocks the west passage. Move it into the side berth, or go east to reach the passengers.',cutIce:'Optional: circle the marked mooring point, placing three buoys with Q to free the ice carrier.',cutBus:'This mooring holds the passengers. Circle the marked point and place three Q buoys to enclose it.',one:'First buoy placed. Move to the other side of the mooring and press Q; turn again and press Q to close the triangle.',connectIce:'Line cut. Approach the round ring on the ice carrier and press E to attach your towline.',connectBus:'The passengers are free to move. Approach their round ring and press E to attach your towline.',towIce:'Tow the carrier into the side berth on the left. Match the ship outline with its bow pointing left.',slow:'The carrier is still moving. Release movement keys and wait. E now only detaches the towline.',heading:'Turn its bow left to match the outline. E still only detaches the towline.',fit:'Fit the whole hull in the berth and bring its bow ring close to the left bollard.',moor:'Position ready. Press E to moor the carrier, release your tug and use the west passage.',done:'The carrier is moored. Now return north for the passengers.',route:'Use the west passage beside the carrier or take the broad eastern detour. Release movement keys before arrival to slow down.',leak:'The passenger hull is sinking. Approach, stop, then hold F for four seconds to patch it with one repair part.',mooring:'Q · Enclose this mooring',ring:'E · Towline ring',pocket:'Optional · Carrier berth',passenger:'Rescue · Passenger boat',ice:'Optional · Blocking vessel',berth:'Passenger arrival pier',wait:'Prepare to moor · slow / align',hull:'Whole hull inside',headingCheck:'Bow points left',still:'Hull stopped',bow:'Bow ring near bollard'}};
+Object.assign(copy.ko,{optional:'선택',move:'WASD · 표시된 계류 지점으로',cutAction:'Q · 부표 놓기',netAction:'Q · 다음 부표 / E · 취소',iceDone:'정박 완료 · 빈 얼음선',iceMoving:'선택 작업 · 빈 얼음선'});
+Object.assign(copy.en,{optional:'Optional',move:'WASD · Approach the marked mooring',cutAction:'Q · Place buoy',netAction:'Q · Next buoy / E · Cancel',iceDone:'Moored · Empty ice carrier',iceMoving:'Optional work · Empty ice carrier'});
+export function marketGuidance(s,g,language){
+ if(s.missionId!=='market'||s.status!=='playing')return g;
+ const t=copy[language]||copy.ko,ice=towBody(s,'ice'),action=towAction(s),station=towMission(s).stations[0],moored=s.temporaryMoorings.some(m=>m.bodyId==='ice');
+ let focus=s.connected?s.connectedBodyId:action.bodyId==='bus'?'bus':!moored&&(action.bodyId==='ice'||Math.hypot(s.boat.x-ice.x,s.boat.y-ice.y)<300&&Math.hypot(s.boat.x-ice.x,s.boat.y-ice.y)<Math.hypot(s.boat.x-s.bus.x,s.boat.y-s.bus.y)||s.boat.x<650&&s.boat.y>480)?'ice':'bus';
+ if(s.anchors.length){const p=s.anchors[0],m=s.moorings.filter(m=>!m.cut).sort((a,b)=>Math.hypot(a.x-p.x,a.y-p.y)-Math.hypot(b.x-p.x,b.y-p.y))[0];if(m)focus=m.bodyId;}
+ const b=focus==='ice'?ice:s.bus,remaining=bodyMoorings(s,b).filter(m=>!m.cut),ring=bodyPoint(b,b.length/2);
+ let hint=g.hint,stage='',point=null,checks=g.dockChecks,actionText=g.action;
+ const target=(p,label,kind)=>({...p,label,kind});
+ if(focus==='ice'&&s.connected){
+  const pose={x:station.x-Math.cos(station.angle)*ice.length/2,y:station.y-Math.sin(station.angle)*ice.length/2};point=target(pose,t.pocket,'pocket');
+  const v=temporaryMooringStatus(s,ice,station);stage='ice-tow';hint=t.towIce;
+  if(v.near){stage='ice-align';hint=!v.still?t.slow:!v.heading?t.heading:!v.hull||!v.bow?t.fit:t.moor;checks=['hull','heading','still','bow'].map(id=>({id,met:v[id],text:t[id==='heading'?'headingCheck':id]}));if(action.kind!=='moor')actionText=t.wait;}
+  if(remaining.length){stage='ice-cut';point=target(remaining[0],t.optional+' · '+t.mooring,'mooring');hint=t.cutIce;checks=[];}
+ }else if(focus==='ice'){
+  if(remaining.length){stage='ice-cut';point=target(remaining[0],t.optional+' · '+t.mooring,'mooring');hint=Math.hypot(s.boat.x-ice.x,s.boat.y-ice.y)>260?t.iceWhy:t.cutIce;}
+  else{stage='ice-connect';point=target(ring,t.ring,'ring');hint=t.connectIce;}
+ }else if(remaining.length){stage='passenger-cut';point=target(remaining[0],t.mooring,'mooring');hint=moored?t.done+' '+t.cutBus:t.cutBus;}
+ else if(!s.connected){stage='passenger-connect';point=target(ring,t.ring,'ring');hint=t.connectBus;}
+ else{stage='passenger-tow';const z=towMission(s).world.berth;point=target({x:z.x+z.w/2,y:z.y+z.h/2},t.berth,'berth');if(!g.dockChecks.length)hint=t.route;}
+ if(s.voyage?.situation?.contract==='leaking'&&!s.voyage.situation.patched&&s.voyage.parts>0&&!s.connected&&!s.anchors.length){stage='passenger-patch';point=target(s.bus,t.passenger,'patch');hint=t.leak;focus='bus';actionText=Math.hypot(s.boat.x-s.bus.x,s.boat.y-s.bus.y)<150?(language==='en'?'Hold F · Patch hull':'F 유지 · 선체 봉합'):(language==='en'?'WASD · Approach the passengers':'WASD · 승객선으로 접근');}
+ if(stage!=='passenger-patch'&&remaining.length&&!s.connected&&!s.anchors.length)actionText=Math.hypot(s.boat.x-point.x,s.boat.y-point.y)>180?t.move:t.cutAction;
+ if(s.anchors.length){actionText=t.netAction;if(s.anchors.length===1)hint=t.one+(g.netTimer?.urgent?' · '+g.netTimer.warning:'');else hint=g.hint;}
+ return {...g,goal:t.goal,hint,action:actionText,dockChecks:checks,focusBodyId:focus,learningStage:stage,waypoint:point,objectLabels:{ice:moored?t.iceDone:bodyMoorings(s,ice).every(m=>m.cut)?t.iceMoving:t.ice,bus:t.passenger},pocketGhost:focus==='ice'&&s.connected&&!remaining.length?{...station,length:ice.length,width:ice.width}:null};
+}
+export function drawMarketGuide(s,g,mini=false){
+ if(s.status!=='playing'||!g?.waypoint)return;
+ const c=this.c,p=g.waypoint;c.save();if(!mini)drawDockingDrift(c,g);
+ if(g.pocketGhost&&!mini){const z=g.pocketGhost,x=z.x-Math.cos(z.angle)*z.length/2,y=z.y-Math.sin(z.angle)*z.length/2;c.save();c.translate(x,y);c.rotate(z.angle);c.fillStyle='#c7e4b52b';c.strokeStyle='#d5ecc1';c.lineWidth=3;c.setLineDash([6,5]);c.beginPath();c.roundRect(-z.length/2,-z.width/2,z.length,z.width,14);c.fill();c.stroke();c.setLineDash([]);c.beginPath();c.moveTo(0,0);c.lineTo(z.length/2-10,0);c.lineTo(z.length/2-22,-9);c.moveTo(z.length/2-10,0);c.lineTo(z.length/2-22,9);c.stroke();c.restore();}
+ c.strokeStyle='#ffdb8f';c.lineWidth=mini?10:2.5/(this.scale||1);c.beginPath();c.arc(p.x,p.y,mini?42:p.kind==='mooring'?22:30,0,Math.PI*2);c.stroke();
+ if(!mini)this.label(p.label,p.x,p.y-42,'#ffe1a2',13);for(const q of g.landmarks||[]){c.strokeStyle='#a5bcb5';c.beginPath();c.arc(q.x,q.y,mini?28:18,0,Math.PI*2);c.stroke();if(!mini)this.label(q.label,q.x,q.y-32,'#b8cec4',11);}c.restore();
+}
+export function drawMarketPointer(s,g){
+ if(s.status!=='playing'||!g?.waypoint)return;
+ const c=this.c,p=g.waypoint,marker=edgeMarker(this.cameraFrame,p,36);if(!marker)return;
+ const {x,y,angle}=marker,v=this.cameraFrame.viewport,limit=Math.max(1,Math.min(340,v.w-24));
+ c.save();c.translate(x,y);c.rotate(angle);c.fillStyle='#ffdb8f';c.beginPath();c.moveTo(14,0);c.lineTo(-6,-8);c.lineTo(-6,8);c.closePath();c.fill();c.restore();c.save();c.font='12px Pretendard';c.textAlign='center';c.fillStyle='#ffe1a2';c.shadowColor='#102422';c.shadowBlur=4;const width=Math.min(limit,c.measureText(p.label).width),tx=Math.max(v.x+width/2+12,Math.min(v.x+v.w-width/2-12,x));c.fillText(p.label,tx,y-22,limit);c.restore();
+}
