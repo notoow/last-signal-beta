@@ -53,17 +53,20 @@ export function rogueContextActions(s){
   if(!s||s.status!=='playing'||s.pendingGear||s.pendingCache||s.salvage?.pending)return result;
   if(s.person){
     result.attack=action('attack','Space','공격','Attack',true,true);
-    const b=s.map.berths.find(b=>b.id===s.mooring),search=shoreSearchStatus(s);
+    const b=s.map.berths.find(b=>b.id===s.mooring),search=shoreSearchStatus(s),rescue=rescueStatus(s);
     if(search?.berth){
       result.primary=action('search','KeyF',search.choiceMode?'수색':'보급 회수',search.choiceMode?'Search':'Supplies',!['choice','hit'].includes(search.blocked),true,search.progress/search.required);
       if(!search.choiceMode)result.secondary.push(action('equipment','KeyR','장비 회수','Equipment',result.primary.enabled,true,result.primary.progress));
     }
     if(b&&distance(s.person,b.landing)<shoreRanges(s).boarding){
-      const board=action('board','KeyE','승선','Board');
+      const together=rescue?.ready,alone=rescue?.active&&rescue.discovered;
+      const board=action('board','KeyE',together?'함께 승선':alone?'혼자 승선':'승선',together?'Board together':alone?'Board alone':'Board');
       if(result.primary)result.secondary.push(board);else result.primary=board;
     }
-    const rescue=rescueStatus(s);
-    if(!result.primary&&rescue?.near&&!rescue.boarding)result.primary=action('rescue','KeyE',rescue.stage==='following'?'기다려':'따라와',rescue.stage==='following'?'Wait':'Follow');
+    if(rescue?.near&&!rescue.boarding){
+      const escort=action('rescue','KeyE',rescue.stage==='following'?'기다려':'따라와',rescue.stage==='following'?'Wait':'Follow');
+      if(result.primary)result.secondary.push(escort);else result.primary=escort;
+    }
     return result;
   }
   if(s.mode==='moored'){
@@ -82,10 +85,11 @@ export function rogueContextActions(s){
 export function rogueMinimap(s){
   if(!s)return null;
   const known=p=>!s.survey||s.survey[Math.floor(p.y/SURVEY_CELL)*SURVEY_COLS+Math.floor(p.x/SURVEY_CELL)]===1;
-  const player=s.person||s.boat;
+  const player=s.person||s.boat,rescue=rescueStatus(s);
   return {width:s.map.width,height:s.map.height,cols:s.map.cols,rows:s.map.rows,tiles:s.map.tiles?.slice()||[],
     survey:s.survey?.slice()||null,surveyCols:SURVEY_COLS,surveyCell:SURVEY_CELL,
     player:{x:player.x,y:player.y,angle:player.angle},boat:{x:s.boat.x,y:s.boat.y},
     berths:s.map.berths.filter(known).map(b=>({x:b.x,y:b.y,claimed:s.claimed.includes(b.id)})),
+    rescue:rescue?.active&&rescue.discovered&&visibleAt(s,rescue.point)?{x:rescue.point.x,y:rescue.point.y,stage:rescue.stage,blocked:rescue.blocked}:null,
     enemies:s.combat?.enemies.filter(e=>e.hp>0&&visibleAt(s,e)).map(e=>({x:e.x,y:e.y,kind:e.kind,asleep:!!e.asleep}))||[]};
 }

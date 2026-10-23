@@ -714,10 +714,11 @@ function createMobileHud({ onMap = () => {
   const mini = document.createElement("button");
   mini.id = "mobileMinimap";
   mini.type = "button";
-  mini.innerHTML = '<canvas width="224" height="128" aria-hidden="true"></canvas>' + icon("chart");
+  mini.innerHTML = '<canvas width="224" height="128" aria-hidden="true"></canvas><span id="mobileRescueMarker" hidden aria-hidden="true">' + icon("crew") + "</span>" + icon("chart");
   mini.addEventListener("click", onMap);
   mini.hidden = true;
   root.append(mini);
+  const rescueMarker = mini.querySelector("#mobileRescueMarker");
   let lastMap = null;
   const reward = document.createElement("div");
   reward.id = "mobileReward";
@@ -743,6 +744,17 @@ function createMobileHud({ onMap = () => {
     if (!m || m === lastMap) return;
     lastMap = m;
     const canvas = mini.querySelector("canvas"), c = canvas.getContext("2d"), w = canvas.width, h = canvas.height, s = Math.min(w / m.width, h / m.height), ox = (w - m.width * s) / 2, oy = (h - m.height * s) / 2;
+    rescueMarker.hidden = !m.rescue;
+    if (m.rescue) {
+      rescueMarker.style.left = (ox + m.rescue.x * s) / w * 100 + "%";
+      rescueMarker.style.top = (oy + m.rescue.y * s) / h * 100 + "%";
+      rescueMarker.dataset.stage = m.rescue.stage;
+      rescueMarker.dataset.blocked = String(!!m.rescue.blocked);
+    } else {
+      rescueMarker.removeAttribute("style");
+      delete rescueMarker.dataset.stage;
+      delete rescueMarker.dataset.blocked;
+    }
     c.fillStyle = "#081d25";
     c.fillRect(0, 0, w, h);
     c.save();
@@ -778,8 +790,10 @@ function createMobileHud({ onMap = () => {
     reward.hidden = performance.now() > rewardUntil;
     root.classList.toggle("has-reward", !reward.hidden);
     mini.hidden = !rogue || !presentation?.minimap;
-    mini.setAttribute("aria-label", document.documentElement.lang === "en" ? "Expand explored chart" : "\uD0D0\uC0AC\uD55C \uD574\uB3C4 \uD655\uB300");
+    const english = document.documentElement.lang === "en", rescue = presentation?.minimap?.rescue, rescueLabel = rescue ? (english ? " \xB7 Mechanic: " : " \xB7 \uC815\uBE44\uACF5: ") + (rescue.blocked ? english ? "stopped" : "\uBA48\uCDA4" : rescue.stage === "following" ? english ? "following" : "\uB530\uB77C\uC624\uB294 \uC911" : english ? "waiting" : "\uAE30\uB2E4\uB9AC\uB294 \uC911") : "";
+    mini.setAttribute("aria-label", (english ? "Expand explored chart" : "\uD0D0\uC0AC\uD55C \uD574\uB3C4 \uD655\uB300") + rescueLabel);
     if (!mini.hidden) drawMinimap(presentation.minimap);
+    else rescueMarker.hidden = true;
     const en = document.documentElement.lang === "en", source = rogue ? document.getElementById("rogueMission") : document.querySelector("#hud .mission-objective");
     const special = presentation?.context?.special, actions2 = document.getElementById("mobileActions");
     const explain = special && (!special.enabled || special.cooldown > 0) && !document.getElementById("mobileControls")?.classList.contains("expanded");
@@ -1150,7 +1164,7 @@ function refreshContext() {
     const action = available[Number(button.dataset.contextSlot)];
     button.hidden = !action;
     if (!action) continue;
-    const label = en ? action.labelEn : action.labelKo, name = action.code === "KeyF" ? "search" : action.code === "KeyR" ? "gear" : ["land", "board"].includes(action.id) ? "board" : "interact";
+    const label = en ? action.labelEn : action.labelKo, name = action.id === "rescue" ? "crew" : action.code === "KeyF" ? "search" : action.code === "KeyR" ? "gear" : ["land", "board"].includes(action.id) ? "board" : "interact";
     if (button.dataset.action !== action.id || button.dataset.label !== label) {
       buttonFace(button, label, name);
       button.dataset.label = label;
