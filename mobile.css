@@ -148,3 +148,111 @@ html,body{height:var(--mobile-height,100dvh);overflow:hidden}
 .mobile-playing #rogue[data-hud=compact] .rogue-readings b{font-size:14px}
 .mobile-playing #rogue[data-hud=compact] .rogue-controls{position:static;padding:4px 0;font-size:12px}
 .mobile-playing #rogue[data-hud=compact] .rogue-radio{position:static;font-size:12px;line-height:1.4}
+
+/* Phone gameplay: the world uses the whole viewport. Controls occupy corners. */
+.mobile-playing #space,.mobile-playing #rogueSea{height:100%;max-height:none}
+#mobileControls{min-height:0;height:116px;background:none;border:0;padding:6px max(10px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));align-items:end}
+#mobileStick{width:92px;height:92px;background:radial-gradient(circle,#b4cbd322 0 38%,#14212cc9 40%);box-shadow:0 2px 8px #0006}
+#mobileActions{grid-template-columns:repeat(2,60px);gap:6px}
+#mobileActions button{min-height:48px;height:48px;font-size:13px;border-radius:8px;background:#172b38e8}
+#mobileActions .mobile-primary{background:#51402aeb;border-color:#f3a343;color:#ffddae}
+#mobileControls.expanded #mobileActions{grid-template-columns:repeat(4,64px);max-height:calc(var(--mobile-height,100dvh) - 70px);box-shadow:0 8px 30px #000a}
+#mobileControls.expanded #mobileActions button{height:auto;min-height:48px}
+.mobile-playing #rogue[data-hud=compact] .rogue-top-stack{top:max(6px,env(safe-area-inset-top));left:max(8px,env(safe-area-inset-left));width:40vw;max-width:40vw;max-height:none;overflow:visible;pointer-events:none}
+.mobile-playing #rogue[data-hud=compact] #rogueMission{padding:5px 8px;background:#111c24db;line-height:1.25}
+.mobile-playing #rogue[data-hud=compact] #rogueMission small{font-size:11px;margin:0 0 3px}
+.mobile-playing #rogue[data-hud=compact] #rogueMission strong{font-size:14px;line-height:1.25}
+.mobile-playing #rogue[data-hud=compact] .rogue-plan-summary,.mobile-playing #rogueRadio{display:none}
+.mobile-playing #rogue[data-hud=compact] .rogue-boss-state{font-size:12px;margin-top:4px}
+.mobile-playing #rogue[data-hud=compact] .rogue-console{top:max(6px,env(safe-area-inset-top));right:max(60px,calc(env(safe-area-inset-right) + 54px));left:auto;bottom:auto;width:calc(60vw - 78px);max-width:none;max-height:none;padding:4px 6px;overflow:visible;background:#111c24db;pointer-events:none;border:0}
+.mobile-playing #rogue[data-hud=compact] .rogue-readings{margin:0;display:grid;grid-template-columns:1fr 1fr;gap:4px 8px;font-size:11px}
+.mobile-playing #rogue[data-hud=compact] [data-rogue-metric]{gap:4px}
+.mobile-playing #rogue[data-hud=compact] .rogue-readings b{font-size:15px}
+.mobile-playing #rogue[data-hud=compact] .rogue-maximum,.mobile-playing #rogue[data-hud=compact] .rogue-readings .rogue-gauge{display:none}
+.mobile-playing #rogue[data-hud=compact] .rogue-readings .rogue-instrument{padding:0}
+.mobile-playing #rogue[data-hud=compact] .rogue-conditions{position:fixed;top:68px;right:max(10px,env(safe-area-inset-right));max-width:48vw;padding:0;margin:0;font-size:12px;line-height:1.35;background:#111c24db}
+.mobile-playing #rogue[data-hud=compact] .rogue-conditions>[data-tone=normal],.mobile-playing #rogue[data-hud=compact] .rogue-impact[aria-hidden]{display:none}
+.mobile-playing #rogue[data-hud=compact] .rogue-controls{position:fixed;display:flex;left:118px;right:148px;top:auto;bottom:max(10px,env(safe-area-inset-bottom));width:auto;padding:6px 8px;margin:0;justify-content:center;font-size:12px;line-height:1.35;background:#111c24db;border:0;max-height:94px;overflow:auto;pointer-events:auto}
+.mobile-playing #rogue[data-hud=compact] .rogue-work{font-size:12px}
+.mobile-playing .play-pause{top:max(6px,env(safe-area-inset-top));right:max(6px,env(safe-area-inset-right));min-width:46px;width:46px;min-height:44px;padding:4px;font-size:11px}
+.mobile-notes p{white-space:pre-line;font-size:14px;line-height:1.6}
+/* Story mode follows the same corner layout and readable camera. */
+.mobile-playing #hud{max-height:none;overflow:visible}
+.mobile-playing #hud[data-ui=compact] .compact-top{left:8px;top:6px;width:40vw;max-width:40vw}
+.mobile-playing #hud .radio-panel,.mobile-playing #hud .passenger-status{display:none}
+.mobile-playing #hud[data-ui=compact] .compact-console{top:6px;left:auto;right:60px;width:calc(60vw - 78px);padding:5px 6px;background:#111c24db}
+.mobile-playing #hud[data-ui=compact] .compact-metrics{display:grid;grid-template-columns:1fr 1fr;gap:4px 8px}
+.mobile-playing #hud[data-ui=compact] .compact-metric{display:flex;gap:4px;align-items:baseline}
+.mobile-playing #hud[data-ui=compact] .compact-metric>strong{font-size:15px}
+.mobile-playing #hud[data-ui=compact] .compact-metric>small,.mobile-playing #hud[data-ui=compact] .compact-gauge,.mobile-playing #hud[data-ui=compact] .compact-conditions{display:none}
+.mobile-playing #hud[data-ui=compact] .compact-actions{position:fixed;left:118px;right:148px;bottom:10px;margin:0;padding:6px;font-size:12px;background:#111c24db;max-height:94px;overflow:auto}
+.mobile-playing #hud[data-ui=compact] .compact-work,.mobile-playing #hud[data-ui=compact] .compact-docking{position:fixed;top:74px;right:8px;max-width:42vw;font-size:12px;background:#111c24db}
+.mobile-playing #hud[data-kind=rescue] .hud-top{position:fixed;top:6px;left:auto;right:60px;width:calc(60vw - 78px);height:auto;min-height:0;padding:6px;gap:10px;background:#111c24db}
+.mobile-playing #hud[data-kind=rescue] .hud-brand,.mobile-playing #hud[data-kind=rescue] .hud-time span{display:none}
+.mobile-playing #hud[data-kind=rescue] .meter{min-width:0;width:75px}
+.mobile-playing #hud[data-kind=rescue] .meter>div{font-size:11px}
+.mobile-playing #hud[data-kind=rescue] .meter b{font-size:13px}
+.mobile-playing #hud[data-kind=rescue] .hud-time{font-size:15px}
+.mobile-playing #hud[data-kind=rescue] .mission-objective{left:8px;top:6px;transform:none;width:40vw;max-width:40vw;font-size:14px;padding:6px 8px;text-align:left;background:#111c24db}
+.mobile-playing #hud[data-kind=rescue] .hud-bottom{position:fixed;bottom:10px;left:118px;right:148px;width:auto;height:auto;padding:6px 8px;display:grid;gap:4px;background:#111c24db}
+.mobile-playing #hud[data-kind=rescue] .hud-hint{display:none}
+.mobile-playing #hud[data-kind=rescue] .anchor-state,.mobile-playing #hud[data-kind=rescue] .context-action{min-width:0;max-width:none;font-size:12px;text-align:left}
+.mobile-playing #hud[data-kind=rescue] .net-clock{margin:0;font-size:12px}
+.mobile-playing .play-pause{font-size:20px;line-height:1}
+.mobile-playing #hud[data-ui=compact] .compact-conditions{display:contents}
+.mobile-playing #hud[data-ui=compact] .compact-build,.mobile-playing #hud[data-ui=compact] .compact-environment>[data-tone=normal]{display:none}
+.mobile-playing #hud[data-ui=compact] .compact-environment,.mobile-playing #hud[data-ui=compact] .compact-risks{position:fixed;right:8px;top:92px;max-width:42vw;font-size:12px;background:#111c24db}
+.mobile-playing #hud[data-ui=compact] .compact-risks{top:130px}
+
+/* Visual hierarchy: navigation in the world, vital bars below, light resources
+   above. Opaque surfaces belong to menus, not the sailing HUD. */
+.mobile-playing #rogueHud,.mobile-playing #hud{display:none!important}
+#mobileFlightHud{position:fixed;inset:0;z-index:80;pointer-events:none;color:#f0f3ed;font:500 13px/1.35 Pretendard,sans-serif;text-shadow:0 1px 3px #00121f,0 0 8px #00121f}
+#mobileFlightHud[hidden],#mobileFlightHud [hidden]{display:none!important}
+#mobileFlightHud svg{width:22px;height:22px;flex:none;filter:drop-shadow(0 1px 2px #00121f)}
+#mobileObjective{position:absolute;left:max(14px,env(safe-area-inset-left));top:max(12px,env(safe-area-inset-top));display:flex;gap:9px;max-width:48vw;align-items:center}
+#mobileObjective>svg{color:#f2c879;width:26px;height:26px}
+#mobileObjective small{display:block;font-size:10px;letter-spacing:.06em;color:#c4d6d8;margin-bottom:3px}
+#mobileObjective strong{font-size:14px;font-weight:600;display:block}
+#mobileResources{position:absolute;right:max(62px,calc(env(safe-area-inset-right) + 56px));top:max(14px,env(safe-area-inset-top));display:flex;gap:16px;align-items:center;max-width:40vw;flex-wrap:wrap;justify-content:end}
+.flight-resource{display:inline-flex;gap:5px;align-items:center}
+.flight-resource b{font-size:16px;font-weight:650;font-variant-numeric:tabular-nums}
+.flight-resource svg{color:#bfd6da;width:19px!important;height:19px!important}
+#mobileVitals{position:absolute;bottom:max(12px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:clamp(150px,30vw,240px);display:grid;gap:7px}
+.flight-vital{display:flex;gap:8px;align-items:center;color:#e5eee8}
+.flight-vital>div{flex:1;min-width:0}
+.flight-vital-label{display:flex;justify-content:space-between;align-items:baseline;line-height:1;margin-bottom:4px}
+.flight-vital-label span{font-size:10px;font-weight:500;letter-spacing:.08em;color:#c7d8db}
+.flight-vital-label b{font-size:17px;font-weight:750;font-variant-numeric:tabular-nums}
+.flight-vital i{height:7px;display:block;background:#0a1c24b3;box-shadow:0 0 0 1px #061720a6,0 1px 4px #00121f80;transform:skewX(-14deg)}
+.flight-vital em{height:100%;display:block;background:currentColor;transition:width .12s linear}
+.flight-vital.fuel{color:#d3ad6a}
+.flight-vital.fuel svg{width:17px!important;height:17px!important;margin-left:5px}
+.flight-vital.fuel .flight-vital-label b{font-size:12px}
+.flight-vital.fuel i{height:3px}
+.danger,.flight-vital.danger{color:#ff967c!important}
+#mobileNotice{position:absolute;top:68px;left:50%;transform:translateX(-50%);display:grid;gap:5px;max-width:56vw;text-align:center;color:#ffcc8b;font-size:13px;font-weight:650}
+#mobileNotice span{background:linear-gradient(90deg,transparent,#1d171ba6,transparent);padding:3px 10px}
+#mobileContext{position:absolute;left:50%;transform:translateX(-50%);bottom:90px;max-width:calc(100vw - 280px);width:max-content;text-align:center;font-size:12px;color:#e4eee8;display:grid;gap:4px}
+#mobileContext>span{white-space:normal;line-height:1.4}
+#mobileContext progress{height:4px;width:100%;accent-color:#e5c17c}
+.flight-dock{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;font-size:11px}
+.flight-dock i{font-style:normal;color:#e4be8e}
+.flight-dock i.ready{color:#a0d6c6}
+#mobileStick{border-color:#d6e5e080;background:radial-gradient(circle,#adc9d51a 0 38%,#0a1c2433 40%);box-shadow:none}
+#mobileThumb{width:34px;height:34px;background:#e3eeeb75;box-shadow:0 1px 3px #00233555}
+#mobileStick span{display:none}
+#mobileActions{align-items:center;justify-items:center;grid-template-columns:54px 60px;gap:6px}
+#mobileActions button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:48px;height:48px;min-height:48px;padding:5px;border-radius:50%;background:#08223040;border:1px solid #d6e5e066;color:#e8f0ec;text-shadow:0 1px 3px #00121f;box-shadow:0 1px 5px #00121f22}
+#mobileActions button svg{width:23px;height:23px;pointer-events:none;filter:drop-shadow(0 1px 2px #00121f)}
+#mobileActions button span{font-size:10px;line-height:1.1;pointer-events:none}
+#mobileActions .mobile-primary{background:#08223040;border-color:#d6e5e066;color:#e8f0ec}
+#mobileActions [data-code=KeyE]{width:60px;height:60px;border:2px solid #e4c282ab;color:#ffe0a1;background:#c99a4320}
+#mobileActions [data-code=KeyE] svg{width:27px;height:27px}
+#mobileActions [data-code=KeyQ]{border-color:#e4c282ab;color:#ffe0a1}
+#mobileActions button.held{background:#e4c28288;color:#fff;border-color:#fff2d1}
+#mobileMore{border-style:solid!important;border-color:#d6e5e033!important;background:transparent!important}
+#mobileControls.expanded #mobileActions{background:#10212cf2;border-radius:14px}
+#mobileControls.expanded #mobileActions button{width:64px;height:54px;min-height:54px;border-radius:8px}
+.mobile-playing .play-pause{background:transparent!important;border:0!important;box-shadow:none!important;color:#eff3ec;text-shadow:0 1px 4px #00121f}
+@media(prefers-reduced-motion:reduce){.flight-vital em{transition:none}}

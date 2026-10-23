@@ -1,4 +1,5 @@
-export const CAMERA_KEY='lastsignal.rogue.camera.v1';
+import {mobileScale,mobileObstacles} from './mobile-presentation.js';
+export const CAMERA_KEY='lastsignal.mobile.camera.v1';
 export const DEFAULT_CAMERA={autoZoom:false,zoom:1};
 export function cameraSettings(value){
   return {autoZoom:value?.autoZoom===true,zoom:Number.isFinite(value?.zoom)?Math.max(.6,Math.min(1.8,value.zoom)):1};
@@ -7,7 +8,7 @@ export function cameraScale(width,height,ashore,options=DEFAULT_CAMERA){
   const p=cameraSettings(options),v=cameraViewport(width,height);
   // At 960×640 the 55-unit crew is ~70px tall, rather than ~46px.
   // Disembarking never changes the scale unless the player opts in.
-  return Math.min(v.w/640,v.h/300)*p.zoom*(p.autoZoom&&ashore?1.18:1);
+  return mobileScale(width,height,p.zoom)*(p.autoZoom&&ashore?1.18:1);
 }
 const clamp=(n,lo,hi)=>Math.max(lo,Math.min(hi,n));
 export function cameraViewport(width,height,kind='rogue'){
@@ -57,6 +58,7 @@ function bodyBounds(b){
 }
 // Presentation only: this never changes hulls, collision, sight range or saves.
 export function playCamera({width,height,world,focus,partner=null,attention=null,ashore=false,kind='rogue',options=DEFAULT_CAMERA,overview=false,previous=null,dt=0,occupied=null}){
+  occupied=[...(occupied||[]),...mobileObstacles()];
   const settings=cameraSettings(options);
   let scale=cameraScale(width,height,ashore,settings);
   const shoreBox=ashore&&attention?{left:Math.min(focus.x-24,attention.x-48),right:Math.max(focus.x+24,attention.x+48),

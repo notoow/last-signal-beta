@@ -1,4 +1,5 @@
 import {touchText} from './mobile-touch-text.js';
+import {mobileLabelFits} from './mobile-presentation.js';
 import {gameArt} from './game-art.js';
 import {DEPTHS,waterAt} from './rogue-map.js';
 import {drawHarborTerrain} from './harbor-terrain.js';
@@ -37,7 +38,8 @@ function prop(c,kind,x,y,w,h,flip=false){
 function canvasLabel(c,text,x,y,color='#f1e6c4',size=15){
   text=touchText(text);
   const t=c.getTransform(),scale=Math.hypot(t.a,t.b)/Math.min(devicePixelRatio||1,2);
-  c.font=`600 ${size/scale}px Pretendard, sans-serif`;c.textAlign='center';c.lineWidth=4/scale;c.strokeStyle='#071c20';c.strokeText(text,x,y);c.fillStyle=color;c.fillText(text,x,y);
+  c.font=`600 ${size/scale}px Pretendard, sans-serif`;c.textAlign='center';c.lineWidth=4/scale;c.strokeStyle='#071c20';if(!mobileLabelFits(c,text,x,y,size))return;
+  c.strokeText(text,x,y);c.fillStyle=color;c.fillText(text,x,y);
 }
 function ring(c,p,r,color){c.strokeStyle=color;c.lineWidth=2;c.beginPath();c.arc(p.x,p.y,r,0,Math.PI*2);c.stroke();}
 const dockFrames=new WeakMap();
@@ -93,7 +95,7 @@ function dockPanel(c,a,frame,presentation,s,language){
     .map(q=>({...q,x:Math.max(v.x+4,Math.min(v.x+v.w-q.w-4,q.x)),y:Math.max(v.y+4,Math.min(v.y+v.h-q.h-4,q.y))}));
   const blocks=[hull,marker,...enemies,...frame.occupied];
   const panel=candidates.find(q=>!blocks.some(b=>dockOverlap(q,b)));if(!panel){c.restore();return null;}
-  c.fillStyle='#10171cf2';c.fillRect(panel.x,panel.y,panel.w,panel.h);
+  c.shadowColor='#00121f';c.shadowBlur=4; // Text stays legible without an opaque panel.
   c.strokeStyle=presentation.ready?'#a4d7b3':'#95d1df';c.lineWidth=2;c.beginPath();c.moveTo(panel.x,panel.y);c.lineTo(panel.x,panel.y+panel.h);c.stroke();
   c.textAlign='left';c.textBaseline='top';c.font='600 12px Pretendard, sans-serif';c.fillStyle='#95d1df';
   c.fillText(presentation.title,panel.x+12,panel.y+9);

@@ -1,4 +1,8 @@
 // Presentation only: never rewrite input codes, saves or authoritative rules.
+export function storyTouchText(value){
+  const en=globalThis.document?.documentElement.lang==='en';
+  return touchText(String(value).replace(/\bQ\b/g,en?'Buoy':'부표').replace(/\bEsc\b/g,en?'Pause':'일시정지'));
+}
 export function touchText(value,language=globalThis.document?.documentElement.lang||'ko'){
   const en=language==='en';
   const names=en

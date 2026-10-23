@@ -17,7 +17,7 @@ export function hudProbe(canvas,selector){
 }
 // The renderer and camera use the same minimap geometry, including its frame.
 export function minimapLayout(width,height,world){
-  if(width<700)return null;
+  return null; // Mobile uses the full chart from More; no second map under the thumb.
   const w=width<1100?154:192,h=w*world.height/world.width,x=28,y=height-33-h;
   return {x,y,w,h,scale:w/world.width,occupied:{x:x-12,y:y-25,w:w+24,h:h+42,id:'minimap'}};
 }

@@ -635,6 +635,87 @@ async function initializeNativeStorage() {
   setStatus("saved");
 }
 
+// mobile/touch-text.js
+function storyTouchText(value) {
+  const en = globalThis.document?.documentElement.lang === "en";
+  return touchText(String(value).replace(/\bQ\b/g, en ? "Buoy" : "\uBD80\uD45C").replace(/\bEsc\b/g, en ? "Pause" : "\uC77C\uC2DC\uC815\uC9C0"));
+}
+function touchText(value, language2 = globalThis.document?.documentElement.lang || "ko") {
+  const en = language2 === "en";
+  const names = en ? { WASD: "Move pad", Space: "Brake", Shift: "Boost", E: "Interact", Q: "Unmoor / Lure", F: "Supplies", R: "Gear", B: "Build", G: "Skill", T: "Tow", H: "Cargo anchor", V: "Throw", X: "Cut net", M: "Chart", C: "Precision" } : { WASD: "\uC774\uB3D9 \uD328\uB4DC", Space: "\uC81C\uB3D9", Shift: "\uBD80\uC2A4\uD130", E: "\uC791\uC5C5", Q: "\uD574\uC81C / \uC720\uC778", F: "\uBCF4\uAE09", R: "\uC7A5\uBE44", B: "\uBE4C\uB4DC", G: "\uC120\uC7A5 \uAE30\uC220", T: "\uACAC\uC778", H: "\uBCF4\uAE09\uC815 \uB2FB", V: "\uD22C\uCC99", X: "\uADF8\uBB3C \uC808\uB2E8", M: "\uD574\uB3C4", C: "\uC815\uBC00" };
+  return String(value).replaceAll("T \uACAC\uC778 / H \uB2FB", "\uACAC\uC778 / \uBCF4\uAE09\uC815 \uB2FB").replaceAll("T \uBD84\uB9AC \xB7 H \uB2FB", "\uACAC\uC778 \uBD84\uB9AC \xB7 \uBCF4\uAE09\uC815 \uB2FB").replaceAll("Space \uADFC\uC811", "\uACF5\uACA9").replaceAll("Space\uB85C \uAC08\uACE0\uB9AC\uB97C", "\uACF5\uACA9\uC73C\uB85C \uAC08\uACE0\uB9AC\uB97C").replaceAll("V\uB098 \uD074\uB9AD\uC73C\uB85C", "\uD654\uBA74 \uD130\uCE58\uB85C").replaceAll("Space Melee", "Attack").replaceAll("Space swings", "Attack swings").replaceAll("V or click", "a world tap").replace(/\b(WASD|Space|Shift|[EQFRBGTHVXMC])\b/g, (key2) => names[key2]).replaceAll("\uBC29\uD5A5\uD0A4", "\uC774\uB3D9 \uD328\uB4DC");
+}
+
+// mobile/hud.js
+var paths = {
+  hull: "M4 9h16l-3 10H7L4 9Zm4 0V5h8v4M12 2v3",
+  crew: "M9 3h6v6H9zM5 21v-6l4-3h6l4 3v6",
+  fuel: "M5 4h10v17H5zM7 7h6v5H7zM15 9h3l2 3v6h-2v-4h-3",
+  boost: "m14 2-9 12h6l-1 8 9-12h-6l1-8Z",
+  ammo: "m5 7 5-4 5 4-5 4-5-4Zm5 4v9m-5-7 5 3 8-5m-13 6 5 4 8-5",
+  water: "M12 2S5 10 5 15a7 7 0 0 0 14 0c0-5-7-13-7-13Z",
+  parts: "m5 3 4 4-2 4-4-2 2-6Zm4 8 10 10 3-3-10-10",
+  objective: "m12 2 3 7 7 3-7 3-3 7-3-7-7-3 7-3 3-7Z",
+  brake: "M5 5v14m14-14v14M9 8v8m6-8v8",
+  interact: "M12 2v14M8 5h8M5 13H2c1 5 5 8 10 9 5-1 9-4 10-9h-3M8 13l4 4 4-4",
+  buoy: "M12 2v10M8 5h8M9 12h6l3 7H6l3-7ZM3 21h18",
+  attack: "m5 4 4-2 13 13-4 4L5 4ZM3 21l7-7M3 13l8 8",
+  more: "M5 11h1v2H5zm6 0h1v2h-1zm6 0h1v2h-1z",
+  info: "M12 10v8m0-13v2M3 12a9 9 0 1 0 18 0 9 9 0 1 0-18 0"
+};
+var icon = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="${paths[name] || paths.objective}"/></svg>`;
+function buttonFace(button, label, name) {
+  button.innerHTML = icon(name) + `<span></span>`;
+  button.querySelector("span").textContent = label;
+}
+var escape2 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+var text = (el) => el?.textContent.trim() || "";
+var set = (el, html) => {
+  if (el.innerHTML !== html) el.innerHTML = html;
+  el.hidden = !html;
+};
+function createMobileHud() {
+  const root = document.createElement("div");
+  root.id = "mobileFlightHud";
+  root.hidden = true;
+  root.innerHTML = '<div id="mobileObjective"></div><div id="mobileResources"></div><div id="mobileVitals"></div><div id="mobileNotice"></div><div id="mobileContext"></div>';
+  document.body.append(root);
+  const nodes = Object.fromEntries([...root.children].map((el) => [el.id, el]));
+  return function refresh2(active, rogue) {
+    root.hidden = !active;
+    if (!active) return;
+    const en = document.documentElement.lang === "en", source = rogue ? document.getElementById("rogueMission") : document.querySelector("#hud .mission-objective");
+    const goal = text(source?.querySelector("strong")) || text(source), region = text(source?.querySelector("small"));
+    set(nodes.mobileObjective, icon("objective") + `<div>${region ? `<small>${escape2(region)}</small>` : ""}<strong>${escape2(goal)}</strong></div>`);
+    const metrics = rogue ? [...document.querySelectorAll("[data-rogue-metric]")].map((el) => {
+      const g = el.querySelector("[role=meter]");
+      return { id: el.dataset.rogueMetric, label: text(el.querySelector("span")), value: text(el.querySelector("b")), raw: g?.getAttribute("aria-valuenow"), max: g?.getAttribute("aria-valuemax"), impact: el.dataset.impact === "true" };
+    }) : [...document.querySelectorAll("#hud [data-hud-metric]")].map((el) => {
+      const g = el.querySelector("[role=meter]");
+      return { id: el.dataset.hudMetric, label: text(el.querySelector("span")), value: text(el.querySelector("strong")), raw: g?.getAttribute("aria-valuenow"), max: g?.getAttribute("aria-valuemax"), impact: el.dataset.tone === "danger" };
+    });
+    if (!rogue && !metrics.length) for (const [i, el] of [...document.querySelectorAll("#hud .meter")].entries()) {
+      const g = el.querySelector("progress");
+      metrics.push({ id: i ? "boost" : "hull", label: en ? i ? "Energy" : "Hull" : i ? "\uC5D0\uB108\uC9C0" : "\uC120\uCCB4", value: text(el.querySelector("b")).split("/")[0].trim(), raw: g?.value, max: g?.max });
+    }
+    const vital = (m) => {
+      const ratio = Math.max(0, Math.min(1, Number(m.raw ?? m.value) / (Number(m.max) || 100))), danger = m.impact || ratio < 0.25;
+      return `<div class="flight-vital ${m.id} ${danger ? "danger" : ""}" role="meter" aria-label="${escape2(m.label)}" aria-valuemin="0" aria-valuemax="${escape2(m.max || 100)}" aria-valuenow="${escape2(m.raw ?? m.value)}">${icon(m.id)}<div><div class="flight-vital-label"><span>${escape2(m.label)}</span><b>${escape2(m.value)}</b></div><i><em style="width:${ratio * 100}%"></em></i></div></div>`;
+    };
+    set(nodes.mobileVitals, metrics.filter((m) => ["hull", "crew", "fuel"].includes(m.id)).map(vital).join(""));
+    set(nodes.mobileResources, metrics.filter((m) => !["hull", "crew", "fuel"].includes(m.id)).map((m) => `<span class="flight-resource ${m.impact ? "danger" : ""}" aria-label="${escape2(m.label + " " + m.value)}" title="${escape2(m.label)}">${icon(m.id)}<b>${escape2(m.value)}</b></span>`).join(""));
+    const notices = rogue ? [...document.querySelectorAll("#rogueConditions>[data-tone=warning],#rogueConditions>.rogue-impact[data-impact-id],#rogueMission .rogue-boss-state")] : [...document.querySelectorAll("#hud .compact-risks>*,#hud .compact-environment>[data-tone=warning]")];
+    set(nodes.mobileNotice, notices.map((el) => `<span>${escape2(text(el))}</span>`).join(""));
+    const work = document.querySelector(rogue ? "#rogueControls .rogue-work" : "#hud .compact-work"), progress = work?.querySelector("progress");
+    const context = rogue ? [...document.querySelectorAll("#rogueControls [data-rogue-context]")].map(text) : [...document.querySelectorAll("#hud .compact-actions [data-hud-item=context],#hud .anchor-state")].map(text);
+    if (rogue && rogue.dataset.mobileMode !== "sailing") context.unshift(text(document.querySelector("#rogueControls [data-rogue-action=primary]")));
+    const dock = document.querySelector("#rogueControls .rogue-dock-checks");
+    const checks = dock && getComputedStyle(dock).clipPath === "none" ? [...dock.children].map((el) => `<i class="${el.dataset.ok === "true" ? "ready" : ""}">${escape2(text(el))}</i>`).join("") : "";
+    const label = text(work) || context.filter(Boolean).join(" \xB7 ");
+    set(nodes.mobileContext, (checks ? `<div class="flight-dock">${checks}</div>` : "") + (label ? `<span>${escape2(label)}</span>` : "") + (progress ? `<progress max="${progress.max}" value="${progress.value}" aria-label="${escape2(label)}"></progress>` : ""));
+  };
+}
+
 // mobile/mobile.js
 try {
   await initializeNativeStorage();
@@ -667,6 +748,7 @@ rotate.querySelector("button").addEventListener("click", async () => {
   refresh();
 });
 document.body.append(rotate);
+var refreshFlightHud = createMobileHud();
 var stick = document.getElementById("mobileStick");
 var actions = document.getElementById("mobileActions");
 var held = /* @__PURE__ */ new Map();
@@ -676,6 +758,7 @@ var playing = false;
 var language = "";
 var deckHeight = 0;
 var thumb = document.getElementById("mobileThumb");
+var voyageNotes = "";
 var key = (code, down) => window.dispatchEvent(new KeyboardEvent(down ? "keydown" : "keyup", { code, bubbles: true, cancelable: true }));
 function hold(owner, codes) {
   const before = new Set([...held.values()].flat());
@@ -704,7 +787,7 @@ function pause() {
 }
 var labels = {
   rogue: [["Space", "\uC81C\uB3D9 / \uACF5\uACA9", "Brake / Hit"], ["KeyE", "\uC791\uC5C5", "Interact"], ["ShiftLeft", "\uBD80\uC2A4\uD130", "Boost"], ["KeyC", "\uC815\uBC00", "Precision"], ["KeyQ", "\uD574\uC81C / \uC720\uC778", "Unmoor / Lure"], ["KeyF", "\uBCF4\uAE09", "Supplies"], ["KeyR", "\uC7A5\uBE44", "Gear"], ["KeyG", "\uC120\uC7A5 \uAE30\uC220", "Skill"], ["KeyM", "\uD574\uB3C4", "Chart"], ["KeyB", "\uBE4C\uB4DC", "Build"], ["KeyV", "\uD22C\uCC99", "Throw"], ["KeyX", "\uADF8\uBB3C \uC808\uB2E8", "Cut net"], ["KeyT", "\uACAC\uC778", "Tow"], ["KeyH", "\uBCF4\uAE09\uC815 \uB2FB", "Cargo anchor"]],
-  story: [["Space", "\uC5ED\uCD94\uC9C4", "Reverse"], ["KeyE", "\uC791\uC5C5", "Interact"], ["ShiftLeft", "\uBD80\uC2A4\uD130", "Boost"], ["KeyC", "\uC815\uBC00", "Precision"], ["KeyQ", "\uBD80\uD45C", "Buoy"], ["KeyF", "\uD604\uC7A5 \uC791\uC5C5", "Work"], ["KeyZ", "\uC904 \uD480\uAE30", "Pay out"], ["KeyX", "\uC904 \uAC10\uAE30", "Reel in"], ["KeyB", "\uBE4C\uB4DC", "Build"], ["KeyG", "\uC6B0\uD68C", "Detour"], ["KeyI", "\uC120\uB0B4", "Interior"], ["KeyR", "\uBB34\uC804", "Radio"], ["KeyM", "\uD574\uB3C4", "Chart"]]
+  story: [["Space", "\uC5ED\uCD94\uC9C4", "Reverse"], ["KeyQ", "\uBD80\uD45C", "Buoy"], ["KeyE", "\uC791\uC5C5", "Interact"], ["ShiftLeft", "\uBD80\uC2A4\uD130", "Boost"], ["KeyC", "\uC815\uBC00", "Precision"], ["KeyF", "\uD604\uC7A5 \uC791\uC5C5", "Work"], ["KeyZ", "\uC904 \uD480\uAE30", "Pay out"], ["KeyX", "\uC904 \uAC10\uAE30", "Reel in"], ["KeyB", "\uBE4C\uB4DC", "Build"], ["KeyG", "\uC6B0\uD68C", "Detour"], ["KeyI", "\uC120\uB0B4", "Interior"], ["KeyR", "\uBB34\uC804", "Radio"], ["KeyM", "\uD574\uB3C4", "Chart"]]
 };
 function render(next) {
   release();
@@ -719,7 +802,7 @@ function render(next) {
     if (["Space", "KeyE"].includes(code)) button.classList.add("mobile-primary");
     if (index >= 3) button.classList.add("mobile-extra");
     const english = document.documentElement.lang === "en";
-    button.textContent = english ? en : ko;
+    buttonFace(button, english ? en : ko, code === "Space" ? "brake" : code === "KeyE" ? "interact" : code === "KeyQ" ? "buoy" : code === "ShiftLeft" ? "boost" : "objective");
     button.setAttribute("aria-label", `${ko} / ${en}`);
     button.addEventListener("pointerdown", (e) => {
       if (!playing) return;
@@ -739,17 +822,28 @@ function render(next) {
   }
   const more = document.createElement("button");
   more.id = "mobileMore";
-  more.textContent = language === "en" ? "More" : "\uB354 \uBCF4\uAE30";
+  buttonFace(more, language === "en" ? "More" : "\uB354 \uBCF4\uAE30", "more");
   more.setAttribute("aria-label", "\uCD94\uAC00 \uC870\uC791 / More controls");
   more.setAttribute("aria-expanded", "false");
   more.addEventListener("click", () => {
     release();
     const expanded = pad.classList.toggle("expanded");
     more.setAttribute("aria-expanded", String(expanded));
-    more.textContent = expanded ? language === "en" ? "Close" : "\uC811\uAE30" : language === "en" ? "More" : "\uB354 \uBCF4\uAE30";
+    buttonFace(more, expanded ? language === "en" ? "Close" : "\uC811\uAE30" : language === "en" ? "More" : "\uB354 \uBCF4\uAE30", "more");
     refresh();
   });
   actions.insertBefore(more, actions.children[3] || null);
+  const info = document.createElement("button");
+  info.type = "button";
+  info.className = "mobile-extra";
+  info.id = "mobileInfo";
+  buttonFace(info, language === "en" ? "Radio / status" : "\uBB34\uC804\xB7\uC0C1\uD0DC", "info");
+  info.addEventListener("click", () => {
+    pause();
+    refresh();
+    document.querySelector(".mobile-notes")?.setAttribute("open", "");
+  });
+  actions.append(info);
 }
 function move(e) {
   const r = stick.getBoundingClientRect(), x = (e.clientX - r.left - r.width / 2) / (r.width / 2), y = (e.clientY - r.top - r.height / 2) / (r.height / 2);
@@ -803,6 +897,16 @@ function installHelp() {
     help.open = true;
     help.innerHTML = language === "en" ? "<summary>Touch controls</summary><p>Drag the left pad to steer. Release it to drift. Hold Brake to slow down; Precision alone does not brake. Use both thumbs to steer while braking or boosting.</p><p>Interact handles mooring, boarding and hooks. Hold Supplies or Gear to search. More reveals tow, anchor, build and net actions. Ashore, Brake becomes Attack. Tap the world to aim a throw; use two fingers to zoom. Pausing saves your run.</p>" : "<summary>\uD130\uCE58 \uC870\uC791</summary><p>\uC67C\uCABD \uD328\uB4DC\uB97C \uBC00\uC5B4 \uC870\uD0C0\uD569\uB2C8\uB2E4. \uC190\uC744 \uB193\uC73C\uBA74 \uD45C\uB958\uD569\uB2C8\uB2E4. \uC81C\uB3D9\uC740 \uAE38\uAC8C \uB204\uB974\uC138\uC694. \uC815\uBC00 \uC6B4\uD56D\uB9CC\uC73C\uB85C\uB294 \uBA48\uCD94\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4. \uB450 \uC190\uAC00\uB77D\uC73C\uB85C \uC774\uB3D9\uACFC \uC81C\uB3D9\xB7\uBD80\uC2A4\uD130\uB97C \uD568\uAED8 \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.</p><p>\uC791\uC5C5\uC73C\uB85C \uACC4\uB958\xB7\uC2B9\uD558\uC120\xB7\uACE0\uB9AC\uB97C \uC870\uC791\uD569\uB2C8\uB2E4. \uBCF4\uAE09\xB7\uC7A5\uBE44\uB294 \uAE38\uAC8C \uB20C\uB7EC \uC218\uC0C9\uD569\uB2C8\uB2E4. \uB354 \uBCF4\uAE30\uC5D0\uC11C \uACAC\uC778\xB7\uB2FB\xB7\uBE4C\uB4DC\xB7\uADF8\uBB3C \uC870\uC791\uC744 \uCC3E\uC744 \uC218 \uC788\uC2B5\uB2C8\uB2E4. \uC0C1\uB959\uD558\uBA74 \uC81C\uB3D9 \uBC84\uD2BC\uC774 \uACF5\uACA9\uC73C\uB85C \uBC14\uB01D\uB2C8\uB2E4. \uD654\uBA74\uC744 \uC9E7\uAC8C \uD130\uCE58\uD574 \uD22C\uCC99 \uBC29\uD5A5\uC744 \uC815\uD558\uACE0 \uB450 \uC190\uAC00\uB77D\uC73C\uB85C \uD655\uB300\uD569\uB2C8\uB2E4. \uC77C\uC2DC\uC815\uC9C0\uD558\uBA74 \uC800\uC7A5\uB429\uB2C8\uB2E4.</p>";
     body.prepend(help);
+    if (voyageNotes) {
+      const notes = document.createElement("details");
+      notes.className = "mobile-notes";
+      const title = document.createElement("summary");
+      title.textContent = language === "en" ? "Radio and current status" : "\uBB34\uC804 \uBC0F \uD604\uC7AC \uC0C1\uD0DC";
+      const text2 = document.createElement("p");
+      text2.textContent = voyageNotes;
+      notes.append(title, text2);
+      body.prepend(notes);
+    }
   }
 }
 function refresh() {
@@ -814,9 +918,10 @@ function refresh() {
   if (playing && (!active || !landscape)) release();
   if (playing && !landscape) pause();
   playing = !!active && landscape;
+  if (playing) voyageNotes = [...document.querySelectorAll("#rogueMission,#rogueRadio,#rogueConditions,#rogueControls,#hud .mission-objective,#hud .radio-panel,#hud .compact-conditions,#hud .compact-actions,#hud .passenger-status,#hud .hud-hint")].map((el) => el.textContent.trim()).filter(Boolean).join("\n\n");
   pad.hidden = !playing;
   document.body.classList.toggle("mobile-playing", playing);
-  const height = playing ? 104 : 0;
+  const height = 0;
   if (deckHeight !== height) {
     deckHeight = height;
     document.documentElement.style.setProperty("--mobile-deck", height + "px");
@@ -824,15 +929,30 @@ function refresh() {
   }
   if (rogue) {
     const attack = actions.querySelector('[data-code="Space"]');
-    if (attack) attack.textContent = rogue.dataset.mobileMode === "ashore" ? language === "en" ? "Attack" : "\uACF5\uACA9" : language === "en" ? "Brake" : "\uC81C\uB3D9";
+    if (attack && attack.dataset.mode !== rogue.dataset.mobileMode) {
+      attack.dataset.mode = rogue.dataset.mobileMode;
+      buttonFace(attack, rogue.dataset.mobileMode === "ashore" ? language === "en" ? "Attack" : "\uACF5\uACA9" : language === "en" ? "Brake" : "\uC81C\uB3D9", rogue.dataset.mobileMode === "ashore" ? "attack" : "brake");
+    }
     const skill = actions.querySelector('[data-code="KeyG"]'), source = document.getElementById("rogueSkill");
     if (skill && source) {
       skill.title = source.title;
       skill.dataset.ready = String(source.getAttribute("aria-disabled") !== "true");
     }
   }
-  for (const button of document.querySelectorAll("#playPause,#roguePause")) button.textContent = language === "en" ? "Pause" : "\uC77C\uC2DC\uC815\uC9C0";
+  for (const button of document.querySelectorAll("#playPause,#roguePause")) {
+    button.textContent = "\u2161";
+    button.setAttribute("aria-label", language === "en" ? "Pause" : "\uC77C\uC2DC\uC815\uC9C0");
+  }
+  if (playing && !rogue) for (const section of document.querySelectorAll("#hud .context-action,#hud .compact-actions,#hud .compact-work")) {
+    const walker = document.createTreeWalker(section, NodeFilter.SHOW_TEXT);
+    let node;
+    while (node = walker.nextNode()) {
+      const value = storyTouchText(node.data);
+      if (node.data !== value) node.data = value;
+    }
+  }
   installHelp();
+  refreshFlightHud(playing, rogue);
 }
 setInterval(refresh, 100);
 refresh();

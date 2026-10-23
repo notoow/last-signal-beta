@@ -1,3 +1,5 @@
+import {playCamera,edgeMarker} from './rogue-camera.js';
+import {storyTouchText} from './mobile-touch-text.js';
 import {gameArt} from './game-art.js';
 import {Renderer} from './render.js';
 import {WIDTH,HEIGHT,inTriangle} from './core.js';
@@ -191,10 +193,12 @@ export class HarborRenderer extends Renderer{
   }
   draw(s,time,l,presentation){
     this.state=s;this.text=l;
+    const frame=playCamera({width:this.w,height:this.h,world:{width:WIDTH,height:HEIGHT},focus:s.player,occupied:[],options:{zoom:1}});
+    this.scale=frame.scale;this.ox=frame.ox;this.oy=frame.oy;
     const kind=s.anchors.length===2?netTargets(s,[...s.anchors,s.player]).kind:'cut';
     this.previewColor=kind==='rescue'?'#e6cf94cc':'#d6b1a0bb';this.previewFill=kind==='rescue'?'#cfb4721b':'#b17d6c12';
     super.draw(s,time,l);
-    const p=presentation?.waypoint;if(p&&s.status==='playing'){const c=this.c;c.save();c.setTransform(this.dpr,0,0,this.dpr,0,0);const x=p.x*this.scale+this.ox,y=p.y*this.scale+this.oy;c.strokeStyle='#ffdb8f';c.lineWidth=2;c.beginPath();c.arc(x,y,23,0,Math.PI*2);c.stroke();c.fillStyle='#ffe1a2';c.font='12px Pretendard';c.textAlign='center';c.fillText(p.label,Math.max(130,Math.min(this.w-130,x)),Math.max(150,y-34));c.restore();}
+    const p=presentation?.waypoint;if(p&&s.status==='playing'){const c=this.c;c.save();c.setTransform(this.dpr,0,0,this.dpr,0,0);const mark=edgeMarker(frame,p),x=mark?.x??p.x*this.scale+this.ox,y=mark?.y??p.y*this.scale+this.oy;c.strokeStyle='#ffdb8f';c.lineWidth=2;c.beginPath();c.arc(x,y,23,0,Math.PI*2);c.stroke();c.fillStyle='#ffe1a2';c.font='12px Pretendard';c.textAlign='center';c.fillText(storyTouchText(p.label),Math.max(130,Math.min(this.w-130,x)),Math.max(150,y-34));c.restore();}
 
   }
   menu(time,l){
