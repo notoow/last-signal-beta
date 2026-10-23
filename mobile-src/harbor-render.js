@@ -193,7 +193,7 @@ export class HarborRenderer extends Renderer{
   }
   draw(s,time,l,presentation){
     this.state=s;this.text=l;
-    const frame=playCamera({width:this.w,height:this.h,world:{width:WIDTH,height:HEIGHT},focus:s.player,occupied:[],options:{zoom:1}});
+    const frame=playCamera({width:this.w,height:this.h,world:{width:WIDTH,height:HEIGHT},focus:s.player,occupied:[],options:{zoom:1},overview:this.mapOpen});
     this.scale=frame.scale;this.ox=frame.ox;this.oy=frame.oy;
     const kind=s.anchors.length===2?netTargets(s,[...s.anchors,s.player]).kind:'cut';
     this.previewColor=kind==='rescue'?'#e6cf94cc':'#d6b1a0bb';this.previewFill=kind==='rescue'?'#cfb4721b':'#b17d6c12';

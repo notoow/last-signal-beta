@@ -5,6 +5,7 @@ import {shoreRanges} from './shore-scale.js';
 import {salvageStatus,winchBurstReady,winchStoreReady,winchLaunchReady} from './rogue-salvage.js';
 import {usesSluice} from './sluice-counterplay.js';
 import {usesLighthouse} from './lighthouse-counterplay.js';
+import {harborDestination} from './harbor-plan.js';
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const action=(id,code,labelKo,labelEn,enabled=true,hold=false,progress=0)=>({id,code,labelKo,labelEn,enabled,hold,progress});
 // One persistent control slot. Its label changes with the action the same B
@@ -85,8 +86,10 @@ export function rogueContextActions(s){
 export function rogueMinimap(s){
   if(!s)return null;
   const known=p=>!s.survey||s.survey[Math.floor(p.y/SURVEY_CELL)*SURVEY_COLS+Math.floor(p.x/SURVEY_CELL)]===1;
-  const player=s.person||s.boat,rescue=rescueStatus(s);
+  const player=s.person||s.boat,rescue=rescueStatus(s),destination=harborDestination(s);
   return {width:s.map.width,height:s.map.height,cols:s.map.cols,rows:s.map.rows,tiles:s.map.tiles?.slice()||[],
+    islands:s.map.tiles?[]:s.map.islands.map(p=>({x:p.x,y:p.y,w:p.w,h:p.h})),mode:s.mode,
+    target:destination?{x:destination.point.x,y:destination.point.y}:null,
     survey:s.survey?.slice()||null,surveyCols:SURVEY_COLS,surveyCell:SURVEY_CELL,
     player:{x:player.x,y:player.y,angle:player.angle},boat:{x:s.boat.x,y:s.boat.y},
     berths:s.map.berths.filter(known).map(b=>({x:b.x,y:b.y,claimed:s.claimed.includes(b.id)})),

@@ -6,8 +6,8 @@ export function storyTouchText(value){
 export function touchText(value,language=globalThis.document?.documentElement.lang||'ko'){
   const en=language==='en';
   const names=en
-    ?{WASD:'Move pad',Space:'Brake',Shift:'Boost',E:'Interact',Q:'Unmoor / Lure',F:'Supplies',R:'Gear',B:'Build',G:'Skill',T:'Tow',H:'Cargo anchor',V:'Throw',X:'Cut net',M:'Chart',C:'Precision'}
-    :{WASD:'이동 패드',Space:'제동',Shift:'부스터',E:'작업',Q:'해제 / 유인',F:'보급',R:'장비',B:'빌드',G:'선장 기술',T:'견인',H:'보급정 닻',V:'투척',X:'그물 절단',M:'해도',C:'정밀'};
+    ?{WASD:'Move pad',Space:'Brake',Shift:'Boost',E:'Interact',Q:'Unmoor / Lure',F:'Supplies',R:'Gear',B:'Ship device',G:'Skill',T:'Tow',H:'Cargo anchor',V:'Throw',X:'Cut net',M:'Chart',C:'Precision'}
+    :{WASD:'이동 패드',Space:'제동',Shift:'부스터',E:'작업',Q:'해제 / 유인',F:'보급',R:'장비',B:'선박 장치',G:'선장 기술',T:'견인',H:'보급정 닻',V:'투척',X:'그물 절단',M:'해도',C:'정밀'};
   return String(value)
     .replaceAll('T 견인 / H 닻','견인 / 보급정 닻')
     .replaceAll('T 분리 · H 닻','견인 분리 · 보급정 닻')

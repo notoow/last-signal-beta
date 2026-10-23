@@ -1,3 +1,5 @@
+import {steeringInput} from './steering-input.js';
+import {drawNavigationMap,navigationViewport} from './navigation-map.js';
 import {createRun,tickRun,interact,resolveGear,resolveSalvage,returnFromWorkshop,resolveCache,planHarbor,encodeRun,restoreRun,SAVE_KEY,RUN_VERSION,CAPTAINS,BUILDS,GEAR,maxHp} from './rogue-core.js';
 import {harborPlanMarkup} from './harbor-plan-ui.js';
 import {voyageRecordMarkup,voyagePreparationText} from './rogue-voyage-record-ui.js';
@@ -20,7 +22,7 @@ const esc=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'
 export function hasRogueSave(){try{return !!restoreRun(localStorage.getItem(SAVE_KEY));}catch{return false;}}
 export function openRogue({resume=false,language='ko',paint='harbor',reduced=false,onClose=()=>{},onPaint=()=>{},onSound=()=>{}}={}){
   const root=document.createElement('section');root.className='rogue-shell';root.id='rogue';root.dataset.hud='compact';
-  root.innerHTML='<canvas id="rogueSea" aria-label="세 해역 로그라이크 항해"></canvas><div class="rogue-top" id="rogueHud"><div class="rogue-top-stack"><div id="rogueMission"></div><div class="rogue-radio" id="rogueRadio" aria-live="polite"></div></div><div class="rogue-console"><div class="rogue-readings" id="rogueReadings"></div><div class="rogue-conditions" id="rogueConditions"></div><div class="rogue-controls" id="rogueControls"></div></div></div><button id="roguePause" class="play-pause" hidden></button><button id="rogueSkill" class="rogue-skill" hidden></button><div class="rogue-modal" id="rogueModal"></div>';
+  root.innerHTML='<canvas id="rogueSea" aria-label="세 해역 항해"></canvas><div class="rogue-top" id="rogueHud"><div class="rogue-top-stack"><div id="rogueMission"></div><div class="rogue-radio" id="rogueRadio" aria-live="polite"></div></div><div class="rogue-console"><div class="rogue-readings" id="rogueReadings"></div><div class="rogue-conditions" id="rogueConditions"></div><div class="rogue-controls" id="rogueControls"></div></div></div><button id="roguePause" class="play-pause" hidden></button><button id="rogueSkill" class="rogue-skill" hidden></button><div class="rogue-modal" id="rogueModal"></div>';
   document.body.append(root);
   const $=id=>root.querySelector('#'+id),keys=new Set(),controller=new AbortController(),options={signal:controller.signal};
   $('roguePause').insertAdjacentHTML('beforebegin','<button id="rogueChart" class="play-pause" hidden></button>');
@@ -33,8 +35,12 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   $('rogueSea').tabIndex=-1;
   let hudRects=[];
   $('roguePause').textContent=en?'Esc · Pause':'Esc · 일시정지';
-  $('rogueChart').textContent=en?'M · Chart':'M · 해도';
+  $('rogueChart').innerHTML='<canvas id="rogueMinimap" width="336" height="192" aria-hidden="true"></canvas><span>'+(en?'M · Chart':'M · 해도')+'</span>';
+  $('rogueChart').setAttribute('aria-label',en?'Expand chart · current position':'해도 확대 · 현재 위치');
   let state=null,paused=true,mapOpen=false,last=performance.now(),clock=0,frameId,closed=false,captain='woo',build='standard',saveError=false;
+  let inputMode=null;
+  const steering=steeringInput(keys,{target:window,game:'rogue',active:()=>!paused&&!mapOpen&&!closed,signal:controller.signal});
+  function releaseControls(){keys.clear();steering.clear();window.dispatchEvent(new CustomEvent('lastsignal:input-reset',{detail:{game:'rogue'}}));}
   let preparationReturn=null,resultView=null;
   let lastMobileFrame=-Infinity;
   let quayRetryPending=false,quayAssetSignature='',quayAssetLayout='';
@@ -114,7 +120,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     $('rogueModal').hidden=false;$('rogueModal').innerHTML=markup;
     activateModal($('rogueModal'),surface==='pause'?'#rogueContinue':surface==='result'?'#rogueNew':undefined);
   }
-  function close(){if(!save())return;releaseModal($('rogueModal'));closed=true;controller.abort();cancelAnimationFrame(frameId);root.remove();if(document.documentElement.dataset.mobileUi==='true')window.dispatchEvent(new CustomEvent('lastsignal:mobile-frame',{detail:null}));onClose();}
+  function close(){if(!save())return;releaseControls();releaseModal($('rogueModal'));closed=true;controller.abort();cancelAnimationFrame(frameId);root.remove();if(document.documentElement.dataset.mobileUi==='true')window.dispatchEvent(new CustomEvent('lastsignal:mobile-frame',{detail:null}));onClose();}
   function launchIntro(){
     let seen=false;try{seen=localStorage.getItem('lastsignal.mobile.intro.v1')==='seen';}catch{}
     if(document.documentElement.dataset.mobileUi!=='true'||seen){play();return;}
@@ -128,7 +134,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     const retryText=sameMap?voyagePreparationText(preparationReturn,language):null;
     if(retrySeed!==null&&retrySeed!==undefined){captain=state.captain;build=state.build;}
     hudMarkup.clear();
-    paused=true;keys.clear();$('rogueMission').textContent='';$('rogueReadings').textContent='';$('rogueControls').textContent='';
+    paused=true;releaseControls();$('rogueMission').textContent='';$('rogueReadings').textContent='';$('rogueControls').textContent='';
     $('rogueRadio').textContent='';
     releaseModal($('rogueModal'));root.dataset.surface='preparation';$('rogueModal').className='rogue-modal';
     $('rogueModal').hidden=false;
@@ -153,7 +159,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
         </section>
         <footer class="embark-footer">
           <div class="embark-secondary"><button id="rogueHome" class="embark-back"><span aria-hidden="true">←</span> ${preparationReturn?t('결과로','Back to result'):t('항구로','Harbor')}</button>
-            <details class="embark-options"><summary>${t('항해 설정','Voyage settings')}</summary><label for="rogueSeed">${t('같은 항구에 다시 도전하기','Replay a harbor')}</label><input id="rogueSeed" inputmode="numeric" placeholder="${t('시드 · 비우면 무작위','Seed · blank for random')}" maxlength="10" value="${retrySeed??''}" ${sameMap?'readonly':''}>${cameraMarkup()}<p>${en?'Carry your remaining fuel between regions. No automatic refuelling.<br>Equipment lasts for this voyage. Paint stays for the next.':'다음 해역에도 남은 연료 그대로 · 자동 보충 없음.<br>장비는 이번 항해까지, 도색은 다음 항해에도 유지됩니다.'}</p></details>
+            <details class="embark-options"><summary>${t('항해 설정','Voyage settings')}</summary><label for="rogueSeed">${t('같은 항구에 다시 도전하기','Replay a harbor')}</label><input id="rogueSeed" inputmode="numeric" placeholder="${t('항구 번호 · 비우면 새로운 항구','Harbor number · blank for a new harbor')}" maxlength="10" value="${retrySeed??''}" ${sameMap?'readonly':''}>${cameraMarkup()}<p>${en?'Carry your remaining fuel between regions. No automatic refuelling.<br>Equipment lasts for this voyage. Paint stays for the next.':'다음 해역에도 남은 연료 그대로 · 자동 보충 없음.<br>장비는 이번 항해까지, 도색은 다음 항해에도 유지됩니다.'}</p></details>
             <details class="embark-story"><summary>${t('출항의 이유','Why we sail')}</summary><p>${t('명부에는 모두 떠났다고 적혀 있다.<br>남은 사람들의 이름을 세 해역 너머 등대에 전하라.','The manifest says everyone left.<br>Carry the remaining names through three regions to the lighthouse.')}</p></details>
           </div>
           <button id="rogueLaunch" class="embark-launch"><span>${t('계류를 풀고 출항','Cast off and sail')}</span><span aria-hidden="true">→</span></button>
@@ -209,12 +215,12 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     });
   }
   function gearChoice(){
-    paused=true;keys.clear();save();modalSurface('inventory',cacheReplacementMarkup(state,language));saveStatus();
+    paused=true;releaseControls();save();modalSurface('inventory',cacheReplacementMarkup(state,language));saveStatus();
     root.querySelectorAll('[data-replace]').forEach(b=>b.addEventListener('click',()=>{resolveGear(state,Number(b.dataset.replace));save();play();},options));
     bind('rogueTrade',()=>{resolveGear(state);save();play();});activateModal($('rogueModal'),'[data-replace]');
   }
   function cacheChoice(){
-    paused=true;keys.clear();save();
+    paused=true;releaseControls();save();
     modalSurface('cache',cacheChoiceMarkup(state,language));saveStatus();
     root.querySelectorAll('[data-cache-choice]').forEach(b=>b.addEventListener('click',()=>{
       const crew=cacheChoiceModel(state,language)?.crew,choice=b.dataset.cacheChoice;
@@ -226,7 +232,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     activateModal($('rogueModal'),'[data-cache-choice]');
   }
   function salvageChoice(){
-    paused=true;keys.clear();save();
+    paused=true;releaseControls();save();
     modalSurface('salvage',salvageChoiceMarkup(state,language));saveStatus();
     root.querySelectorAll('[data-salvage-choice]').forEach(b=>b.addEventListener('click',()=>{
       if(!resolveSalvage(state,b.dataset.salvageChoice))return;
@@ -244,22 +250,21 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   }
   function harborChart(){
     if(!state?.harborIntel||paused)return;
-    paused=true;mapOpen=false;keys.clear();releaseShipAssist(state);save();
+    paused=true;mapOpen=false;releaseControls();releaseShipAssist(state);save();
     modalSurface('chart',harborPlanMarkup(state,language));saveStatus();
     const choose=id=>{if(planHarbor(state,id)){if(save())play();}};
     root.querySelectorAll('[data-harbor-target]').forEach(b=>b.addEventListener('click',()=>choose(b.dataset.harborTarget),options));
     bind('harborPlanClear',()=>choose(null));bind('harborPlanClose',play);
-    const selected='.harbor-plan-sites [aria-pressed=true]:not(:disabled)',available='.harbor-plan-sites [data-harbor-target]:not(:disabled)';
-    activateModal($('rogueModal'),root.querySelector(selected)?selected:root.querySelector(available)?available:'#harborPlanClose');
+    activateModal($('rogueModal'),'#harborPlanClose');
   }
   function play(){if(root.dataset.surface==='salvage'&&saveError&&!state?.salvage?.pending&&!save())return;
     if(state?.pendingGear){gearChoice();return;}if(state?.pendingCache){cacheChoice();return;}if(state?.salvage?.pending){salvageChoice();return;}
-    resultView=null;paused=false;keys.clear();root.dataset.surface='playing';releaseModal($('rogueModal'));$('rogueModal').hidden=true;
+    resultView=null;paused=false;releaseControls();root.dataset.surface='playing';releaseModal($('rogueModal'));$('rogueModal').hidden=true;
     $('rogueSea').focus({preventScroll:true});probe.invalidate();last=performance.now();}
   const direction=()=>{
-    const input={x:(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0),y:(keys.has('KeyS')||keys.has('ArrowDown')?1:0)-(keys.has('KeyW')||keys.has('ArrowUp')?1:0)};
+    const input=steering.read();
     const view=lastRogueCamera($('rogueSea'));
-    // Desktop keys and mobile's emitted keys share one screen-to-world boundary.
+    // Keyboard and continuous touch share one magnitude-preserving projection.
     return view?.projection?screenVectorToWorld(view,input):input;
   };
   $('rogueSea').addEventListener('pointerdown',e=>{
@@ -286,22 +291,22 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   for(const event of ['pointerup','pointercancel','lostpointercapture'])$('rogueSea').addEventListener(event,e=>{touches.delete(e.pointerId);pinch=null;},options);
   bind('rogueSkill',()=>{if(!paused&&state){interact(state,'captain',direction());save();}});
   bind('roguePause',pause);
-  bind('rogueChart',harborChart);
+  bind('rogueChart',()=>{if(state?.harborIntel)harborChart();else if(!paused){mapOpen=!mapOpen;releaseControls();}});
   function pause(){
-    if(!state)return;paused=true;keys.clear();releaseShipAssist(state);const saved=save();
-    const controls=(en?'WASD move · C precision · Space brake · Shift boost<br>E moor / disembark / board / hook · Q unmoor / lure<br>F supplies · R equipment · B build action · M chart<br>Ashore: Space melee · V / click throw scrap<br>T tow supply boat · H supply boat anchor':'WASD 이동 · C 정밀 운항 · Space 제동 · Shift 부스터<br>E 계류 / 하선 / 재승선 / 고리 · Q 계류 해제 / 유인<br>F 보급 · R 장비 · B 빌드 조작 · M 해도<br>상륙: Space 근접 공격 · V / 클릭 고철 투척<br>T 보급정 견인 · H 보급정 닻')+(waterMotion(state)?'<br><br>'+(en?'Release movement to drift. C alone does not brake. Hold Space for powered braking and position assist; it uses fuel and can be overcome by strong flow or tow load. Pausing releases assist.':'손을 놓으면 해류를 따라 표류합니다. C만 눌러도 멈추지 않습니다. Space를 누르고 있으면 연료를 써서 감속·정지를 돕지만 강한 해류나 견인 하중에는 밀릴 수 있습니다. 일시정지하면 보조가 해제됩니다.'):'');
-    modalSurface('pause',pauseMarkup({kicker:CAPTAINS[state.captain].name+' · '+(state.depth+1)+' / 3 · '+(en?'Seed ':'시드 ')+state.seed,saved,saveId:'rogueSaveStatus',language,
+    if(!state)return;paused=true;releaseControls();releaseShipAssist(state);const saved=save();
+    const controls=(en?'WASD move · C precision · Space brake · Shift boost<br>E moor / disembark / board / hook · Q unmoor / lure<br>F supplies · R equipment · B ship device · M chart<br>Ashore: Space melee · V / click throw scrap<br>T tow supply boat · H supply boat anchor':'WASD 이동 · C 정밀 운항 · Space 제동 · Shift 부스터<br>E 계류 / 하선 / 재승선 / 고리 · Q 계류 해제 / 유인<br>F 보급 · R 장비 · B 선박 장치 · M 해도<br>상륙: Space 근접 공격 · V / 클릭 고철 투척<br>T 보급정 견인 · H 보급정 닻')+(waterMotion(state)?'<br><br>'+(en?'Release movement to drift. C alone does not brake. Hold Space for powered braking and position assist; it uses fuel and can be overcome by strong flow or tow load. Pausing releases assist.':'손을 놓으면 해류를 따라 표류합니다. C만 눌러도 멈추지 않습니다. Space를 누르고 있으면 연료를 써서 감속·정지를 돕지만 강한 해류나 견인 하중에는 밀릴 수 있습니다. 일시정지하면 보조가 해제됩니다.'):'');
+    modalSurface('pause',pauseMarkup({kicker:CAPTAINS[state.captain].name+' · '+(state.depth+1)+' / 3 · '+(en?'Voyage no. ':'항해 번호 ')+state.seed,saved,saveId:'rogueSaveStatus',language,
       actions:'<button id="rogueContinue" class="primary">'+ui.resume+'</button><button id="rogueHome" class="secondary">'+ui.home+'</button>',
       details:rogueDetailsMarkup(state,language)+salvageDetailsMarkup(state,language)+'<details><summary>'+ui.controls+'</summary><p>'+controls+'</p><p>'+(en?'Anchor the supply boat separately before leaving your tug. Deliver it to the exit for +20 fuel and crew health.':'하선 전 보급정 닻을 따로 내려주세요. 탈출 부두에 데려오면 연료·선원 체력 +20.')+'</p></details><details><summary>'+ui.camera+'</summary>'+cameraMarkup()+'</details><details><summary>'+ui.radio+'</summary>'+state.log.map(l=>'<p>'+esc(rogueHudText(l.text,language))+'</p>').join('')+'</details>'}));
     bindCamera();bind('rogueHome',close);bind('rogueContinue',play);
   }
   function end(){
-    paused=true;preparationReturn=null;keys.clear();save();const won=state.status==='won';
+    paused=true;preparationReturn=null;releaseControls();save();const won=state.status==='won';
     // Rendering discovers visible terrain. Keep the completed save immutable
     // while its backdrop is drawn or the player cancels a new preparation.
     resultView=structuredClone(state);
     modalSurface('result',resultMarkup({outcome:won?'success':'failure',title:won?ui.rogueComplete:ui.failed,
-      kicker:CAPTAINS[state.captain].name+' · '+(en?'Seed ':'시드 ')+state.seed,summary:won?ui.rogueSummary:rogueFailureText(state.reason,language),
+      kicker:CAPTAINS[state.captain].name+' · '+(en?'Voyage no. ':'항해 번호 ')+state.seed,summary:won?ui.rogueSummary:rogueFailureText(state.reason,language),
       facts:[{label:ui.regions,value:(state.depth+1)+' / 3'},{label:ui.hull,value:Math.ceil(state.hp)+' / '+maxHp(state)},{label:ui.equipment,value:state.equipment.length+' / 6'}],
       reward:voyageRecordMarkup(state,language)+'<p id="rogueSaveStatus" class="session-save" role="status" data-save-state="'+(saveError?'failed':'saved')+'">'+(saveError?ui.saveFailed:ui.saved)+'</p>',
       details:state.log.map(l=>'<p>'+esc(rogueHudText(l.text,language))+'</p>').join(''),
@@ -343,7 +348,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     if(!e.repeat){
       const action={KeyE:'interact',KeyQ:'horn',KeyB:'special',KeyX:'cutnet',KeyG:'captain',KeyT:'tow',KeyH:'cargoAnchor',KeyV:'ranged',...(state.person?{Space:'melee'}:{})}[e.code];
       if(action){const uses=state.salvage?.uses??0;const used=interact(state,action,direction());if(used&&(action==='ranged'||action==='melee'))onSound('anchor');if((state.salvage?.uses??0)>uses)onSound('lift');save();}
-      if(e.code==='KeyM'){e.preventDefault();if(state.harborIntel)harborChart();else mapOpen=!mapOpen;}
+      if(e.code==='KeyM'){e.preventDefault();if(state.harborIntel)harborChart();else{mapOpen=!mapOpen;releaseControls();}}
       if(!mapOpen&&['Equal','NumpadAdd','Minus','NumpadSubtract'].includes(e.code))changeZoom(camera.zoom*(['Equal','NumpadAdd'].includes(e.code)?1.1:1/1.1));
     }
   }
@@ -356,6 +361,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     if(closed)return;const dt=Math.min((now-last)/1000,.05);last=now;
     const shoreProfile=state?.generator>=4&&['moored','ashore'].includes(state.mode)?'metre':'';
     if(root.dataset.shoreProfile!==shoreProfile){root.dataset.shoreProfile=shoreProfile;probe.invalidate();}
+    if(state&&inputMode!==state.mode){if(inputMode!==null)releaseControls();inputMode=state.mode;}
     if(state){
       if(!paused){
         const before=state.combat?{...state.combat}:null;
@@ -391,7 +397,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
       const hud=rogueHudModel(state,language),markup=rogueHudMarkup(hud);
       $('rogueSkill').hidden=paused;
       $('roguePause').hidden=paused;
-      $('rogueChart').hidden=paused||!state.harborIntel;
+      $('rogueChart').hidden=paused;
       $('rogueSkill').dataset.compact=String(hud.skill.compact);
       $('rogueSkill').setAttribute('aria-disabled',String(!hud.skill.usable));
       $('rogueSkill').setAttribute('aria-label',hud.skill.name+' · '+hud.skill.reason);
@@ -416,9 +422,12 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
         const view=drawRogue($('rogueSea'),resultView||state,{reduced,mapOpen,camera,occupied:hudRects,language});
         refreshQuayAssets(view);
       }
-      if(document.documentElement.dataset.mobileUi==='true'&&now-lastMobileFrame>=100){
+      if(now-lastMobileFrame>=100){
         lastMobileFrame=now;
-        window.dispatchEvent(new CustomEvent('lastsignal:mobile-frame',{detail:{mode:state.mode,mapOpen,active:!paused,context:rogueContextActions(state),minimap:rogueMinimap(state)}}));
+        const minimap={...rogueMinimap(state),viewport:navigationViewport(lastRogueCamera($('rogueSea')))};
+        if(document.documentElement.dataset.mobileUi==='true')
+          window.dispatchEvent(new CustomEvent('lastsignal:mobile-frame',{detail:{game:'rogue',mode:state.mode,mapOpen,active:!paused,context:rogueContextActions(state),captain:{id:state.captain,code:'KeyG',...hud.skill},minimap}}));
+        else if(!paused)drawNavigationMap($('rogueMinimap'),minimap);
       }
     }
     frameId=requestAnimationFrame(frame);

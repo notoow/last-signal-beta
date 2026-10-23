@@ -425,7 +425,7 @@ function shore(s,input,dt){
   const p=s.person,berth=s.map.berths.find(b=>b.id===s.mooring),island=s.map.islands[berth.island];
   const old={...p},buildings=shoreBuildings(island);
   const mag=Math.hypot(input.x||0,input.y||0),fast=input.boost;
-  if(mag){p.angle=Math.atan2(input.y,input.x);const v=crewSpeed(s,fast)*crewEffects(s).speed*(s.combat?.action?.kind==='melee'?.55:1);
+  if(mag){p.angle=Math.atan2(input.y,input.x);const v=crewSpeed(s,fast)*crewEffects(s).speed*Math.min(1,mag)*(s.combat?.action?.kind==='melee'?.55:1);
     if(s.generator===1){
       p.x=clamp(p.x+input.x/mag*v*dt,island.x+12,island.x+island.w-12);
       p.y=clamp(p.y+input.y/mag*v*dt,island.y+12,island.y+island.h-12);
@@ -567,7 +567,11 @@ export function tickRun(s,input,elapsed){
   if(s.status!=='playing'||s.pendingGear||s.pendingCache||s.salvage?.pending)return;
   input={...input,x:Number.isFinite(input.x)?clamp(input.x,-1,1):0,y:Number.isFinite(input.y)?clamp(input.y,-1,1):0};
   let left=clamp(elapsed,0,.1);
+  // Animation observes a whole display frame. A tiny final physics remainder
+  // must not overwrite real travel with "idle" (notably at 60/120 Hz).
+  const motion=left>0&&s.combat?[s.combat,...s.combat.enemies].map(actor=>[actor,actor.stride]):[];
   while(left>0){const dt=Math.min(left,1/120);left-=dt;step(s,input,dt);}
+  for(const [actor,stride] of motion)actor.moving=actor.stride-stride>1e-7;
   if(s.status==='playing')tickRescue(s,clamp(elapsed,0,.1));
   updateSurvey(s);
   refreshHarborIntel(s);
@@ -595,7 +599,7 @@ function step(s,input,dt){
   if(s.mode==='moored')return;
   const braced=s.captain==='woo'&&s.skill.left>0,dashing=s.captain==='park'&&s.skill.left>0;
   const b=s.boat,mag=braced||dashing?0:Math.hypot(input.x||0,input.y||0);
-  let boost=!!input.boost&&mag>0&&s.boost>0,fuelRate=.025+(mag?.13:0)+(boost?.24:0);
+  let boost=!!input.boost&&mag>0&&s.boost>0,fuelRate=.025+.13*Math.min(1,mag)+(boost?.24:0);
   const old={...b},brake=!!input.brake,precision=!!input.precision;
   const bilge=s.build==='bilge'?(.85+Math.min(s.flood,55)*(.018+level(s,'turbine')*.004)):1;
   const motor=(1+level(s,'motor')*.12)*CAPTAINS[s.captain].thrust;
@@ -609,7 +613,7 @@ function step(s,input,dt){
     // Reverse thrust while the requested direction is behind the bow lets a
     // skipper back out of a quay instead of powering farther into it.
     const alignment=Math.cos(angleDiff(a,b.angle));
-    const thrust=(boost?220:precision?40:110)*alignment;
+    const thrust=(boost?220:precision?40:110)*Math.min(1,mag)*alignment;
     // The helm turns first; thrust follows the bow. Inertia makes wide turns real.
     b.vx+=Math.cos(b.angle)*thrust*bilge*motor*dt;
     b.vy+=Math.sin(b.angle)*thrust*bilge*motor*dt;

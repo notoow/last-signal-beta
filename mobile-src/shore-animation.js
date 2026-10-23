@@ -2,6 +2,8 @@ import {shoreScale} from './shore-scale.js';
 import {project,HARBOR_PROJECTION,IDENTITY_PROJECTION} from './world-projection.js';
 import {FAUNA,fauna as faunaSpec} from './shore-encounters.js';
 import {visibleAt} from './rogue-vision.js';
+import {crewFacing,crewPose,CREW_CYCLE} from './shore-pose.js';
+export {crewPose} from './shore-pose.js';
 const load=file=>{const i=new Image();i.src='assets/art/'+file;return i;};
 const fauna=load('shore-fauna-v1.png');
 const crew=Object.fromEntries(['woo','park','han','jeong'].map(id=>[id,load('crew-sd-'+id+'-v1.png')]));
@@ -12,17 +14,12 @@ fetch('assets/art/shore-worker-v1-metadata.json').then(r=>r.ok?r.json():null).th
 const crewRows={woo:0,park:1,han:2,jeong:3},faunaRows={rat:0,dog:1,crab:2,gull:3};
 // Feet stay at the physical actor origin. Artwork has measured, non-square rows.
 const crewAnchors={woo:[422,815,1187,350],park:[425,795,1176,350],han:[416,817,1215,375],jeong:[415,815,1208,368]};
-export function crewPose(angle,moving,stride,hit,action,searching){
-  if(hit>0)return {row:0,col:3,flip:false};
-  if(action)return {row:2,col:action.left>(action.kind==='melee'?.26:.19)?2:3,flip:Math.cos(action.angle)<0};
-  if(searching)return {row:1,col:3,flip:false};
-  const vertical=Math.abs(Math.sin(angle))>.65,row=vertical?(Math.sin(angle)<0?1:0):2;
-  const step=Math.floor(stride/8)%4;
-  return {row,col:moving?(row===2?step%2:[1,0,2,0][step]):0,flip:row===2&&Math.cos(angle)<0};
-}
+const facings=new WeakMap();
 function crewSprite(c,s,p,reduced,unit=1){
   const img=crew[s.captain],fight=s.combat;if(!img.complete||!img.naturalWidth)return;
-  const {row,col,flip}=crewPose(p.angle,fight.moving,fight.stride,fight.hit,fight.action,s.work>0);
+  const facing=crewFacing(p.angle,facings.get(s.person));
+  if(s.person&&!fight.action&&!fight.hit)facings.set(s.person,facing);
+  const {row,col,flip}=crewPose(p.angle,fight.moving,fight.stride,fight.hit,fight.action,s.work>0,facing);
   const anchors=crewAnchors[s.captain],ys=[0,440,820,1254],xs=[0,320,632,944,1254],x=xs[col],y=ys[row],w=xs[col+1]-x,h=ys[row+1]-y;
   const idle=!fight.moving&&!fight.action&&!fight.hit&&!s.work;
   const breath=idle&&!reduced?Math.sin(s.time*2.1+crewRows[s.captain]*1.7)*.012:0,scale=55*unit/anchors[3];
@@ -95,7 +92,8 @@ export function drawShoreEncounter(c,s,reduced){
     // A small continuous weight transfer softens contact-pose changes while
     // preserving planted feet at rest and never blending double silhouettes.
     const stride=enemy||worker?p.stride:fight.stride,moving=enemy||worker?p.moving:fight.moving;
-    const stepLift=!reduced&&moving?Math.sin(stride/8*Math.PI)**2*(enemy?1:1.5):0;
+    const contact=enemy||worker?8:CREW_CYCLE/2;
+    const stepLift=!reduced&&moving?Math.sin(stride/contact*Math.PI)**2*(enemy?1:1.5):0;
     const drawP={...p,y:p.y-lift-stepLift,angle:!enemy&&!worker&&fight.action?fight.action.angle:p.angle};
     if(enemy){
       const breath=!reduced&&!p.moving&&p.phase==='idle'?Math.sin(s.time*2.8+p.homeX)*.018:0;
@@ -138,7 +136,8 @@ export function drawProjectedShoreActor(c,s,actor,frame,reduced=false){
   const stride=(enemy||worker?p.stride:fight.stride)/unit,moving=enemy||worker?p.moving:fight.moving;
   const bird=p.kind==='gull',height=(enemy?{rat:32,dog:49,crab:78,gull:53}[p.kind]:55)*k;
   const lift=(bird?16+(reduced?0:Math.sin(s.time*7+p.homeX)*2):0)*k;
-  const stepLift=!reduced&&moving?Math.sin(stride/8*Math.PI)**2*(enemy?1:1.5)*k:0;
+  const contact=enemy||worker?8:CREW_CYCLE/2;
+  const stepLift=!reduced&&moving?Math.sin(stride/contact*Math.PI)**2*(enemy?1:1.5)*k:0;
   const drawP={...p,x:foot.x,y:foot.y-lift-stepLift,angle:face,stride};
   c.fillStyle='#03151c80';c.beginPath();c.ellipse(foot.x,foot.y,height*.22,height*.055,.198,0,7);c.fill();
   if(enemy){

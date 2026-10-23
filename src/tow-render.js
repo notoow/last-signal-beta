@@ -15,7 +15,7 @@ export class TowRenderer extends HarborRenderer{
  frameCamera(s,world,partner){
   const frame=playCamera({width:this.w,height:this.h,world,focus:s.boat,partner:s.connected?partner:null,kind:s.voyage?'voyage':'tow',
    options:this.cameraSettings,overview:this.mapOpen,previous:!this.reduce&&this.camera?this.cameraFrame:null,dt:Math.max(0,Math.min(.1,s.time-(this.cameraTime??s.time))),
-   occupied:this.hudRects?[...this.hudRects,...(!this.mapOpen&&minimapLayout(this.w,this.h,world)?[minimapLayout(this.w,this.h,world).occupied]:[])]:null});
+   occupied:this.hudRects?[...this.hudRects,...(!this.externalChart&&!this.mapOpen&&minimapLayout(this.w,this.h,world)?[minimapLayout(this.w,this.h,world).occupied]:[])]:null});
   this.cameraFrame=frame;this.camera=frame.camera;this.cameraTime=s.time;this.scale=frame.scale;this.ox=frame.ox;this.oy=frame.oy;
  }
  towPointer(s,partner){
@@ -154,6 +154,7 @@ export class TowRenderer extends HarborRenderer{
  }
 
  minimap(s,l,presentation){
+  if(this.externalChart)return;
   const mini=minimapLayout(this.w,this.h,TOW_WORLD);if(!mini)return;
   const c=this.c;c.setTransform(this.dpr,0,0,this.dpr,0,0);const {w,h,x,y,scale}=mini;
   c.fillStyle='#102b2be8';c.fillRect(x-12,y-25,w+24,h+42);c.strokeStyle='#a8b48d45';c.strokeRect(x-12,y-25,w+24,h+42);

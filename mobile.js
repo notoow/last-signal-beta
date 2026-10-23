@@ -571,6 +571,16 @@ var init_web = __esm({
   }
 });
 
+// src/steering-input.js
+var zero = () => ({ x: 0, y: 0 });
+function joystickVector(x, y, deadzone = 0.18) {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return zero();
+  const length = Math.hypot(x, y);
+  if (length <= deadzone) return zero();
+  const strength = Math.min(1, (length - deadzone) / (1 - deadzone));
+  return { x: x / length * strength, y: y / length * strength };
+}
+
 // mobile/mobile.js
 init_dist();
 
@@ -642,8 +652,89 @@ function storyTouchText(value) {
 }
 function touchText(value, language2 = globalThis.document?.documentElement.lang || "ko") {
   const en = language2 === "en";
-  const names = en ? { WASD: "Move pad", Space: "Brake", Shift: "Boost", E: "Interact", Q: "Unmoor / Lure", F: "Supplies", R: "Gear", B: "Build", G: "Skill", T: "Tow", H: "Cargo anchor", V: "Throw", X: "Cut net", M: "Chart", C: "Precision" } : { WASD: "\uC774\uB3D9 \uD328\uB4DC", Space: "\uC81C\uB3D9", Shift: "\uBD80\uC2A4\uD130", E: "\uC791\uC5C5", Q: "\uD574\uC81C / \uC720\uC778", F: "\uBCF4\uAE09", R: "\uC7A5\uBE44", B: "\uBE4C\uB4DC", G: "\uC120\uC7A5 \uAE30\uC220", T: "\uACAC\uC778", H: "\uBCF4\uAE09\uC815 \uB2FB", V: "\uD22C\uCC99", X: "\uADF8\uBB3C \uC808\uB2E8", M: "\uD574\uB3C4", C: "\uC815\uBC00" };
+  const names = en ? { WASD: "Move pad", Space: "Brake", Shift: "Boost", E: "Interact", Q: "Unmoor / Lure", F: "Supplies", R: "Gear", B: "Ship device", G: "Skill", T: "Tow", H: "Cargo anchor", V: "Throw", X: "Cut net", M: "Chart", C: "Precision" } : { WASD: "\uC774\uB3D9 \uD328\uB4DC", Space: "\uC81C\uB3D9", Shift: "\uBD80\uC2A4\uD130", E: "\uC791\uC5C5", Q: "\uD574\uC81C / \uC720\uC778", F: "\uBCF4\uAE09", R: "\uC7A5\uBE44", B: "\uC120\uBC15 \uC7A5\uCE58", G: "\uC120\uC7A5 \uAE30\uC220", T: "\uACAC\uC778", H: "\uBCF4\uAE09\uC815 \uB2FB", V: "\uD22C\uCC99", X: "\uADF8\uBB3C \uC808\uB2E8", M: "\uD574\uB3C4", C: "\uC815\uBC00" };
   return String(value).replaceAll("T \uACAC\uC778 / H \uB2FB", "\uACAC\uC778 / \uBCF4\uAE09\uC815 \uB2FB").replaceAll("T \uBD84\uB9AC \xB7 H \uB2FB", "\uACAC\uC778 \uBD84\uB9AC \xB7 \uBCF4\uAE09\uC815 \uB2FB").replaceAll("Space \uADFC\uC811", "\uACF5\uACA9").replaceAll("Space\uB85C \uAC08\uACE0\uB9AC\uB97C", "\uACF5\uACA9\uC73C\uB85C \uAC08\uACE0\uB9AC\uB97C").replaceAll("V\uB098 \uD074\uB9AD\uC73C\uB85C", "\uD654\uBA74 \uD130\uCE58\uB85C").replaceAll("Space Melee", "Attack").replaceAll("Space swings", "Attack swings").replaceAll("V or click", "a world tap").replace(/\b(WASD|Space|Shift|[EQFRBGTHVXMC])\b/g, (key2) => names[key2]).replaceAll("\uBC29\uD5A5\uD0A4", "\uC774\uB3D9 \uD328\uB4DC");
+}
+
+// src/world-projection.js
+var IDENTITY_PROJECTION = Object.freeze({ xx: 1, xy: 0, yx: 0, yy: 1 });
+var HARBOR_PROJECTION = Object.freeze({ xx: 1, xy: -0.6, yx: 156 / 788, yy: 0.4266 });
+
+// src/navigation-map.js
+function navigationTransform(width, height, map) {
+  const scale = Math.min(width / map.width, height / map.height);
+  return { scale, x: (width - map.width * scale) / 2, y: (height - map.height * scale) / 2 };
+}
+function drawNavigationMap(canvas, map) {
+  if (!map || !canvas) return;
+  const c = canvas.getContext("2d"), w = canvas.width, h = canvas.height;
+  const { scale: s, x: ox, y: oy } = navigationTransform(w, h, map);
+  c.clearRect(0, 0, w, h);
+  c.fillStyle = "#07151c";
+  c.fillRect(0, 0, w, h);
+  c.save();
+  c.translate(ox, oy);
+  c.scale(s, s);
+  c.beginPath();
+  c.rect(0, 0, map.width, map.height);
+  c.clip();
+  c.fillStyle = "#15343f";
+  c.fillRect(0, 0, map.width, map.height);
+  c.fillStyle = "#889b96";
+  if (map.tiles?.length && map.cols && map.rows) {
+    const tw = map.width / map.cols, th = map.height / map.rows;
+    for (let y = 0; y < map.rows; y++) for (let x = 0; x < map.cols; x++) if (map.tiles[y * map.cols + x]) c.fillRect(x * tw, y * th, tw + 0.5, th + 0.5);
+  } else for (const p of map.islands || []) c.fillRect(p.x, p.y, p.w, p.h);
+  if (map.survey) {
+    c.fillStyle = "#07151c";
+    for (let y = 0; y < Math.ceil(map.height / map.surveyCell); y++) for (let x = 0; x < map.surveyCols; x++)
+      if (map.survey[y * map.surveyCols + x] !== 1) c.fillRect(x * map.surveyCell, y * map.surveyCell, map.surveyCell + 0.5, map.surveyCell + 0.5);
+  }
+  if (map.viewport?.length) {
+    c.beginPath();
+    map.viewport.forEach((p, i) => i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y));
+    c.closePath();
+    c.fillStyle = "#d8e9e310";
+    c.fill();
+    c.strokeStyle = "#e4eee15c";
+    c.lineWidth = 1 / s;
+    c.stroke();
+  }
+  const dot = (p, r, color) => {
+    c.fillStyle = color;
+    c.beginPath();
+    c.arc(p.x, p.y, r / s, 0, Math.PI * 2);
+    c.fill();
+  };
+  for (const b of map.berths || []) dot(b, 3, b.claimed ? "#829b95" : "#e6c27b");
+  for (const e of map.enemies || []) dot(e, 2.5, e.asleep ? "#b69078" : "#ef8772");
+  if (map.target) {
+    c.strokeStyle = "#f5cd70";
+    c.lineWidth = 1.5 / s;
+    c.beginPath();
+    c.arc(map.target.x, map.target.y, 7 / s, 0, Math.PI * 2);
+    c.stroke();
+  }
+  if (map.rescue) dot(map.rescue, 3.5, "#8ae0c4");
+  if (map.boat && Math.hypot(map.boat.x - map.player.x, map.boat.y - map.player.y) > 4) {
+    c.strokeStyle = "#9ddcea";
+    c.lineWidth = 2 / s;
+    c.strokeRect(map.boat.x - 3 / s, map.boat.y - 3 / s, 6 / s, 6 / s);
+  }
+  c.translate(map.player.x, map.player.y);
+  c.rotate(map.player.angle || 0);
+  c.strokeStyle = "#061217";
+  c.lineWidth = 3 / s;
+  c.fillStyle = "#fff3ba";
+  c.beginPath();
+  c.moveTo(8 / s, 0);
+  c.lineTo(-6 / s, -5 / s);
+  c.lineTo(-3 / s, 0);
+  c.lineTo(-6 / s, 5 / s);
+  c.closePath();
+  c.stroke();
+  c.fill();
+  c.restore();
 }
 
 // mobile/hud.js
@@ -667,6 +758,7 @@ var paths = {
   search: "M3 7h18v14H3zM8 7V3h8v4M3 12h18M10 12v3h4v-3",
   gear: "M4 20 14 10m-2-7 3 3 3-1 1-3c5 4 1 11-4 9L5 22l-3-3 10-10c-1-2-2-4 0-6Z",
   board: "M3 18h18M6 18V7h12v11M9 7V3h6v4M10 11h4m-4 3h4",
+  land: "M3 20h18M5 16V8h7m-3 4 4 4 4-4m-4 4V3",
   chart: "m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2V5Zm6-2v16m6-14v16"
 };
 var icon = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="${paths[name] || paths.objective}"/></svg>`;
@@ -743,7 +835,7 @@ function createMobileHud({ onMap = () => {
   function drawMinimap(m) {
     if (!m || m === lastMap) return;
     lastMap = m;
-    const canvas = mini.querySelector("canvas"), c = canvas.getContext("2d"), w = canvas.width, h = canvas.height, s = Math.min(w / m.width, h / m.height), ox = (w - m.width * s) / 2, oy = (h - m.height * s) / 2;
+    const canvas = mini.querySelector("canvas"), w = canvas.width, h = canvas.height, { scale: s, x: ox, y: oy } = navigationTransform(w, h, m);
     rescueMarker.hidden = !m.rescue;
     if (m.rescue) {
       rescueMarker.style.left = (ox + m.rescue.x * s) / w * 100 + "%";
@@ -755,41 +847,14 @@ function createMobileHud({ onMap = () => {
       delete rescueMarker.dataset.stage;
       delete rescueMarker.dataset.blocked;
     }
-    c.fillStyle = "#081d25";
-    c.fillRect(0, 0, w, h);
-    c.save();
-    c.translate(ox, oy);
-    c.scale(s, s);
-    c.fillStyle = "#224d55";
-    c.fillRect(0, 0, m.width, m.height);
-    if (m.tiles?.length && m.cols && m.rows) {
-      const tw = m.width / m.cols, th = m.height / m.rows;
-      c.fillStyle = "#939381";
-      for (let y = 0; y < m.rows; y++) for (let x = 0; x < m.cols; x++) if (m.tiles[y * m.cols + x]) c.fillRect(x * tw, y * th, tw + 0.5, th + 0.5);
-    }
-    if (m.survey) {
-      c.fillStyle = "#08171f";
-      const rows = Math.ceil(m.height / m.surveyCell);
-      for (let y = 0; y < rows; y++) for (let x = 0; x < m.surveyCols; x++) if (m.survey[y * m.surveyCols + x] !== 1) c.fillRect(x * m.surveyCell, y * m.surveyCell, m.surveyCell + 0.5, m.surveyCell + 0.5);
-    }
-    const dot = (p, r, color) => {
-      c.fillStyle = color;
-      c.beginPath();
-      c.arc(p.x, p.y, r / s, 0, Math.PI * 2);
-      c.fill();
-    };
-    for (const b of m.berths || []) dot(b, 2.4, b.claimed ? "#9db9af" : "#dfbe78");
-    for (const e of m.enemies || []) dot(e, 2, e.asleep ? "#ac8c75" : "#ec896c");
-    if (m.boat && Math.hypot(m.boat.x - m.player.x, m.boat.y - m.player.y) > 4) dot(m.boat, 2.5, "#c6e2e6");
-    dot(m.player, 4, "#fff1b4");
-    c.restore();
+    drawNavigationMap(canvas, m);
   }
   return function refresh2(active, rogue, presentation = null) {
     root.hidden = !active;
     if (!active) return;
     reward.hidden = performance.now() > rewardUntil;
     root.classList.toggle("has-reward", !reward.hidden);
-    mini.hidden = !rogue || !presentation?.minimap;
+    mini.hidden = !presentation?.minimap;
     const english = document.documentElement.lang === "en", rescue = presentation?.minimap?.rescue, rescueLabel = rescue ? (english ? " \xB7 Mechanic: " : " \xB7 \uC815\uBE44\uACF5: ") + (rescue.blocked ? english ? "stopped" : "\uBA48\uCDA4" : rescue.stage === "following" ? english ? "following" : "\uB530\uB77C\uC624\uB294 \uC911" : english ? "waiting" : "\uAE30\uB2E4\uB9AC\uB294 \uC911") : "";
     mini.setAttribute("aria-label", (english ? "Expand explored chart" : "\uD0D0\uC0AC\uD55C \uD574\uB3C4 \uD655\uB300") + rescueLabel);
     if (!mini.hidden) drawMinimap(presentation.minimap);
@@ -819,7 +884,7 @@ function createMobileHud({ onMap = () => {
     }
     const vital = (m) => {
       const ratio = Math.max(0, Math.min(1, Number(m.raw ?? m.value) / (Number(m.max) || 100))), danger = m.impact || ratio < 0.25;
-      return `<div class="flight-vital ${m.id} ${danger ? "danger" : ""}" role="meter" aria-label="${escape2(m.label)}" aria-valuemin="0" aria-valuemax="${escape2(m.max || 100)}" aria-valuenow="${escape2(m.raw ?? m.value)}">${icon(m.id)}<div><div class="flight-vital-label"><span>${escape2(m.label)}</span><b>${escape2(m.value)}</b></div><i><em style="width:${ratio * 100}%"></em></i></div></div>`;
+      return `<div class="flight-vital ${m.id} ${danger ? "danger" : ""}" role="meter" aria-label="${escape2(m.label)}" aria-valuemin="0" aria-valuemax="${escape2(m.max || 100)}" aria-valuenow="${escape2(m.raw ?? m.value)}">${icon(m.id)}<div><div class="flight-vital-label"><span>${escape2(m.label)}</span><b>${escape2(m.value)}<small> / ${escape2(m.max || 100)}</small></b></div><i><em style="width:${ratio * 100}%"></em></i></div></div>`;
     };
     set(nodes.mobileVitals, metrics.filter((m) => ["hull", "crew", "fuel"].includes(m.id)).map(vital).join(""));
     const layout = rogue && metrics.some((m) => m.id === "hull") && metrics.some((m) => m.id === "fuel") && !metrics.some((m) => m.id === "crew") ? "aboard" : "default";
@@ -963,7 +1028,7 @@ try {
 }
 document.documentElement.dataset.mobileMoveSide = moveSide;
 window.addEventListener("lastsignal:mobile-frame", (event) => {
-  mobileFrame = event.detail;
+  if (event.detail?.game === mode) mobileFrame = event.detail;
 });
 function setMoveSide(side) {
   release();
@@ -988,7 +1053,14 @@ function hold(owner, codes) {
   for (const code of after) if (!before.has(code)) key(code, true);
   for (const b of actions.querySelectorAll("[data-code]")) b.classList.toggle("held", after.has(b.dataset.code));
 }
+function steer(vector) {
+  window.dispatchEvent(new CustomEvent("lastsignal:steer", { detail: { game: mode, ...vector } }));
+}
+window.addEventListener("lastsignal:input-reset", (event) => {
+  if (event.detail?.game === mode) release();
+});
 function resetStick() {
+  steer({ x: 0, y: 0 });
   thumb.style.transform = "translate(0px,0px)";
   stick.classList.remove("active", "floating");
   stickOrigin = null;
@@ -1008,11 +1080,12 @@ function pause() {
   key("Escape", false);
 }
 var labels = {
-  rogue: [["Space", "\uC81C\uB3D9 / \uACF5\uACA9", "Brake / Hit"], ["KeyE", "\uC791\uC5C5", "Interact"], ["ShiftLeft", "\uBD80\uC2A4\uD130", "Boost"], ["KeyC", "\uC815\uBC00", "Precision"], ["KeyQ", "\uD574\uC81C / \uC720\uC778", "Unmoor / Lure"], ["KeyF", "\uBCF4\uAE09", "Supplies"], ["KeyR", "\uC7A5\uBE44", "Gear"], ["KeyG", "\uC120\uC7A5 \uAE30\uC220", "Skill"], ["KeyM", "\uD574\uB3C4", "Chart"], ["KeyB", "\uBE4C\uB4DC", "Build"], ["KeyV", "\uD22C\uCC99", "Throw"], ["KeyX", "\uADF8\uBB3C \uC808\uB2E8", "Cut net"], ["KeyT", "\uACAC\uC778", "Tow"], ["KeyH", "\uBCF4\uAE09\uC815 \uB2FB", "Cargo anchor"]],
-  story: [["Space", "\uC5ED\uCD94\uC9C4", "Reverse"], ["KeyQ", "\uBD80\uD45C", "Buoy"], ["KeyE", "\uC791\uC5C5", "Interact"], ["ShiftLeft", "\uBD80\uC2A4\uD130", "Boost"], ["KeyC", "\uC815\uBC00", "Precision"], ["KeyF", "\uD604\uC7A5 \uC791\uC5C5", "Work"], ["KeyZ", "\uC904 \uD480\uAE30", "Pay out"], ["KeyX", "\uC904 \uAC10\uAE30", "Reel in"], ["KeyB", "\uBE4C\uB4DC", "Build"], ["KeyG", "\uC6B0\uD68C", "Detour"], ["KeyI", "\uC120\uB0B4", "Interior"], ["KeyR", "\uBB34\uC804", "Radio"], ["KeyM", "\uD574\uB3C4", "Chart"]]
+  rogue: [["Space", "\uC81C\uB3D9 / \uACF5\uACA9", "Brake / Hit"], ["KeyE", "\uC791\uC5C5", "Interact"], ["ShiftLeft", "\uBD80\uC2A4\uD130", "Boost"], ["KeyC", "\uC815\uBC00", "Precision"], ["KeyQ", "\uD574\uC81C / \uC720\uC778", "Unmoor / Lure"], ["KeyF", "\uBCF4\uAE09", "Supplies"], ["KeyR", "\uC7A5\uBE44", "Gear"], ["KeyG", "\uC120\uC7A5 \uAE30\uC220", "Skill"], ["KeyM", "\uD574\uB3C4", "Chart"], ["KeyB", "\uC120\uBC15 \uC7A5\uBE44", "Ship gear"], ["KeyV", "\uD22C\uCC99", "Throw"], ["KeyX", "\uADF8\uBB3C \uC808\uB2E8", "Cut net"], ["KeyT", "\uACAC\uC778", "Tow"], ["KeyH", "\uBCF4\uAE09\uC815 \uB2FB", "Cargo anchor"]],
+  story: [["Space", "\uC5ED\uCD94\uC9C4", "Reverse"], ["KeyQ", "\uBD80\uD45C", "Buoy"], ["KeyE", "\uC791\uC5C5", "Interact"], ["ShiftLeft", "\uBD80\uC2A4\uD130", "Boost"], ["KeyC", "\uC815\uBC00", "Precision"], ["KeyF", "\uD604\uC7A5 \uC791\uC5C5", "Work"], ["KeyZ", "\uC904 \uD480\uAE30", "Pay out"], ["KeyX", "\uC904 \uAC10\uAE30", "Reel in"], ["KeyB", "\uC120\uBC15 \uC7A5\uBE44", "Ship gear"], ["KeyG", "\uC6B0\uD68C", "Detour"], ["KeyI", "\uC120\uB0B4", "Interior"], ["KeyR", "\uBB34\uC804", "Radio"], ["KeyM", "\uD574\uB3C4", "Chart"]]
 };
 function render(next) {
   release();
+  if (mode !== next) mobileFrame = null;
   mode = next;
   language = document.documentElement.lang;
   pad.dataset.mode = mode;
@@ -1025,7 +1098,8 @@ function render(next) {
     button.type = "button";
     button.dataset.code = code;
     if (["Space", "KeyE"].includes(code)) button.classList.add("mobile-primary");
-    if (index >= 3) button.classList.add("mobile-extra");
+    if (mode === "rogue" && code === "KeyG") button.classList.add("mobile-captain-skill");
+    else if (index >= 3) button.classList.add("mobile-extra");
     const english = document.documentElement.lang === "en";
     buttonFace(button, english ? en : ko, code === "Space" ? "brake" : code === "KeyE" ? "interact" : code === "KeyQ" ? "buoy" : code === "ShiftLeft" ? "boost" : "objective");
     button.setAttribute("aria-label", `${ko} / ${en}`);
@@ -1102,30 +1176,47 @@ function bindMenuToggle(button, toggle) {
     if (e.detail === 0 && playing) toggle();
   });
 }
-function bindTouchClick(button) {
+function bindTouchClick(button, { scrollable = false } = {}) {
   if (touchClickBound.has(button)) return;
   touchClickBound.add(button);
-  let pointer = null;
-  button.style.touchAction = "none";
+  let pointer = null, start = null, dragged = false;
+  button.style.touchAction = scrollable ? "manipulation" : "none";
   button.addEventListener("pointerdown", (e) => {
-    if (!playing || e.pointerType !== "touch" || e.button !== 0) return;
+    if (e.pointerType !== "touch" || e.button !== 0 || button.disabled || button.getAttribute("aria-disabled") === "true") return;
     e.preventDefault();
     handledPointers.add(e.pointerId);
     if (pointer !== null) return;
     pointer = e.pointerId;
+    start = { x: e.clientX, y: e.clientY };
+    dragged = false;
     button.setPointerCapture(pointer);
+  });
+  button.addEventListener("pointermove", (e) => {
+    if (e.pointerId === pointer && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) dragged = true;
   });
   button.addEventListener("pointerup", (e) => {
     if (e.pointerId !== pointer) return;
     pointer = null;
     e.preventDefault();
     const r = button.getBoundingClientRect();
-    if (playing && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) button.click();
+    if (!dragged && Math.hypot(e.clientX - start.x, e.clientY - start.y) <= 10 && button.isConnected && !button.disabled && button.getAttribute("aria-disabled") !== "true" && r.width > 0 && r.height > 0 && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) button.click();
   });
   for (const type of ["pointercancel", "lostpointercapture"]) button.addEventListener(type, (e) => {
     if (e.pointerId === pointer) pointer = null;
   });
 }
+function bindModalTouchClicks(node) {
+  if (!(node instanceof Element)) return;
+  const bind = (button) => {
+    if (button.closest("#panel,#rogueModal,#mobileRotate")) bindTouchClick(button, { scrollable: true });
+  };
+  if (node.matches("button,summary")) bind(node);
+  for (const button of node.querySelectorAll("button,summary")) bind(button);
+}
+bindModalTouchClicks(document.body);
+new MutationObserver((records) => {
+  for (const record of records) for (const node of record.addedNodes) bindModalTouchClicks(node);
+}).observe(document.body, { childList: true, subtree: true });
 function bindAction(button) {
   button.addEventListener("pointerdown", (e) => {
     const code = button.dataset.code;
@@ -1162,6 +1253,23 @@ document.addEventListener("click", (e) => {
 }, true);
 function refreshContext() {
   const context = mobileFrame?.active ? mobileFrame.context : null, available = [context?.primary, ...context?.secondary || []].filter(Boolean), en = language === "en";
+  const captain = mobileFrame?.captain, skill = actions.querySelector(".mobile-captain-skill");
+  if (skill) {
+    const label = captain?.name || (en ? "Captain skill" : "\uC120\uC7A5 \uAE30\uC220"), name = { woo: "hull", park: "boost", han: "buoy", jeong: "winch" }[captain?.id] || "objective";
+    if (skill.dataset.label !== label) {
+      buttonFace(skill, label, name);
+      skill.insertAdjacentHTML("beforeend", '<small class="mobile-captain-timer"></small>');
+      skill.dataset.label = label;
+    }
+    skill.dataset.ready = String(!!captain?.usable);
+    skill.setAttribute("aria-disabled", String(!captain?.usable));
+    const time = captain?.active ? captain.remaining : captain?.remainingCooldown || 0;
+    skill.querySelector("small").textContent = time > 0 ? Math.ceil(time) : "";
+    skill.dataset.state = captain?.active ? "active" : time > 0 ? "cooldown" : captain?.usable ? "ready" : "locked";
+    skill.style.setProperty("--skill-cooldown", Math.min(1, (captain?.remainingCooldown || 0) / (captain?.cooldown || 1)) * 360 + "deg");
+    skill.title = [label, captain?.reason].filter(Boolean).join(" \xB7 ");
+    skill.setAttribute("aria-label", skill.title + (time > 0 ? ` \xB7 ${Math.ceil(time)}${en ? " seconds" : "\uCD08"}` : ""));
+  }
   const build = actions.querySelector('[data-code="KeyB"]'), special = context?.special;
   actions.dataset.special = String(!!special);
   if (build) {
@@ -1178,8 +1286,8 @@ function refreshContext() {
       delete build.dataset.ready;
       build.removeAttribute("aria-disabled");
       build.removeAttribute("title");
-      buttonFace(build, en ? "Build" : "\uBE4C\uB4DC", "objective");
-      build.setAttribute("aria-label", "\uBE4C\uB4DC / Build");
+      buttonFace(build, en ? "Ship gear" : "\uC120\uBC15 \uC7A5\uBE44", "objective");
+      build.setAttribute("aria-label", "\uC120\uBC15 \uC7A5\uBE44 / Ship gear");
       document.getElementById("mobileTools").append(build);
     }
   }
@@ -1187,9 +1295,21 @@ function refreshContext() {
   actions.dataset.mode = mobileFrame?.mode || "";
   for (const button of actions.querySelectorAll("[data-context-slot]")) {
     const action = available[Number(button.dataset.contextSlot)];
-    button.hidden = !action;
-    if (!action) continue;
-    const label = en ? action.labelEn : action.labelKo, name = action.id === "rescue" ? "crew" : action.code === "KeyF" ? "search" : action.code === "KeyR" ? "gear" : ["land", "board"].includes(action.id) ? "board" : "interact";
+    button.hidden = !action && button.dataset.contextSlot !== "0";
+    if (!action) {
+      if (!button.hidden) {
+        buttonFace(button, en ? "Interact" : "\uC791\uC5C5", "interact");
+        button.dataset.ready = "false";
+        button.setAttribute("aria-disabled", "true");
+        button.setAttribute("aria-label", en ? "Approach a quay or work site" : "\uBD80\uB450\uB098 \uC791\uC5C5 \uB300\uC0C1\uC5D0 \uC811\uADFC\uD558\uC138\uC694");
+        delete button.dataset.action;
+        delete button.dataset.label;
+        delete button.dataset.code;
+        button.classList.remove("working");
+      }
+      continue;
+    }
+    const label = en ? action.labelEn : action.labelKo, name = action.id === "rescue" ? "crew" : action.code === "KeyF" ? "search" : action.code === "KeyR" ? "gear" : action.id === "land" ? "land" : action.id === "board" ? "board" : "interact";
     if (button.dataset.action !== action.id || button.dataset.label !== label) {
       buttonFace(button, label, name);
       button.dataset.label = label;
@@ -1210,7 +1330,7 @@ function move(e) {
   const r = stick.getBoundingClientRect(), x = (e.clientX - stickOrigin.x) / (r.width / 2), y = (e.clientY - stickOrigin.y) / (r.height / 2);
   const radius = Math.max(1, Math.hypot(x, y));
   thumb.style.transform = `translate(${x / radius * 28}px,${y / radius * 28}px)`;
-  hold("stick", [...x < -0.25 ? ["KeyA"] : x > 0.25 ? ["KeyD"] : [], ...y < -0.25 ? ["KeyW"] : y > 0.25 ? ["KeyS"] : []]);
+  steer(joystickVector(x, y));
 }
 document.addEventListener("pointerdown", (e) => {
   const onStick = e.target === stick || stick.contains(e.target), world = ["rogueSea", "space"].includes(e.target.id), side = moveSide === "left" ? e.clientX < innerWidth * 0.44 : e.clientX > innerWidth * 0.56;
@@ -1219,9 +1339,8 @@ document.addEventListener("pointerdown", (e) => {
   e.stopImmediatePropagation();
   stickPointer = e.pointerId;
   stickOrigin = { x: e.clientX, y: e.clientY };
-  const half = stick.offsetWidth / 2;
-  stick.style.setProperty("--stick-x", Math.max(half + 8, Math.min(innerWidth - half - 8, e.clientX)) + "px");
-  stick.style.setProperty("--stick-y", Math.max(half + 8, Math.min(innerHeight - half - 8, e.clientY)) + "px");
+  stick.style.setProperty("--stick-x", e.clientX + "px");
+  stick.style.setProperty("--stick-y", e.clientY + "px");
   stick.classList.add("active", "floating");
   stick.setPointerCapture(e.pointerId);
   move(e);
@@ -1269,7 +1388,7 @@ function installHelp() {
     const help = document.createElement("details");
     help.className = "mobile-help";
     help.open = true;
-    help.innerHTML = language === "en" ? "<summary>Touch controls</summary><p>Touch the lower movement side and drag: the pad appears under your thumb. Release to drift; hold Brake to slow down. Swap sides below or from More.</p><p>Nearby mooring, boarding and search actions appear beside Attack. Hold Search until its ring fills. Tap the small chart to expand it. More contains the other tools. Pausing saves your run.</p>" : "<summary>\uD130\uCE58 \uC870\uC791</summary><p>\uC774\uB3D9 \uC190 \uCABD \uC544\uB798 \uC601\uC5ED\uC744 \uB204\uB974\uACE0 \uBC00\uBA74 \uADF8 \uC790\uB9AC\uC5D0 \uD328\uB4DC\uAC00 \uC0DD\uAE41\uB2C8\uB2E4. \uC190\uC744 \uB193\uC73C\uBA74 \uD45C\uB958\uD558\uACE0, \uC81C\uB3D9\uC744 \uAE38\uAC8C \uB204\uB974\uBA74 \uAC10\uC18D\uD569\uB2C8\uB2E4. \uC544\uB798 \uC124\uC815\uC774\uB098 \uB354 \uBCF4\uAE30\uC5D0\uC11C \uC88C\uC6B0\uB97C \uBC14\uAFC0 \uC218 \uC788\uC5B4\uC694.</p><p>\uAC00\uAE4C\uC6B4 \uC811\uC548\xB7\uC2B9\uD558\uC120\xB7\uC218\uC0C9 \uBC84\uD2BC\uC740 \uACF5\uACA9 \uC606\uC5D0 \uB098\uD0C0\uB0A9\uB2C8\uB2E4. \uC218\uC0C9\uC740 \uC9C4\uD589 \uB9C1\uC774 \uCC30 \uB54C\uAE4C\uC9C0 \uAE38\uAC8C \uB204\uB974\uC138\uC694. \uC791\uC740 \uD574\uB3C4\uB97C \uB204\uB974\uBA74 \uD655\uB300\uD569\uB2C8\uB2E4. \uB098\uBA38\uC9C0 \uB3C4\uAD6C\uB294 \uB354 \uBCF4\uAE30\uC5D0 \uC788\uACE0 \uC77C\uC2DC\uC815\uC9C0\uD558\uBA74 \uC800\uC7A5\uB429\uB2C8\uB2E4.</p>";
+    help.innerHTML = language === "en" ? "<summary>Touch controls</summary><p>Touch the lower movement side and drag: the pad appears under your thumb. Drag slightly for fine thrust, farther for more thrust. Release to drift; hold Brake to slow down. Swap sides below or from More.</p><p>Nearby mooring, boarding and search actions appear beside Attack. Hold Search until its ring fills. Tap the small chart to expand it. More contains the other tools. Pausing saves your run.</p>" : "<summary>\uD130\uCE58 \uC870\uC791</summary><p>\uC774\uB3D9 \uC190 \uCABD \uC544\uB798 \uC601\uC5ED\uC744 \uB204\uB974\uACE0 \uBC00\uBA74 \uADF8 \uC790\uB9AC\uC5D0 \uD328\uB4DC\uAC00 \uC0DD\uAE41\uB2C8\uB2E4. \uC870\uAE08 \uBC00\uBA74 \uBBF8\uC138 \uCD94\uC9C4, \uB354 \uBC00\uBA74 \uAC15\uD55C \uCD94\uC9C4\uC785\uB2C8\uB2E4. \uC190\uC744 \uB193\uC73C\uBA74 \uD45C\uB958\uD558\uACE0, \uC81C\uB3D9\uC744 \uAE38\uAC8C \uB204\uB974\uBA74 \uAC10\uC18D\uD569\uB2C8\uB2E4. \uC544\uB798 \uC124\uC815\uC774\uB098 \uB354 \uBCF4\uAE30\uC5D0\uC11C \uC88C\uC6B0\uB97C \uBC14\uAFC0 \uC218 \uC788\uC5B4\uC694.</p><p>\uAC00\uAE4C\uC6B4 \uC811\uC548\xB7\uC2B9\uD558\uC120\xB7\uC218\uC0C9 \uBC84\uD2BC\uC740 \uACF5\uACA9 \uC606\uC5D0 \uB098\uD0C0\uB0A9\uB2C8\uB2E4. \uC218\uC0C9\uC740 \uC9C4\uD589 \uB9C1\uC774 \uCC30 \uB54C\uAE4C\uC9C0 \uAE38\uAC8C \uB204\uB974\uC138\uC694. \uC791\uC740 \uD574\uB3C4\uB97C \uB204\uB974\uBA74 \uD655\uB300\uD569\uB2C8\uB2E4. \uB098\uBA38\uC9C0 \uB3C4\uAD6C\uB294 \uB354 \uBCF4\uAE30\uC5D0 \uC788\uACE0 \uC77C\uC2DC\uC815\uC9C0\uD558\uBA74 \uC800\uC7A5\uB429\uB2C8\uB2E4.</p>";
     body.prepend(help);
     if (kakao) body.append(browserHelp(language === "en"));
     if (voyageNotes) {
@@ -1321,14 +1440,47 @@ function compactPreparation() {
     build.append(details);
   }
 }
+function compactHome() {
+  const panel = document.querySelector("#panel.cabin-screen"), choices = panel?.querySelector(".title-choices");
+  if (!choices || panel.querySelector(".mobile-home-quick")) return;
+  const en = language === "en", resume = choices.querySelector("#rogueResume") || choices.querySelector("#resume"), fresh = choices.querySelector("#roguelike");
+  if (!fresh) return;
+  const main = document.createElement("div");
+  main.className = "mobile-home-main";
+  if (resume) main.append(resume);
+  main.append(fresh);
+  const quick = document.createElement("nav");
+  quick.className = "mobile-home-quick";
+  quick.setAttribute("aria-label", en ? "Harbor menu" : "\uD56D\uAD6C \uBA54\uB274");
+  const story = choices.querySelector("#start"), settings = choices.querySelector("#settings");
+  if (story) quick.append(story);
+  const more = document.createElement("details");
+  more.className = "mobile-home-extras";
+  const summary = document.createElement("summary");
+  summary.textContent = en ? "Harbor" : "\uD56D\uAD6C \uBA54\uB274";
+  more.append(summary);
+  const extra = document.createElement("div");
+  extra.className = "mobile-home-extra-list";
+  for (const button of [...choices.querySelectorAll("button")]) if (button !== settings) extra.append(button);
+  more.append(extra);
+  quick.append(more);
+  if (settings) quick.append(settings);
+  choices.append(main);
+  panel.append(quick);
+  const caption = document.createElement("p");
+  caption.className = "mobile-home-caption";
+  caption.textContent = en ? "The next signal is waiting." : "\uC544\uC9C1, \uB204\uAD70\uAC00\uC758 \uC2E0\uD638\uAC00 \uB0A8\uC544 \uC788\uB2E4.";
+  panel.querySelector(".title-mark").append(caption);
+}
 function refresh() {
   const rogue = document.getElementById("rogue");
   const next = rogue ? "rogue" : "story";
   const active = rogue ? document.getElementById("rogueModal")?.hidden : document.getElementById("panel")?.classList.contains("playing");
   const landscape = innerWidth > innerHeight;
+  rotate.hidden = landscape || !(rogue ? ["playing", "pause"].includes(rogue.dataset.surface) : document.getElementById("panel")?.classList.contains("playing") || document.querySelector("#panel .session-pause"));
   if (mode !== next || language !== document.documentElement.lang) render(next);
   if (playing && (!active || !landscape)) release();
-  if (playing && !landscape) pause();
+  if (active && !landscape) pause();
   playing = !!active && landscape;
   if (playing) voyageNotes = [...document.querySelectorAll("#rogueMission,#rogueRadio,#rogueConditions,#rogueControls,#hud .mission-objective,#hud .radio-panel,#hud .compact-conditions,#hud .compact-actions,#hud .passenger-status,#hud .hud-hint")].map((el) => el.textContent.trim()).filter(Boolean).join("\n\n");
   pad.hidden = !playing;
@@ -1346,11 +1498,6 @@ function refresh() {
       attack.dataset.mode = rogue.dataset.mobileMode;
       buttonFace(attack, rogue.dataset.mobileMode === "ashore" ? language === "en" ? "Attack" : "\uACF5\uACA9" : language === "en" ? "Brake" : "\uC81C\uB3D9", rogue.dataset.mobileMode === "ashore" ? "attack" : "brake");
     }
-    const skill = actions.querySelector('[data-code="KeyG"]'), source = document.getElementById("rogueSkill");
-    if (skill && source) {
-      skill.title = source.title;
-      skill.dataset.ready = String(source.getAttribute("aria-disabled") !== "true");
-    }
   }
   for (const button of document.querySelectorAll("#playPause,#roguePause")) {
     button.textContent = "\u2161";
@@ -1366,6 +1513,7 @@ function refresh() {
   }
   installHelp();
   compactPreparation();
+  compactHome();
   refreshFlightHud(playing, rogue, mobileFrame);
   for (const button of document.querySelectorAll("#mobileMinimap,#roguePause,#playPause,#mobileInfo,#mobileSwap")) bindTouchClick(button);
 }

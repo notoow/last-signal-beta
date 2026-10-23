@@ -68,7 +68,7 @@ export function stepShipMotion(s,input,dt,power=1){
     const dx=c.target?c.target.x-b.x:0,dy=c.target?c.target.y-b.y:0;
     const x=(dx*2.5-b.vx*3.8)*mass,y=(dy*2.5-b.vy*3.8)*mass;
     forward=x*fx+y*fy;side=-x*fy+y*fx;
-  }else if(mag)forward=capacity*Math.cos(wrap(heading-b.angle));
+  }else if(mag)forward=capacity*Math.min(1,mag)*Math.cos(wrap(heading-b.angle));
   // One effort budget: steering and transverse assist cannot each get a full
   // engine in the same step. Reverse is weaker than forward assist.
   const foreLimit=forward<0&&assist?capacity*.8:capacity;
