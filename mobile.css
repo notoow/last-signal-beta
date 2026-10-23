@@ -204,6 +204,75 @@ html,body{height:var(--mobile-height,100dvh);overflow:hidden}
 .mobile-playing #hud[data-ui=compact] .compact-environment,.mobile-playing #hud[data-ui=compact] .compact-risks{position:fixed;right:8px;top:92px;max-width:42vw;font-size:12px;background:#111c24db}
 .mobile-playing #hud[data-ui=compact] .compact-risks{top:130px}
 
+.mobile-browser-help{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px;margin-top:14px}
+.mobile-browser-help [hidden]{display:none!important}
+.mobile-browser-help .mobile-external,.mobile-browser-help .mobile-copy-link{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 14px;border:1px solid #d4bb80;border-radius:7px;font:600 14px/1.3 Pretendard,sans-serif;text-decoration:none;background:#193540;color:#ffe7b6}
+.mobile-browser-help .mobile-external{background:#e7c785;color:#152c32}
+.mobile-browser-help .mobile-external:visited{color:#152c32}
+.mobile-browser-help p{flex-basis:100%;margin:0;font-size:12px;line-height:1.5}
+.mobile-browser-url{width:100%;min-width:0;padding:8px;font-size:13px;background:#122731;color:#f4ead4;border:1px solid #aebfb7}
+.mobile-handedness{display:flex!important;align-items:center;gap:10px;min-height:44px;font:13px/1.4 Pretendard,sans-serif;color:#dfdfd3}
+.mobile-handedness input{min-height:24px;min-width:24px;width:24px;height:24px;accent-color:#d9bc80}
+.mobile-copy-status:empty{display:none}
+#mobileRotate{overflow:auto}
+@media(orientation:portrait){#mobileRotate{padding:22px}.rotate-phone{margin:12px auto 32px;width:46px;height:74px}.rotate-card h1{font-size:21px}.rotate-card button{min-height:44px}}
+.mobile-voyage-intro{margin:auto;width:min(580px,100%);padding:24px;color:#f4ead4;text-align:center}
+.mobile-voyage-intro>span{font-size:12px;color:#d4ba81;letter-spacing:.1em}
+.mobile-voyage-intro h1{font:700 clamp(22px,4vw,30px)/1.4 Pretendard,sans-serif;margin:16px 0}
+.mobile-voyage-intro p{font:15px/1.7 Pretendard,sans-serif;color:#c6d0c9;margin:0 0 22px}
+.mobile-voyage-intro>div{display:flex;justify-content:center;gap:10px}
+.mobile-voyage-intro button{min-height:46px;padding:10px 22px;font-size:15px;border:1px solid #d8bc83;border-radius:5px}
+#rogueIntroSail{background:#d8bc83;color:#12282f}#rogueIntroSkip{background:transparent;color:#ccd5cb}
+.embark .mobile-captain-details,.embark .mobile-build-details{border:0;border-top:1px solid #bdcdb22b;margin-top:8px;padding:0}
+.embark .mobile-captain-details>summary,.embark .mobile-build-details>summary{display:flex;align-items:center;min-height:44px;font-size:12px;color:#c6cabd;cursor:pointer;list-style:none}
+.embark .mobile-captain-details>summary::before,.embark .mobile-build-details>summary::before{content:'＋';margin-right:6px;color:#debf7d}
+.embark details[open]>summary::before{content:'−'}
+@media(max-width:1100px){
+ .rogue-modal:has(.embark){padding:10px 14px!important}
+ .embark{grid-template-columns:minmax(130px,.9fr) minmax(88px,.65fr) minmax(205px,1.45fr)!important;grid-template-rows:auto minmax(170px,1fr) auto!important;gap:8px 12px!important;padding:0!important;min-height:calc(var(--mobile-height,100dvh) - 20px)!important}
+ .embark-header{grid-column:1/-1!important;grid-row:1!important;padding:0!important;min-height:34px}
+ .embark-header h1{font-size:21px!important;margin:2px 0 0!important}.embark-location{font-size:10px}.embark-route{font-size:10px!important;gap:7px!important}
+ .embark-crew{grid-column:1!important;grid-row:2!important;padding:0!important;background:transparent!important;align-self:start!important}
+ .embark-crew h2{font-size:11px;margin:0 0 4px}.embark-roster{grid-template-columns:1fr 1fr!important;gap:2px!important}
+ .embark-roster button{min-height:44px!important;padding:4px!important;gap:4px!important}.embark-roster button b{font-size:17px!important}.roster-number{font-size:9px}.roster-mark{font-size:14px}
+ .embark-person{display:block!important;position:relative!important;grid-column:2;grid-row:2;left:auto!important;bottom:auto!important;z-index:1!important;width:100%!important;height:190px!important;max-height:42vh;align-self:center;pointer-events:none}
+ .embark-person canvas{filter:none!important}.embark-ship{display:none!important}
+ .embark-profile{min-height:0!important;margin:6px 0 0!important;padding:0!important;border:0!important}.embark-trade{font-size:11px!important;line-height:1.4!important}
+ .embark-stats{font-size:11px!important;margin:6px 0!important;gap:6px!important}.embark-stats>div{grid-template-columns:60px 1fr}.embark-stats b{font-size:13px!important}
+ .embark-skill h3{font-size:12px!important}.embark-skill kbd{display:none}.embark-skill p,.embark-skill small{font-size:11px!important}
+ .embark-vessel{grid-column:3!important;grid-row:2!important;padding:0!important;background:transparent!important;align-self:start!important}
+ .embark-vessel{display:grid!important;grid-template-columns:minmax(0,1fr) auto;column-gap:7px}
+ .embark-ship-name{grid-column:1;grid-row:1;align-self:center}.embark-vessel .embark-paints{grid-column:2;grid-row:1;align-self:center}.embark-vessel .embark-paints small{display:none}
+ .embark-vessel .embark-build-tabs,.embark-vessel .embark-build-info{grid-column:1/-1}
+ .embark-ship-name b{font-size:17px!important}.embark-ship-name span{font-size:10px!important}
+ .embark-paints{margin:4px 0!important;gap:4px!important}.embark-paints button{width:44px!important;height:44px!important;min-height:44px!important}.embark-paints small{font-size:9px!important}
+ .embark-build-tabs{margin:5px 0!important;gap:9px!important}.embark-build-tabs button{min-height:44px!important;padding:5px 0!important;font-size:12px!important}
+ .embark-build-info{min-height:0!important}.embark-build-info h2{font-size:17px!important;margin:0 0 4px!important}.embark-build-info p{font-size:11px!important;line-height:1.4!important;margin:0!important}
+ .embark-footer{grid-column:1/-1!important;grid-row:3!important;padding:6px 0!important;min-height:48px;gap:8px!important;z-index:5}.embark-footer button,.embark-footer summary{font-size:12px!important;min-height:44px!important}.embark-launch{min-width:160px!important}.embark-secondary{gap:8px!important}
+ .embark-options[open],.embark-story[open]{max-width:calc(100vw - 32px)}
+ .rogue-reward-art{width:72px!important;height:72px!important;object-fit:contain}
+}
+@media(max-width:700px){.embark-ship-name b{font-size:14px!important}.embark-ship-name span{font-size:9px!important}}
+@media(max-width:1100px) and (orientation:landscape){
+ .rogue-modal:has(.rogue-cache-desk){padding:8px!important;overflow:auto;align-items:start}
+ .rogue-cache-desk{padding:8px!important;width:100%!important;max-width:none!important;min-height:0!important;margin:0!important;gap:6px!important}
+ .rogue-cache-desk .rogue-salvage-header{display:flex!important;flex-direction:row!important;justify-content:space-between!important;align-items:center!important;text-align:left!important;gap:8px!important;margin:0!important;padding:0!important;min-height:0!important}
+ .rogue-cache-desk .rogue-salvage-kicker{font-size:9px!important;margin:0!important}.rogue-cache-desk .rogue-salvage-header h2{font-size:18px!important;margin:2px 0!important}.rogue-cache-desk .rogue-salvage-header p:not(.rogue-salvage-kicker){font-size:10px!important;margin:0!important}
+ .rogue-cache-capacity{display:flex!important;flex-direction:row!important;align-items:baseline!important;gap:6px!important;min-width:0!important;padding:0!important;white-space:nowrap}.rogue-cache-capacity b{font-size:17px!important}.rogue-cache-capacity span{font-size:9px!important}.rogue-cache-capacity span:last-child{display:none}
+ .rogue-cache-desk .rogue-salvage-options{display:flex!important;gap:8px!important;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x proximity;padding:4px 0 8px!important;margin:0!important;min-height:0!important;align-items:stretch!important}
+ .rogue-cache-desk .rogue-salvage-option{flex:0 0 200px!important;scroll-snap-align:start;display:flex!important;flex-direction:column!important;min-height:0!important;max-height:none!important;padding:10px!important;gap:4px!important;margin:0!important;position:relative}
+ .rogue-cache-desk .rogue-salvage-option-heading{padding:0!important;margin:0!important;min-height:30px!important}.rogue-cache-desk .rogue-salvage-option-heading span{font-size:9px!important}.rogue-cache-desk .rogue-salvage-option h3{font-size:15px!important;line-height:1.2!important;margin:0!important}
+ .rogue-cache-desk .rogue-reward-art{width:64px!important;height:64px!important;position:absolute;right:8px;top:8px}
+ .rogue-cache-desk .rogue-crew-reward .rogue-salvage-option-heading{padding-right:62px!important;min-height:45px!important}
+ .rogue-cache-desk .rogue-cache-label,.rogue-cache-desk .rogue-cache-note{font-size:10px!important;line-height:1.3!important;margin:0!important}
+ .rogue-cache-desk .rogue-cache-effect{display:flex;align-items:baseline;gap:7px;margin:4px 0!important;padding:0!important;min-height:0!important}.rogue-cache-desk .rogue-cache-effect b{font-size:23px!important}.rogue-cache-desk .rogue-cache-effect span{font-size:11px!important}
+ .rogue-cache-desk .rogue-cache-description{font-size:11px!important;line-height:1.4!important;margin:0!important;flex:1}
+ .rogue-cache-desk .rogue-salvage-option>button{width:100%;min-height:44px!important;padding:7px!important;margin:4px 0 0!important;font-size:12px!important;flex:none}
+ .rogue-cache-desk .rogue-cache-common{font-size:10px!important;line-height:1.3!important;padding:0!important;margin:0!important;gap:6px}
+ .rogue-cache-desk .rogue-salvage-footer{min-height:44px!important;display:flex!important;align-items:center!important;margin:0!important;padding:0!important;gap:8px}.rogue-cache-desk .rogue-salvage-footer>button{min-height:44px!important;padding:6px 12px!important;font-size:12px!important}.rogue-cache-desk .rogue-salvage-footer>p{display:none}
+}
+@media(max-width:900px) and (orientation:landscape){.rogue-cache-desk .rogue-salvage-header h2+p::after{content:' · 옆으로 넘기기 →';color:#dfbd7f}html[lang=en] .rogue-cache-desk .rogue-salvage-header h2+p::after{content:' · Swipe →'}}
+
 /* Visual hierarchy: navigation in the world, vital bars below, light resources
    above. Opaque surfaces belong to menus, not the sailing HUD. */
 .mobile-playing #rogueHud,.mobile-playing #hud{display:none!important}
@@ -218,7 +287,7 @@ html,body{height:var(--mobile-height,100dvh);overflow:hidden}
 .flight-resource{display:inline-flex;gap:5px;align-items:center}
 .flight-resource b{font-size:16px;font-weight:650;font-variant-numeric:tabular-nums}
 .flight-resource svg{color:#bfd6da;width:19px!important;height:19px!important}
-#mobileVitals{position:absolute;bottom:max(12px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:clamp(150px,30vw,240px);display:grid;gap:7px}
+#mobileVitals{position:absolute;bottom:max(12px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:clamp(130px,26vw,220px);display:grid;gap:7px}
 .flight-vital{display:flex;gap:8px;align-items:center;color:#e5eee8}
 .flight-vital>div{flex:1;min-width:0}
 .flight-vital-label{display:flex;justify-content:space-between;align-items:baseline;line-height:1;margin-bottom:4px}
@@ -256,3 +325,32 @@ html,body{height:var(--mobile-height,100dvh);overflow:hidden}
 #mobileControls.expanded #mobileActions button{width:64px;height:54px;min-height:54px;border-radius:8px}
 .mobile-playing .play-pause{background:transparent!important;border:0!important;box-shadow:none!important;color:#eff3ec;text-shadow:0 1px 4px #00121f}
 @media(prefers-reduced-motion:reduce){.flight-vital em{transition:none}}
+
+/* Floating movement and contextual actions share no opaque bottom deck. */
+#mobileActions [hidden]{display:none!important}
+#mobileStick.floating{position:fixed;left:var(--stick-x);top:var(--stick-y);transform:translate(-50%,-50%);margin:0}
+html[data-mobile-move-side=right] #mobileControls{flex-direction:row-reverse}
+#mobileControls[data-mode=rogue]:not(.expanded) #mobileActions{grid-template-columns:52px 64px;grid-template-areas:'boost more' 'primary attack';gap:8px}
+#mobileControls[data-mode=rogue]:not(.expanded) #mobileActions[data-context-count='2'],#mobileControls[data-mode=rogue]:not(.expanded) #mobileActions[data-context-count='3']{grid-template-columns:52px 64px 64px;grid-template-areas:'boost tertiary more' 'secondary primary attack'}
+#mobileControls[data-mode=rogue]:not(.expanded) #mobileActions>[data-code=Space]{grid-area:attack;width:64px;height:64px;border-width:2px}
+#mobileControls[data-mode=rogue]:not(.expanded) #mobileActions>[data-code=ShiftLeft]{grid-area:boost}
+#mobileControls[data-mode=rogue]:not(.expanded) #mobileMore{grid-area:more}
+#mobileControls:not(.expanded) [data-context-slot='0']{grid-area:primary}
+#mobileControls:not(.expanded) [data-context-slot='1']{grid-area:secondary}
+#mobileControls:not(.expanded) [data-context-slot='2']{grid-area:tertiary}
+#mobileActions .mobile-context-action{position:relative;width:60px;height:60px;border:2px solid #e4c282ab;background:#c99a4320;color:#ffe0a1;isolation:isolate}
+#mobileActions .mobile-context-action[data-ready=false]{opacity:.5}
+#mobileActions .mobile-context-action.working::after{content:'';position:absolute;inset:-5px;background:conic-gradient(#f0cb84 var(--work-progress),transparent 0);mask:radial-gradient(transparent 65%,#000 67%);border-radius:50%;pointer-events:none}
+#mobileActions .mobile-context-action[data-hold=true] span::after{content:' · 누르기';font-size:8px;display:block;color:#d6d8cb}
+html[lang=en] #mobileActions .mobile-context-action[data-hold=true] span::after{content:'HOLD'}
+#mobileControls:not(.expanded) #mobileActions[data-mode=ashore]>[data-code=ShiftLeft]{visibility:hidden;pointer-events:none}
+#mobileControls.expanded #mobileActions>*{grid-area:auto}
+#mobileMinimap{position:absolute;top:52px;right:max(12px,env(safe-area-inset-right));width:112px;height:68px;padding:0;min-height:0;margin:0;overflow:hidden;border:1px solid #a8bdb188;border-radius:5px;background:#08171fe6;box-shadow:0 1px 4px #00182466;pointer-events:auto;touch-action:manipulation}
+#mobileMinimap canvas{position:static!important;display:block;width:100%!important;height:100%!important}
+#mobileMinimap>svg{position:absolute;right:3px;bottom:3px;width:14px;height:14px;color:#f0dfb6;background:#09232bbb;border-radius:2px}
+#mobileMinimap:focus-visible{outline:2px solid #ffdf99;outline-offset:3px}
+#mobileReward{position:absolute;top:68px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;max-width:220px;padding:4px 10px 4px 4px;border-left:2px solid #e7c17c;background:linear-gradient(90deg,#0e2532ed,#0e2532a6);pointer-events:none}
+#mobileReward img{width:40px;height:40px;object-fit:contain}#mobileReward b{display:block;font-size:13px}#mobileReward small{display:block;font-size:10px;color:#dec490}
+#mobileFlightHud.has-reward #mobileNotice{top:124px}
+#mobileContext{max-width:calc(100vw - 320px)}
+@media(max-width:600px){#mobileMinimap{width:96px;height:58px;top:50px}#mobileNotice{max-width:calc(100vw - 240px);font-size:11px}#mobileObjective{max-width:50vw}#mobileContext{font-size:11px;bottom:84px}}

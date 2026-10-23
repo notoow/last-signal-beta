@@ -1,18 +1,16 @@
 ---
 name: Bug report / 버그 제보
-about: Describe a gameplay or browser problem
+about: Report a gameplay or browser problem
 title: '[Web beta] '
 ---
 
-## 상황 / What happened?
+## What happened? / 상황
 
-## 재현 방법 / Steps to reproduce
+## Steps / 재현 방법
 
-## 기대한 동작 / Expected behavior
-
-## 환경 / Context
-- Version: 0.60.0
+## Environment
+- Version: 0.64.0
 - Browser / OS:
-- Seed (if known):
+- Seed:
 
-Screenshots help. Reports are public: please remove personal information.
+Reports are public. Remove personal information.

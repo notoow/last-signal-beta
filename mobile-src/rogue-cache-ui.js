@@ -2,6 +2,7 @@ import {GEAR,maxHp,maxFuel,cacheSupplyPreview} from './rogue-core.js';
 import {cacheOffer,gearEffect} from './rogue-cache.js';
 import {FLOOR_TOOLS,SHORE_SITES,toolBerth,hasTool} from './shore-encounters.js';
 import {salvageDeviceName} from './rogue-salvage-ui.js';
+import {CREW_UPGRADES,crewRank} from './crew-upgrades.js';
 
 const esc=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const number=value=>value>0&&value<.1?'<0.1':String(Number(value.toFixed(1)));
@@ -56,7 +57,8 @@ export function cacheChoiceModel(s,language='ko'){
       if(s.depth===0&&s.salvage&&!s.salvage.recovered)common.push(salvageDeviceName(s,language)+(en?' · Prototype I':' · 시제품 I'));
     }
   }
-  return {full:s.equipment.length>=6,slots:s.equipment.length,
+  const crew=offer.crew?{id:offer.crew,rank:crewRank(s,offer.crew),...CREW_UPGRADES[offer.crew]}:null;
+  return {full:s.equipment.length>=6,slots:s.equipment.length,crew,
     site:en?['Salvage yard','Fuel wharf','Fish-market landing'][berth.island]:SHORE_SITES[berth.island],
     gear:offer.gear.map(id=>{
       const effect=gearEffect(s,id),capacity=id==='tank'?maxFuel(s):id==='plating'?maxHp(s):null;
@@ -79,7 +81,15 @@ export function cacheChoiceMarkup(s,language='ko'){
       <h2>${en?'Choose what to take':'가져갈 것을 고르세요'}</h2><p>${en?'Choose one. The voyage is paused.':'하나만 선택하세요. 항해는 잠시 멈춰 있습니다.'}</p></div>
       <div class="rogue-cache-capacity"><span>${en?'Equipment carried':'보유 장비'}</span><b>${m.slots}<small> / 6</small></b><span>${m.full?(en?'Replacement required':'선택 후 교체 필요'):(en?'Copies stack':'같은 장비도 중첩')}</span></div>
     </header>
-    <div class="rogue-salvage-options">
+    <div class="rogue-salvage-options" data-crew-choice="${!!m.crew}">
+      ${m.crew?`<article class="rogue-salvage-option rogue-crew-reward" data-cache-option="crew:${m.crew.id}">
+        <img class="rogue-reward-art" src="assets/art/crew-upgrade-${m.crew.id}-v1.png" width="128" height="128" alt="">
+        <div class="rogue-salvage-option-heading"><span>${en?'CREW':'선원'}</span><h3>${esc(en?m.crew.en:m.crew.name)}</h3></div>
+        <p class="rogue-cache-effect"><span>${en?'Rank':'등급'} ${m.crew.rank}</span><i aria-hidden="true">→</i><b>${m.crew.rank+1}</b></p>
+        <p class="rogue-cache-description">${m.crew.id==='grip'?(en?`Melee damage ${24+m.crew.rank*8} → ${32+m.crew.rank*8}`:`근접 공격력 ${24+m.crew.rank*8} → ${32+m.crew.rank*8}`):m.crew.id==='stride'?(en?`Walk / sprint speed +${m.crew.rank*12}% → +${(m.crew.rank+1)*12}%`:`걷기·달리기 속도 +${m.crew.rank*12}% → +${(m.crew.rank+1)*12}%`):(en?`Crew damage reduction ${m.crew.rank*15}% → ${(m.crew.rank+1)*15}%`:`선원 받는 피해 감소 ${m.crew.rank*15}% → ${(m.crew.rank+1)*15}%`)}</p>
+        <p class="rogue-cache-note">${en?'This voyage · stacks to rank 3 · no ship slot':'이번 항해에서 유지 · 3단계 중첩 · 선박 장비칸 별도'}</p>
+        <button data-cache-choice="crew:${m.crew.id}">${en?'Equip on crew':'선원에게 장착'}<span aria-hidden="true">↗</span></button>
+      </article>`:''}
       ${m.gear.map((g,i)=>`<article class="rogue-salvage-option" data-cache-option="${g.id}">
         <div class="rogue-salvage-option-heading"><span>0${i+1}</span><h3>${esc(g.name)}</h3></div>
         <p class="rogue-cache-label">${m.full?(en?'If added · ':'추가 장착 시 · '):''}${esc(g.label)}</p>

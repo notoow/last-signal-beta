@@ -1,6 +1,7 @@
 import {voyageDebrief} from './rogue-voyage-record.js';
 import {cacheGearName} from './rogue-cache-ui.js';
 import {GENERATOR_VERSION} from './rogue-map.js';
+import {CREW_UPGRADES} from './crew-upgrades.js';
 
 const esc=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const n=x=>x>0&&x<.1?'<0.1':String(Number(x.toFixed(1)));
@@ -30,7 +31,7 @@ export function voyageRecordModel(s,language='ko'){
   const events=r.events.map(e=>{
     let title='',detail=gains(e,en);
     if(e.kind==='cache'){
-      title=sites[lang][e.site]+' · '+(e.gear?gear(e.gear)+(e.pending?(en?' selected · replacement pending':' 선택 · 교체 대기'):(en?' recovered':' 회수')):(en?'Supplies taken':'보급품 수령'));
+      title=sites[lang][e.site]+' · '+(e.crew?(en?CREW_UPGRADES[e.crew].en+' equipped':CREW_UPGRADES[e.crew].name+' 장착'):e.gear?gear(e.gear)+(e.pending?(en?' selected · replacement pending':' 선택 · 교체 대기'):(en?' recovered':' 회수')):(en?'Supplies taken':'보급품 수령'));
       if(e.tool)detail=[detail,tools[lang][e.tool]].filter(Boolean).join(' · ');
     }else if(e.kind==='gear'){
       title=e.slot===null?(en?`Traded ${gear(e.gear)} for fuel`:`${gear(e.gear)} 대신 연료 교환`):(en?`${gear(e.removed)} → ${gear(e.gear)}`:`${gear(e.removed)} → ${gear(e.gear)} 교체`);

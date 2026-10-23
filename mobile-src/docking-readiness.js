@@ -32,7 +32,8 @@ export function dockHint(status,language='ko',exit=false){
 
 // This is a local steering hint, not an autopilot or a forecast of current/tow
 // forces. The caller checks candidate poses against the real collision model.
-export function dockingAlignment({boat,berth,status,poseClear,spinningMatters=true,fuel=true,ability=false,exit=false}){
+export function dockingAlignment({boat,berth,status,poseClear,turnPose=null,spinningMatters=true,fuel=true,ability=false,exit=false}){
+  const limits=status.limits||DOCK_LIMITS;
   const wrap=a=>Math.atan2(Math.sin(a),Math.cos(a));
   const dx=berth.x-boat.x,dy=berth.y-boat.y;
   const checks={...status.checks};
@@ -51,8 +52,13 @@ export function dockingAlignment({boat,berth,status,poseClear,spinningMatters=tr
     // WASD targets eight headings. Never imply a key supplies sideways thrust.
     const target=!checks.position?Math.round(Math.atan2(dy,dx)/(Math.PI/4))*Math.PI/4:berth.angle;
     const delta=wrap(target-boat.angle),steps=Math.max(1,Math.ceil(Math.abs(delta)/.025));
-    let turnClear=true;
-    for(let i=1;i<=steps;i++)if(!poseClear({...boat,angle:boat.angle+delta*i/steps})){turnClear=false;break;}
+    let turnClear=true,turned={...boat};
+    for(let i=1;i<=steps;i++){
+      const angle=boat.angle+delta*i/steps;
+      const nextPose=turnPose?turnPose(turned,angle):poseClear({...turned,angle})?{...turned,angle}:null;
+      if(!nextPose){turnClear=false;break;}
+      turned=nextPose;
+    }
     if(!turnClear)next={kind:'maneuver',keys:[],heading:target};
     else if(Math.abs(delta)>.12)next={kind:'turn',keys:['Space',...keysFor(target)],heading:target};
     else if(!checks.position){

@@ -6,7 +6,9 @@ import {drawHarborTerrain} from './harbor-terrain.js';
 import {workSprite,workRope} from './harbor-work-art.js';
 import {objective,partPosition,berthReadiness,berthAlignment,GEAR} from './rogue-core.js';
 import {dockHint} from './docking-readiness.js';
-import {dockAlignmentPresentation} from './rogue-hud.js';
+import {dockAlignmentPresentation,impactPresentation} from './rogue-hud.js';
+import {recentImpact} from './rogue-impact.js';
+import {drawExitQuay,exitQuayLabel} from './exit-quay-view.js';
 import {crewImage} from './departure-art.js';
 import {drawCaptainBoat} from './captain-fleet.js';
 import {drawShoreEncounter} from './shore-animation.js';
@@ -44,7 +46,41 @@ function canvasLabel(c,text,x,y,color='#f1e6c4',size=15){
 function ring(c,p,r,color){c.strokeStyle=color;c.lineWidth=2;c.beginPath();c.arc(p.x,p.y,r,0,Math.PI*2);c.stroke();}
 const dockFrames=new WeakMap();
 export const lastRogueDocking=canvas=>dockFrames.get(canvas)||null;
+const exitFrames=new WeakMap();
+export const lastRogueExitQuay=canvas=>exitFrames.get(canvas)||null;
+const impactFrames=new WeakMap();
+export const lastRogueImpact=canvas=>impactFrames.get(canvas)||null;
 const dockOverlap=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
+function impactTag(c,hit,frame,s,dockingPanel){
+  const project=p=>({x:p.x*frame.scale+frame.ox,y:p.y*frame.scale+frame.oy}),p=project(hit.point),v=frame.viewport;
+  if(p.x<v.x||p.y<v.y||p.x>v.x+v.w||p.y>v.y+v.h)return null;
+  const body=b=>{
+    const q=project(b),a=b.angle||0,hx=(Math.abs(Math.cos(a))*b.length+Math.abs(Math.sin(a))*b.width)*frame.scale/2+8,
+      hy=(Math.abs(Math.sin(a))*b.length+Math.abs(Math.cos(a))*b.width)*frame.scale/2+8;
+    return {x:q.x-hx,y:q.y-hy,w:hx*2,h:hy*2};
+  };
+  const blocks=[...frame.occupied,body(s.boat)];
+  if(dockingPanel)blocks.push(dockingPanel);
+  if(s.person){const q=project(s.person);blocks.push({x:q.x-24*frame.scale,y:q.y-65*frame.scale,w:48*frame.scale,h:82*frame.scale});}
+  if(s.tow?.hp>0&&visibleAt(s,s.tow))blocks.push(body(s.tow));
+  for(const e of s.combat?.enemies||[]){
+    if(e.hp<=0||!visibleAt(s,e))continue;const q=project(e),r=({gull:72,crab:90,dog:60,rat:40}[e.kind]||50)*frame.scale;
+    blocks.push({x:q.x-r*.6,y:q.y-r,w:r*1.2,h:r*1.4});
+  }
+  if(s.boss.active&&!s.boss.cleared){
+    blocks.push(body({...s.map.boss,length:340,width:150,angle:0}));
+    const warning=s.boss.crane?.target;
+    if(warning&&['warn','attack'].includes(s.boss.phase)){const q=project(warning),r=CRANE.radius*frame.scale;blocks.push({x:q.x-r,y:q.y-r,w:r*2,h:r*2});}
+  }
+  c.save();c.font='600 14px Pretendard, sans-serif';
+  const w=c.measureText(hit.loss).width+20,h=28,gap=14;
+  const candidates=[{x:p.x-w/2,y:p.y-54-h,w,h},{x:p.x+54,y:p.y-h/2,w,h},{x:p.x-54-w,y:p.y-h/2,w,h},{x:p.x-w/2,y:p.y+54,w,h}];
+  const tag=candidates.find(r=>r.x>=v.x+gap&&r.y>=v.y+gap&&r.x+r.w<=v.x+v.w-gap&&r.y+r.h<=v.y+v.h-gap&&!blocks.some(b=>dockOverlap(r,b)));
+  if(!tag){c.restore();return null;}
+  const color=hit.target==='scrap'?'#e8d9ab':'#ffbe78';c.fillStyle='#10171cf2';c.fillRect(tag.x,tag.y,tag.w,tag.h);
+  c.fillStyle=color;c.fillRect(tag.x,tag.y,2,tag.h);c.textAlign='left';c.textBaseline='middle';c.fillText(hit.loss,tag.x+10,tag.y+h/2);c.restore();
+  return {...tag,text:hit.loss,point:p,protected:blocks};
+}
 function dockGeometry(c,a,scale){
   const p=a.boat,t=a.berth,r=a.limits.distance,color=a.status.ready?'#a4d7b3':'#95d1df';
   c.save();c.lineWidth=1.5/scale;c.strokeStyle=color;c.fillStyle=a.status.ready?'#a4d7b318':'#95d1df0c';
@@ -65,7 +101,7 @@ function dockGeometry(c,a,scale){
   c.fillStyle='#f3f1e8';c.strokeStyle='#10171c';c.lineWidth=2/scale;
   c.beginPath();c.arc(p.x,p.y,4/scale,0,Math.PI*2);c.fill();c.stroke();c.restore();
 }
-function dockPanel(c,a,frame,presentation,s,language){
+function dockPanel(c,a,frame,presentation,s,language,exitScene=null){
   const point=p=>({x:p.x*frame.scale+frame.ox,y:p.y*frame.scale+frame.oy}),t=point(a.berth),p=point(a.boat),r=a.limits.distance*frame.scale;
   const rect=(x,y,w,h)=>({x,y,w,h}),pad=16,v=frame.viewport;
   const hullRadius=(Math.hypot(s.boat.length,s.boat.width)/2+5)*frame.scale;
@@ -93,7 +129,20 @@ function dockPanel(c,a,frame,presentation,s,language){
   const left=Math.min(hull.x,marker.x),right=Math.max(hull.x+hull.w,marker.x+marker.w),top=Math.min(hull.y,marker.y),bottom=Math.max(hull.y+hull.h,marker.y+marker.h);
   const candidates=[rect((p.x+t.x)/2-width/2,bottom+pad,width,height),rect(right+pad,(p.y+t.y)/2-height/2,width,height),rect(left-pad-width,(p.y+t.y)/2-height/2,width,height),rect((p.x+t.x)/2-width/2,top-pad-height,width,height)]
     .map(q=>({...q,x:Math.max(v.x+4,Math.min(v.x+v.w-q.w-4,q.x)),y:Math.max(v.y+4,Math.min(v.y+v.h-q.h-4,q.y))}));
-  const blocks=[hull,marker,...enemies,...frame.occupied];
+  const supply=[];
+  if(s.tow?.hp>0&&visibleAt(s,s.tow)){
+    // Include the rotated rendered hull and its contact shadow, plus the
+    // sub-unit floating motion. Connection does not determine visibility.
+    const t=s.tow,q=point(t),co=Math.abs(Math.cos(t.angle)),si=Math.abs(Math.sin(t.angle));
+    const hx=(co*(t.length*.52+2)+si*(t.width*.55+3)+1)*frame.scale,
+      hy=(si*(t.length*.52+2)+co*(t.width*.55+3)+2)*frame.scale;
+    supply.push({...rect(q.x-hx,q.y-hy,hx*2,hy*2),kind:'supply-hull'});
+    c.save();c.font='600 13px Pretendard, sans-serif';const captionWidth=c.measureText(towCaption(t,language)).width;c.restore();
+    supply.push({...rect(q.x-captionWidth/2-4,q.y-43*frame.scale-17,captionWidth+8,22),kind:'supply-caption'});
+  }
+  const facility=[];
+  if(a.exit&&exitScene){const r=exitScene.site.surface,q=point(r);facility.push({...rect(q.x,q.y,r.w*frame.scale,r.h*frame.scale),kind:'exit-apron'});}
+  const protectedContent=[hull,marker,...enemies,...supply,...facility],blocks=[...protectedContent,...frame.occupied];
   const panel=candidates.find(q=>!blocks.some(b=>dockOverlap(q,b)));if(!panel){c.restore();return null;}
   c.shadowColor='#00121f';c.shadowBlur=4; // Text stays legible without an opaque panel.
   c.strokeStyle=presentation.ready?'#a4d7b3':'#95d1df';c.lineWidth=2;c.beginPath();c.moveTo(panel.x,panel.y);c.lineTo(panel.x,panel.y+panel.h);c.stroke();
@@ -111,8 +160,10 @@ function dockPanel(c,a,frame,presentation,s,language){
   }
   c.font=`600 ${font}px Pretendard, sans-serif`;c.fillStyle=presentation.tone==='warning'?'#ffbe78':'#f3f1e8';
   lines.forEach((text,i)=>{const x=panel.x+12,y=panel.y+hintY+i*19;c.fillText(text,x,y);textBounds.push({x,y,w:c.measureText(text).width,h:19});});c.restore();
-  return {...panel,lines,textBounds,protected:[hull,marker,...enemies]};
+  return {...panel,lines,textBounds,protected:protectedContent};
 }
+const towCaption=(t,language)=>language==='en'?(t.connected?'T Release · H '+(t.anchor?'Raise anchor':'Drop anchor'):'Supply boat · T Tow / H Anchor'):
+  t.connected?'T 분리 · H 닻 '+(t.anchor?'올리기':'내리기'):'보급정 · T 견인 / H 닻';
 function net(c,x,y,r=50){c.save();c.translate(x,y);c.rotate(.3);c.strokeStyle='#b4b299';c.lineWidth=1;for(let i=-r;i<=r;i+=12){c.beginPath();c.moveTo(i,-r);c.lineTo(i,r);c.moveTo(-r,i);c.lineTo(r,i);c.stroke();}c.restore();}
 function dredgerSprite(c,id,x,y){
   const image=dredgerArt[id];if(!ready(image))return false;
@@ -156,7 +207,7 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   const label=chartPins?()=>{}:canvasLabel;
   const old=frames.get(canvas),previous=!reduced&&old?.map===s.map?old.frame:null;
   const frame=rogueCamera(canvas,s,mapOpen,settings,previous,Math.min(.1,Math.max(0,s.time-(old?.time??s.time))),occupied);
-  const alignment=mapOpen?null:berthAlignment(s),dockCopy=dockAlignmentPresentation(alignment,language);
+  const alignment=mapOpen?null:berthAlignment(s),dockCopy=dockAlignmentPresentation(alignment,language,s);
   dockFrames.delete(canvas);
   frames.set(canvas,{map:s.map,time:s.time,frame});
   const {width,height,scale,ox,oy}=frame;
@@ -165,7 +216,7 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   const c=canvas.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,width,height);
   c.save();c.translate(ox,oy);c.scale(scale,scale);
   gameArt.water(c,s.map.width,s.map.height,reduced?0:s.time);
-  if(s.map.version===2){c.fillStyle='#0b293c44';c.fillRect(0,0,s.map.width,s.map.height);}
+  if(s.map.version>=2){c.fillStyle='#0b293c44';c.fillRect(0,0,s.map.width,s.map.height);}
   // Surface arrows are actual ambient current vectors, not routes.
   const current=waterMotion(s)?waterVelocity(s):s.map.current,a=Math.atan2(current.y,current.x);
   c.strokeStyle='#bfdbce45';c.lineWidth=1.5;
@@ -173,13 +224,15 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
     if(!waterAt(s.map,{x,y},35))continue;
     c.save();c.translate(x,y);c.rotate(a);c.beginPath();c.moveTo(-12,0);c.lineTo(12,0);c.lineTo(6,-4);c.moveTo(12,0);c.lineTo(6,4);c.stroke();c.restore();
   }
-  if(s.map.version===2)drawHarborTerrain(c,s.map,reduced?0:s.time,frame.bounds);
+  if(s.map.version>=2)drawHarborTerrain(c,s.map,reduced?0:s.time,frame.bounds);
   else for(const island of s.map.islands){
     // Walkable service yard: roof modules are confined to a small back apron.
     gameArt.wall(c,{...island,id:'walkable-quay'});
     if(!['scenery','observation'].includes(island.role))gameArt.wall(c,{id:'service-pump',x:island.x+island.w-130,y:island.y+20,w:112,h:125});
     gameArt.dressing(c,island,reduced?0:s.time,true,s.map.islands);
   }
+  const exitScene=drawExitQuay(c,s);
+  if(exitScene)exitFrames.set(canvas,exitScene);else exitFrames.delete(canvas);
   for(const berth of s.map.berths){
     const selected=berth.id===s.mooring,docking=berthReadiness(s,berth),ok=docking.ready;
     const aligning=alignment&&!alignment.exit&&alignment.berth.id===berth.id;
@@ -225,7 +278,11 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
     const frames=[[12,80,1230,308],[12,500,1230,296],[12,840,1230,350]],f=frames[s.depth],h=340*f[3]/f[2];
     c.save();c.globalAlpha=boss.cleared?.52:1;c.drawImage(bosses,...f,p.x-170,p.y-h/2,340,h);c.restore();
   }else if(!sluice&&!lighthouse)gameArt.boat(c,{...p,angle:0,length:340,width:140},'inspection');
-  if(!sluice&&!lighthouse)label(c,DEPTHS[s.depth].boss,p.x,p.y-100,boss.cleared?'#8ab4a0':'#f1e6c4',22);
+  if(!sluice&&!lighthouse){
+    const name=boss.cleared?(language==='en'?['Stopped dredger','Stopped sluice warden','Restored lighthouse']:['멈춘 준설선','멈춘 수문지기','복구된 등대'])[s.depth]:
+      language==='en'?['Runaway dredger','Sluice warden','Lighthouse warden'][s.depth]:DEPTHS[s.depth].boss;
+    label(c,name,p.x,p.y-100,boss.cleared?'#8ab4a0':'#f1e6c4',22);
+  }
   if(!sluice&&!lighthouse&&(!boss.cleared||dredger))boss.parts.forEach((hp,i)=>{
     const part=partPosition(s,i);
     if(dredger){
@@ -250,7 +307,7 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
     if(tracking){c.save();c.strokeStyle='#b9e9de88';c.setLineDash([5,7]);c.beginPath();c.moveTo(p.x,p.y);c.lineTo(decoy.x,decoy.y);c.stroke();c.restore();}
   }
   if(!alignment?.exit){c.save();c.translate(s.map.exit.x,s.map.exit.y);c.rotate(s.map.exit.angle);c.strokeStyle=boss.cleared?'#afdcaf':'#667d79';c.lineWidth=3;c.strokeRect(-50,-24,100,48);c.restore();}
-  if(!alignment?.exit)label(c,boss.cleared?dockHint(berthReadiness(s,s.map.exit),language,true):language==='en'?
+  if(!alignment?.exit)label(c,exitScene?exitQuayLabel(exitScene,language):boss.cleared?dockHint(berthReadiness(s,s.map.exit),language,true):language==='en'?
     (lighthouse?'Lighthouse berth · acknowledge all 3 relays':sluice?'Exit berth · open all 3 gates':'Exit berth · stop the drives'):
     (lighthouse?'등대 부두 · 명부 3개 수신 확인 필요':sluice?'탈출 부두 · 수문 3개 개방 필요':'탈출 부두 · 구동부 정지 필요'),s.map.exit.x-40,s.map.exit.y+85);
   if(s.mode!=='sailing'){const berth=s.map.berths.find(b=>b.id===s.mooring);workRope(c,{x:s.boat.x-20,y:s.boat.y},berth.landing,.25,3.2);}
@@ -258,8 +315,7 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
     const t=s.tow;drawWake(c,t,s.time,reduced);gameArt.boat(c,floatPose(t,reduced?0:s.time,!!t.anchor),'inspection');
     if(t.connected)workRope(c,tugStern(s.boat),towBow(t),t.tension,3.3);
     if(t.anchor){workRope(c,towBow(t),{x:t.anchor.x,y:t.anchor.y+36},.55,2);quaySprite(c,'anchor',t.anchor.x-6,t.anchor.y+27,13,24);}
-    label(c,language==='en'?(t.connected?'T Release · H '+(t.anchor?'Raise anchor':'Drop anchor'):'Supply boat · T Tow / H Anchor'):
-      t.connected?'T 분리 · H 닻 '+(t.anchor?'올리기':'내리기'):'보급정 · T 견인 / H 닻',t.x,t.y-43,'#e6d6a9',13);
+    label(c,towCaption(t,language),t.x,t.y-43,'#e6d6a9',13);
   }
   drawWake(c,s.boat,s.time,reduced);
   drawCaptainBoat(c,floatPose(s.boat,reduced?0:s.time,s.mode!=='sailing'),s.captain,s.paint);
@@ -298,10 +354,14 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   if(target&&!alignedTarget)ring(c,target,task.rescue&&target===s.rescue?16:s.mode==='ashore'?32:42,'#ebd59e');
   if(alignment)dockGeometry(c,alignment,scale);
   c.restore();
-  const panel=alignment?dockPanel(c,alignment,frame,dockCopy,s,language):null;
+  const panel=alignment?dockPanel(c,alignment,frame,dockCopy,s,language,exitScene):null;
   canvas.dataset.dockPanel=String(!!panel);
   if(alignment)dockFrames.set(canvas,{berth:alignment.berth,boat:alignment.boat,worldRadius:alignment.limits.distance,radius:alignment.limits.distance*scale,
     centre:{x:alignment.berth.x*scale+ox,y:alignment.berth.y*scale+oy},presentation:dockCopy,panel,oldTargetRingSuppressed:!!alignedTarget});
+  // Fixed, short-lived receipt. No flash, float, shake or camera adjustment;
+  // the console remains authoritative when a world tag has no clear space.
+  const impact=mapOpen?null:impactPresentation(recentImpact(s),language);
+  if(impact)impactFrames.set(canvas,{impact,tag:impactTag(c,impact,frame,s,panel)});else impactFrames.delete(canvas);
   if(!mapOpen){
     const points=[];
     if(target)points.push({p:target,text:task.rescue?(language==='en'?'Escort / ladder':'정비공 / 사다리'):task.planSite?(language==='en'?'Planned quay':'선택한 부두'):task.planBoss?(language==='en'?'Outer approach':'바깥 해역 입구'):language==='en'?(s.person?'Search / return':'Target'):(s.person?'수색 / 귀환':'목표'),color:'#f6dda2'});

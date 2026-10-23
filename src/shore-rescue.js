@@ -12,7 +12,7 @@ function say(s,id,text){
   s.log.push({id,text,time:s.time,depth:s.depth});s.radio={text,left:7};
 }
 export function newShoreRescue(s){
-  if(s.generator!==2||!s.combat)return null;
+  if(s.generator<2||!s.combat)return null;
   // A person is a separate reason to visit a quay, never an extra roll in the
   // compulsory counter-tool chest. Placement must have a real walkable exit.
   const candidates=s.map.berths.filter(b=>b.id!==toolBerth(s).id);
@@ -126,7 +126,7 @@ export function leaveRescue(s){
 export function validRescue(s){
   const r=s.rescue;if(r===null)return true;
   const num=(n,min,max)=>Number.isFinite(n)&&n>=min&&n<=max;
-  if(!r||s.generator!==2||!s.combat||!Number.isInteger(r.site)||!num(r.site,0,2)||!Number.isInteger(r.quay)||!num(r.quay,0,2)||
+  if(!r||s.generator<2||!s.combat||!Number.isInteger(r.site)||!num(r.site,0,2)||!Number.isInteger(r.quay)||!num(r.quay,0,2)||
     !['waiting','following','aboard','left-behind'].includes(r.stage)||
     !num(r.x,0,3400)||!num(r.y,0,1800)||!num(r.angle,-Math.PI,Math.PI)||!num(r.stride,0,1e9)||
     !['moving','discovered'].every(k=>typeof r[k]==='boolean')||![null,'threat','distant','route'].includes(r.blocked))return false;

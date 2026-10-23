@@ -661,7 +661,12 @@ var paths = {
   buoy: "M12 2v10M8 5h8M9 12h6l3 7H6l3-7ZM3 21h18",
   attack: "m5 4 4-2 13 13-4 4L5 4ZM3 21l7-7M3 13l8 8",
   more: "M5 11h1v2H5zm6 0h1v2h-1zm6 0h1v2h-1z",
-  info: "M12 10v8m0-13v2M3 12a9 9 0 1 0 18 0 9 9 0 1 0-18 0"
+  info: "M12 10v8m0-13v2M3 12a9 9 0 1 0 18 0 9 9 0 1 0-18 0",
+  swap: "M3 7h17l-4-4m4 14H3l4 4M20 7l-4 4M3 17l4-4",
+  search: "M3 7h18v14H3zM8 7V3h8v4M3 12h18M10 12v3h4v-3",
+  gear: "M4 20 14 10m-2-7 3 3 3-1 1-3c5 4 1 11-4 9L5 22l-3-3 10-10c-1-2-2-4 0-6Z",
+  board: "M3 18h18M6 18V7h12v11M9 7V3h6v4M10 11h4m-4 3h4",
+  chart: "m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2V5Zm6-2v16m6-14v16"
 };
 var icon = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="${paths[name] || paths.objective}"/></svg>`;
 function buttonFace(button, label, name) {
@@ -674,16 +679,83 @@ var set = (el, html) => {
   if (el.innerHTML !== html) el.innerHTML = html;
   el.hidden = !html;
 };
-function createMobileHud() {
+function createMobileHud({ onMap = () => {
+} } = {}) {
   const root = document.createElement("div");
   root.id = "mobileFlightHud";
   root.hidden = true;
   root.innerHTML = '<div id="mobileObjective"></div><div id="mobileResources"></div><div id="mobileVitals"></div><div id="mobileNotice"></div><div id="mobileContext"></div>';
   document.body.append(root);
   const nodes = Object.fromEntries([...root.children].map((el) => [el.id, el]));
-  return function refresh2(active, rogue) {
+  const mini = document.createElement("button");
+  mini.id = "mobileMinimap";
+  mini.type = "button";
+  mini.innerHTML = '<canvas width="224" height="128" aria-hidden="true"></canvas>' + icon("chart");
+  mini.addEventListener("click", onMap);
+  mini.hidden = true;
+  root.append(mini);
+  let lastMap = null;
+  const reward = document.createElement("div");
+  reward.id = "mobileReward";
+  reward.hidden = true;
+  reward.setAttribute("role", "status");
+  root.append(reward);
+  let rewardUntil = 0;
+  window.addEventListener("lastsignal:mobile-reward", (event) => {
+    const data = event.detail;
+    if (!data) return;
+    reward.replaceChildren();
+    const img = document.createElement("img");
+    img.src = data.image;
+    img.alt = "";
+    const copy = document.createElement("span"), name = document.createElement("b"), rank = document.createElement("small");
+    name.textContent = data.name;
+    rank.textContent = (document.documentElement.lang === "en" ? "Crew equipped \xB7 rank " : "\uC120\uC6D0 \uC7A5\uCC29 \xB7 ") + data.rank + (document.documentElement.lang === "en" ? "" : "\uB2E8\uACC4");
+    copy.append(name, rank);
+    reward.append(img, copy);
+    rewardUntil = performance.now() + 1500;
+  });
+  function drawMinimap(m) {
+    if (!m || m === lastMap) return;
+    lastMap = m;
+    const canvas = mini.querySelector("canvas"), c = canvas.getContext("2d"), w = canvas.width, h = canvas.height, s = Math.min(w / m.width, h / m.height), ox = (w - m.width * s) / 2, oy = (h - m.height * s) / 2;
+    c.fillStyle = "#081d25";
+    c.fillRect(0, 0, w, h);
+    c.save();
+    c.translate(ox, oy);
+    c.scale(s, s);
+    c.fillStyle = "#224d55";
+    c.fillRect(0, 0, m.width, m.height);
+    if (m.tiles?.length && m.cols && m.rows) {
+      const tw = m.width / m.cols, th = m.height / m.rows;
+      c.fillStyle = "#939381";
+      for (let y = 0; y < m.rows; y++) for (let x = 0; x < m.cols; x++) if (m.tiles[y * m.cols + x]) c.fillRect(x * tw, y * th, tw + 0.5, th + 0.5);
+    }
+    if (m.survey) {
+      c.fillStyle = "#08171f";
+      const rows = Math.ceil(m.height / m.surveyCell);
+      for (let y = 0; y < rows; y++) for (let x = 0; x < m.surveyCols; x++) if (m.survey[y * m.surveyCols + x] !== 1) c.fillRect(x * m.surveyCell, y * m.surveyCell, m.surveyCell + 0.5, m.surveyCell + 0.5);
+    }
+    const dot = (p, r, color) => {
+      c.fillStyle = color;
+      c.beginPath();
+      c.arc(p.x, p.y, r / s, 0, Math.PI * 2);
+      c.fill();
+    };
+    for (const b of m.berths || []) dot(b, 2.4, b.claimed ? "#9db9af" : "#dfbe78");
+    for (const e of m.enemies || []) dot(e, 2, e.asleep ? "#ac8c75" : "#ec896c");
+    if (m.boat && Math.hypot(m.boat.x - m.player.x, m.boat.y - m.player.y) > 4) dot(m.boat, 2.5, "#c6e2e6");
+    dot(m.player, 4, "#fff1b4");
+    c.restore();
+  }
+  return function refresh2(active, rogue, presentation = null) {
     root.hidden = !active;
     if (!active) return;
+    reward.hidden = performance.now() > rewardUntil;
+    root.classList.toggle("has-reward", !reward.hidden);
+    mini.hidden = !rogue || !presentation?.minimap;
+    mini.setAttribute("aria-label", document.documentElement.lang === "en" ? "Expand explored chart" : "\uD0D0\uC0AC\uD55C \uD574\uB3C4 \uD655\uB300");
+    if (!mini.hidden) drawMinimap(presentation.minimap);
     const en = document.documentElement.lang === "en", source = rogue ? document.getElementById("rogueMission") : document.querySelector("#hud .mission-objective");
     const goal = text(source?.querySelector("strong")) || text(source), region = text(source?.querySelector("small"));
     set(nodes.mobileObjective, icon("objective") + `<div>${region ? `<small>${escape2(region)}</small>` : ""}<strong>${escape2(goal)}</strong></div>`);
@@ -711,8 +783,8 @@ function createMobileHud() {
     if (rogue && rogue.dataset.mobileMode !== "sailing") context.unshift(text(document.querySelector("#rogueControls [data-rogue-action=primary]")));
     const dock = document.querySelector("#rogueControls .rogue-dock-checks");
     const checks = dock && getComputedStyle(dock).clipPath === "none" ? [...dock.children].map((el) => `<i class="${el.dataset.ok === "true" ? "ready" : ""}">${escape2(text(el))}</i>`).join("") : "";
-    const label = text(work) || context.filter(Boolean).join(" \xB7 ");
-    set(nodes.mobileContext, (checks ? `<div class="flight-dock">${checks}</div>` : "") + (label ? `<span>${escape2(label)}</span>` : "") + (progress ? `<progress max="${progress.max}" value="${progress.value}" aria-label="${escape2(label)}"></progress>` : ""));
+    const label = rogue ? "" : text(work) || context.filter(Boolean).join(" \xB7 ");
+    set(nodes.mobileContext, (checks ? `<div class="flight-dock">${checks}</div>` : "") + (label ? `<span>${escape2(label)}</span>` : "") + (!rogue && progress ? `<progress max="${progress.max}" value="${progress.value}" aria-label="${escape2(label)}"></progress>` : ""));
   };
 }
 
@@ -727,6 +799,7 @@ try {
   document.body.append(failure);
   throw new Error("Native save restore failed; game startup stopped");
 }
+document.documentElement.dataset.mobileUi = "true";
 var gameEntry = "./mobile-src/rescue-app.js";
 await import(gameEntry);
 var pad = document.createElement("nav");
@@ -738,27 +811,123 @@ var rotate = document.createElement("div");
 rotate.id = "mobileRotate";
 rotate.setAttribute("role", "dialog");
 rotate.setAttribute("aria-label", "\uAC00\uB85C \uD654\uBA74 \uC548\uB0B4");
-rotate.innerHTML = '<div class="rotate-card"><div class="rotate-phone" aria-hidden="true">\u21BB</div><h1>\uD734\uB300\uD3F0\uC744 \uAC00\uB85C\uB85C \uB3CC\uB824\uC8FC\uC138\uC694</h1><p>\uB113\uC740 \uD654\uBA74\uC5D0\uC11C \uB450 \uC190\uC73C\uB85C \uC870\uC791\uD560 \uC218 \uC788\uC5B4\uC694.</p><button type="button">\uAC00\uB85C \uD654\uBA74\uC73C\uB85C \uC2DC\uC791</button><p class="rotate-hint" role="status">\uC790\uB3D9 \uD68C\uC804\uC774 \uC548 \uB418\uBA74 \uD734\uB300\uD3F0\uC758 \uD68C\uC804 \uC7A0\uAE08\uC744 \uD480\uACE0 \uC9C1\uC811 \uB3CC\uB824\uC8FC\uC138\uC694.<br>\uCE74\uCE74\uC624\uD1A1 \uC548\uC5D0\uC11C\uB294 \uBA54\uB274\uC5D0\uC11C \uC678\uBD80 \uBE0C\uB77C\uC6B0\uC800\uB85C \uC5F4\uC5B4\uBCF4\uC138\uC694.</p></div>';
-rotate.querySelector("button").addEventListener("click", async () => {
-  try {
-    if (!document.fullscreenElement && document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
-    if (screen.orientation?.lock) await screen.orientation.lock("landscape");
-  } catch {
-  }
-  refresh();
-});
+var kakao = /KAKAOTALK/i.test(navigator.userAgent) && !Capacitor.isNativePlatform();
+function browserHelp(en) {
+  const help = document.createElement("div");
+  help.className = "mobile-browser-help";
+  const external = document.createElement("a");
+  external.className = "mobile-external";
+  external.textContent = en ? "Open in external browser" : "\uC678\uBD80 \uBE0C\uB77C\uC6B0\uC800\uB85C \uC5F4\uAE30";
+  external.href = "kakaotalk://web/openExternal?url=" + encodeURIComponent(location.href);
+  external.hidden = !kakao;
+  external.addEventListener("click", () => pause());
+  const copy = document.createElement("button");
+  copy.type = "button";
+  copy.className = "mobile-copy-link";
+  copy.textContent = en ? "Copy link" : "\uB9C1\uD06C \uBCF5\uC0AC";
+  const manual = document.createElement("p");
+  manual.className = "mobile-browser-manual";
+  manual.textContent = en ? "If nothing opens, use the Kakao menu \u2192 Open in external browser, or paste this link into Chrome / Safari." : "\uC5F4\uB9AC\uC9C0 \uC54A\uC73C\uBA74 \uCE74\uCE74\uC624\uD1A1 \uBA54\uB274 \u2192 \uC678\uBD80 \uBE0C\uB77C\uC6B0\uC800\uB85C \uC5F4\uAE30\uB97C \uB204\uB974\uAC70\uB098, \uB9C1\uD06C\uB97C Chrome / Safari\uC5D0 \uBD99\uC5EC \uB123\uC73C\uC138\uC694.";
+  const url = document.createElement("input");
+  url.className = "mobile-browser-url";
+  url.type = "url";
+  url.readOnly = true;
+  url.value = location.href;
+  url.setAttribute("aria-label", en ? "Game link" : "\uAC8C\uC784 \uB9C1\uD06C");
+  url.hidden = true;
+  const status = document.createElement("p");
+  status.className = "mobile-copy-status";
+  status.setAttribute("role", "status");
+  copy.addEventListener("click", async () => {
+    let copied = false;
+    try {
+      await navigator.clipboard.writeText(location.href);
+      copied = true;
+    } catch {
+    }
+    if (!copied) {
+      url.hidden = false;
+      url.focus();
+      url.select();
+      try {
+        copied = document.execCommand("copy");
+      } catch {
+      }
+    }
+    status.textContent = copied ? en ? "Link copied. Paste it into your browser." : "\uB9C1\uD06C\uB97C \uBCF5\uC0AC\uD588\uC5B4\uC694. \uBE0C\uB77C\uC6B0\uC800 \uC8FC\uC18C\uCC3D\uC5D0 \uBD99\uC5EC \uB123\uC73C\uC138\uC694." : en ? "Select and copy the link below." : "\uC544\uB798 \uB9C1\uD06C\uB97C \uAE38\uAC8C \uB20C\uB7EC \uBCF5\uC0AC\uD574 \uC8FC\uC138\uC694.";
+  });
+  help.append(external, copy, manual, url, status);
+  return help;
+}
+function renderRotation(en) {
+  rotate.replaceChildren();
+  const card = document.createElement("div");
+  card.className = "rotate-card";
+  card.innerHTML = `<div class="rotate-phone" aria-hidden="true">\u21BB</div><h1>${en ? "Turn your phone sideways" : "\uD734\uB300\uD3F0\uC744 \uAC00\uB85C\uB85C \uB3CC\uB824\uC8FC\uC138\uC694"}</h1><p>${en ? "Use both hands with a wider view." : "\uB113\uC740 \uD654\uBA74\uC5D0\uC11C \uB450 \uC190\uC73C\uB85C \uC870\uC791\uD560 \uC218 \uC788\uC5B4\uC694."}</p><button class="mobile-request-landscape" type="button">${en ? "Try landscape fullscreen" : "\uAC00\uB85C \uC804\uCCB4\uD654\uBA74\uC73C\uB85C \uC2DC\uC791"}</button><p class="rotate-hint" role="status">${en ? "If rotation is blocked, unlock screen rotation and turn your phone." : "\uC790\uB3D9 \uD68C\uC804\uC774 \uC548 \uB418\uBA74 \uD734\uB300\uD3F0\uC758 \uD68C\uC804 \uC7A0\uAE08\uC744 \uD480\uACE0 \uC9C1\uC811 \uB3CC\uB824\uC8FC\uC138\uC694."}</p>`;
+  if (kakao) card.append(browserHelp(en));
+  rotate.append(card);
+  card.querySelector("button").addEventListener("click", async (e) => {
+    e.currentTarget.disabled = true;
+    try {
+      if (!document.fullscreenElement && document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
+    } catch {
+    }
+    try {
+      if (!screen.orientation?.lock) throw Error("Unsupported");
+      await screen.orientation.lock("landscape");
+    } catch {
+      card.querySelector(".rotate-hint").textContent = en ? "This browser cannot lock rotation. Turn your phone manually or open the link in an external browser." : "\uC774 \uBE0C\uB77C\uC6B0\uC800\uC5D0\uC11C\uB294 \uAC00\uB85C \uACE0\uC815\uC744 \uC9C0\uC6D0\uD558\uC9C0 \uC54A\uC744 \uC218 \uC788\uC5B4\uC694. \uC9C1\uC811 \uB3CC\uB9AC\uAC70\uB098 \uC678\uBD80 \uBE0C\uB77C\uC6B0\uC800\uB85C \uC5F4\uC5B4\uC8FC\uC138\uC694.";
+    }
+    e.target.disabled = false;
+    refresh();
+  });
+}
 document.body.append(rotate);
-var refreshFlightHud = createMobileHud();
+var refreshFlightHud = createMobileHud({ onMap: () => {
+  if (playing) {
+    release();
+    key("KeyM", true);
+    key("KeyM", false);
+    refresh();
+  }
+} });
 var stick = document.getElementById("mobileStick");
 var actions = document.getElementById("mobileActions");
 var held = /* @__PURE__ */ new Map();
 var stickPointer = null;
+var stickOrigin = null;
 var mode = "";
 var playing = false;
 var language = "";
 var deckHeight = 0;
+var handledPointers = /* @__PURE__ */ new Set();
+var blockedClicks = /* @__PURE__ */ new Map();
 var thumb = document.getElementById("mobileThumb");
 var voyageNotes = "";
+var mobileFrame = null;
+var moveSide = "left";
+try {
+  const saved = JSON.parse(localStorage.getItem("lastsignal.mobile.controls.v1"));
+  if (saved?.moveSide === "right") moveSide = "right";
+} catch {
+}
+document.documentElement.dataset.mobileMoveSide = moveSide;
+window.addEventListener("lastsignal:mobile-frame", (event) => {
+  mobileFrame = event.detail;
+});
+function setMoveSide(side) {
+  release();
+  moveSide = side === "right" ? "right" : "left";
+  document.documentElement.dataset.mobileMoveSide = moveSide;
+  try {
+    localStorage.setItem("lastsignal.mobile.controls.v1", JSON.stringify({ moveSide }));
+  } catch {
+  }
+  document.querySelectorAll("[data-mobile-move-side]").forEach((input) => {
+    input.checked = moveSide === "right";
+  });
+  document.getElementById("mobileSwap")?.setAttribute("aria-pressed", String(moveSide === "right"));
+}
 var key = (code, down) => window.dispatchEvent(new KeyboardEvent(down ? "keydown" : "keyup", { code, bubbles: true, cancelable: true }));
 function hold(owner, codes) {
   const before = new Set([...held.values()].flat());
@@ -771,11 +940,14 @@ function hold(owner, codes) {
 }
 function resetStick() {
   thumb.style.transform = "translate(0px,0px)";
-  stick.classList.remove("active");
+  stick.classList.remove("active", "floating");
+  stickOrigin = null;
 }
 function release() {
   for (const owner of [...held.keys()]) hold(owner, []);
+  const previous = stickPointer;
   stickPointer = null;
+  if (previous !== null && stick.hasPointerCapture(previous)) stick.releasePointerCapture(previous);
   resetStick();
 }
 function pause() {
@@ -793,9 +965,12 @@ function render(next) {
   release();
   mode = next;
   language = document.documentElement.lang;
+  pad.dataset.mode = mode;
+  renderRotation(language === "en");
   actions.replaceChildren();
   pad.classList.remove("expanded");
   for (const [index, [code, ko, en]] of labels[mode].entries()) {
+    if (mode === "rogue" && ["KeyE", "KeyF", "KeyR"].includes(code)) continue;
     const button = document.createElement("button");
     button.type = "button";
     button.dataset.code = code;
@@ -804,20 +979,7 @@ function render(next) {
     const english = document.documentElement.lang === "en";
     buttonFace(button, english ? en : ko, code === "Space" ? "brake" : code === "KeyE" ? "interact" : code === "KeyQ" ? "buoy" : code === "ShiftLeft" ? "boost" : "objective");
     button.setAttribute("aria-label", `${ko} / ${en}`);
-    button.addEventListener("pointerdown", (e) => {
-      if (!playing) return;
-      e.preventDefault();
-      button.setPointerCapture(e.pointerId);
-      hold(e.pointerId, [code]);
-      queueMicrotask(refresh);
-    });
-    for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) button.addEventListener(event, (e) => hold(e.pointerId, []));
-    button.addEventListener("click", (e) => {
-      if (e.detail === 0 && playing) {
-        key(code, true);
-        key(code, false);
-      }
-    });
+    bindAction(button);
     actions.append(button);
   }
   const more = document.createElement("button");
@@ -844,31 +1006,120 @@ function render(next) {
     document.querySelector(".mobile-notes")?.setAttribute("open", "");
   });
   actions.append(info);
+  const swap = document.createElement("button");
+  swap.type = "button";
+  swap.className = "mobile-extra";
+  swap.id = "mobileSwap";
+  swap.setAttribute("aria-pressed", String(moveSide === "right"));
+  buttonFace(swap, language === "en" ? "Swap hands" : "\uC88C\uC6B0 \uBC18\uC804", "swap");
+  swap.addEventListener("click", () => setMoveSide(moveSide === "left" ? "right" : "left"));
+  actions.append(swap);
+  if (mode === "rogue") for (let i = 0; i < 3; i++) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "mobile-context-action";
+    button.dataset.contextSlot = i;
+    button.hidden = true;
+    bindAction(button);
+    actions.append(button);
+  }
+}
+function bindAction(button) {
+  button.addEventListener("pointerdown", (e) => {
+    const code = button.dataset.code;
+    if (!playing || !code || button.dataset.ready === "false") return;
+    e.preventDefault();
+    handledPointers.add(e.pointerId);
+    button.setPointerCapture(e.pointerId);
+    hold(e.pointerId, [code]);
+    queueMicrotask(refresh);
+  });
+  for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) button.addEventListener(event, (e) => hold(e.pointerId, []));
+  button.addEventListener("click", (e) => {
+    const code = button.dataset.code;
+    if (e.detail === 0 && playing && code && button.dataset.ready !== "false") {
+      key(code, true);
+      key(code, false);
+    }
+  });
+}
+document.addEventListener("pointerdown", () => blockedClicks.clear(), true);
+for (const type of ["pointerup", "pointercancel"]) document.addEventListener(type, (e) => {
+  if (!handledPointers.delete(e.pointerId)) return;
+  blockedClicks.set(e.pointerId, { at: performance.now(), x: e.clientX, y: e.clientY });
+  for (const [id, p] of blockedClicks) if (performance.now() - p.at > 1e3) blockedClicks.delete(id);
+}, true);
+document.addEventListener("click", (e) => {
+  if (!e.isTrusted) return;
+  const now = performance.now(), point = blockedClicks.get(e.pointerId);
+  const consumed = point && now - point.at < 1e3 || e.detail > 0 && [...blockedClicks.values()].some((p) => now - p.at < 500 && Math.hypot(e.clientX - p.x, e.clientY - p.y) < 3);
+  if (consumed) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }
+}, true);
+function refreshContext() {
+  const context = mobileFrame?.active ? mobileFrame.context : null, available = [context?.primary, ...context?.secondary || []].filter(Boolean), en = language === "en";
+  actions.dataset.contextCount = available.length;
+  actions.dataset.mode = mobileFrame?.mode || "";
+  for (const button of actions.querySelectorAll("[data-context-slot]")) {
+    const action = available[Number(button.dataset.contextSlot)];
+    button.hidden = !action;
+    if (!action) continue;
+    const label = en ? action.labelEn : action.labelKo, name = action.code === "KeyF" ? "search" : action.code === "KeyR" ? "gear" : ["land", "board"].includes(action.id) ? "board" : "interact";
+    if (button.dataset.action !== action.id || button.dataset.label !== label) {
+      buttonFace(button, label, name);
+      button.dataset.label = label;
+      button.dataset.action = action.id;
+    }
+    button.dataset.code = action.code;
+    button.dataset.ready = String(action.enabled);
+    button.setAttribute("aria-disabled", String(!action.enabled));
+    button.dataset.hold = String(!!action.hold);
+    button.setAttribute("aria-label", label + (action.hold ? en ? " \xB7 hold" : " \xB7 \uAE38\uAC8C \uB204\uB974\uAE30" : ""));
+    button.title = button.getAttribute("aria-label");
+    button.style.setProperty("--work-progress", Math.max(0, Math.min(1, action.progress || 0)) * 360 + "deg");
+    button.classList.toggle("working", action.progress > 0);
+  }
 }
 function move(e) {
-  const r = stick.getBoundingClientRect(), x = (e.clientX - r.left - r.width / 2) / (r.width / 2), y = (e.clientY - r.top - r.height / 2) / (r.height / 2);
+  if (!stickOrigin) return;
+  const r = stick.getBoundingClientRect(), x = (e.clientX - stickOrigin.x) / (r.width / 2), y = (e.clientY - stickOrigin.y) / (r.height / 2);
   const radius = Math.max(1, Math.hypot(x, y));
   thumb.style.transform = `translate(${x / radius * 28}px,${y / radius * 28}px)`;
   hold("stick", [...x < -0.25 ? ["KeyA"] : x > 0.25 ? ["KeyD"] : [], ...y < -0.25 ? ["KeyW"] : y > 0.25 ? ["KeyS"] : []]);
 }
-stick.addEventListener("pointerdown", (e) => {
-  if (!playing || stickPointer !== null) return;
+document.addEventListener("pointerdown", (e) => {
+  const onStick = e.target === stick || stick.contains(e.target), world = ["rogueSea", "space"].includes(e.target.id), side = moveSide === "left" ? e.clientX < innerWidth * 0.44 : e.clientX > innerWidth * 0.56;
+  if (!playing || stickPointer !== null || e.button !== 0 || !onStick && !(world && side && e.clientY > Math.max(76, innerHeight * 0.28)) || mobileFrame?.mapOpen) return;
   e.preventDefault();
+  e.stopImmediatePropagation();
   stickPointer = e.pointerId;
+  stickOrigin = { x: e.clientX, y: e.clientY };
+  const half = stick.offsetWidth / 2;
+  stick.style.setProperty("--stick-x", Math.max(half + 8, Math.min(innerWidth - half - 8, e.clientX)) + "px");
+  stick.style.setProperty("--stick-y", Math.max(half + 8, Math.min(innerHeight - half - 8, e.clientY)) + "px");
+  stick.classList.add("active", "floating");
   stick.setPointerCapture(e.pointerId);
-  stick.classList.add("active");
   move(e);
-});
-stick.addEventListener("pointermove", (e) => {
-  if (e.pointerId === stickPointer) move(e);
-});
-for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) stick.addEventListener(event, (e) => {
+}, true);
+document.addEventListener("pointermove", (e) => {
   if (e.pointerId === stickPointer) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    move(e);
+  }
+}, true);
+for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) document.addEventListener(event, (e) => {
+  if (e.pointerId === stickPointer) {
+    e.stopImmediatePropagation();
     hold("stick", []);
+    const previous = stickPointer;
     stickPointer = null;
+    if (stick.hasPointerCapture(previous)) stick.releasePointerCapture(previous);
     resetStick();
   }
-});
+}, true);
 var worldTouches = /* @__PURE__ */ new Map();
 var gestureWasMulti = false;
 document.addEventListener("pointerdown", (e) => {
@@ -895,8 +1146,9 @@ function installHelp() {
     const help = document.createElement("details");
     help.className = "mobile-help";
     help.open = true;
-    help.innerHTML = language === "en" ? "<summary>Touch controls</summary><p>Drag the left pad to steer. Release it to drift. Hold Brake to slow down; Precision alone does not brake. Use both thumbs to steer while braking or boosting.</p><p>Interact handles mooring, boarding and hooks. Hold Supplies or Gear to search. More reveals tow, anchor, build and net actions. Ashore, Brake becomes Attack. Tap the world to aim a throw; use two fingers to zoom. Pausing saves your run.</p>" : "<summary>\uD130\uCE58 \uC870\uC791</summary><p>\uC67C\uCABD \uD328\uB4DC\uB97C \uBC00\uC5B4 \uC870\uD0C0\uD569\uB2C8\uB2E4. \uC190\uC744 \uB193\uC73C\uBA74 \uD45C\uB958\uD569\uB2C8\uB2E4. \uC81C\uB3D9\uC740 \uAE38\uAC8C \uB204\uB974\uC138\uC694. \uC815\uBC00 \uC6B4\uD56D\uB9CC\uC73C\uB85C\uB294 \uBA48\uCD94\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4. \uB450 \uC190\uAC00\uB77D\uC73C\uB85C \uC774\uB3D9\uACFC \uC81C\uB3D9\xB7\uBD80\uC2A4\uD130\uB97C \uD568\uAED8 \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.</p><p>\uC791\uC5C5\uC73C\uB85C \uACC4\uB958\xB7\uC2B9\uD558\uC120\xB7\uACE0\uB9AC\uB97C \uC870\uC791\uD569\uB2C8\uB2E4. \uBCF4\uAE09\xB7\uC7A5\uBE44\uB294 \uAE38\uAC8C \uB20C\uB7EC \uC218\uC0C9\uD569\uB2C8\uB2E4. \uB354 \uBCF4\uAE30\uC5D0\uC11C \uACAC\uC778\xB7\uB2FB\xB7\uBE4C\uB4DC\xB7\uADF8\uBB3C \uC870\uC791\uC744 \uCC3E\uC744 \uC218 \uC788\uC2B5\uB2C8\uB2E4. \uC0C1\uB959\uD558\uBA74 \uC81C\uB3D9 \uBC84\uD2BC\uC774 \uACF5\uACA9\uC73C\uB85C \uBC14\uB01D\uB2C8\uB2E4. \uD654\uBA74\uC744 \uC9E7\uAC8C \uD130\uCE58\uD574 \uD22C\uCC99 \uBC29\uD5A5\uC744 \uC815\uD558\uACE0 \uB450 \uC190\uAC00\uB77D\uC73C\uB85C \uD655\uB300\uD569\uB2C8\uB2E4. \uC77C\uC2DC\uC815\uC9C0\uD558\uBA74 \uC800\uC7A5\uB429\uB2C8\uB2E4.</p>";
+    help.innerHTML = language === "en" ? "<summary>Touch controls</summary><p>Touch the lower movement side and drag: the pad appears under your thumb. Release to drift; hold Brake to slow down. Swap sides below or from More.</p><p>Nearby mooring, boarding and search actions appear beside Attack. Hold Search until its ring fills. Tap the small chart to expand it. More contains the other tools. Pausing saves your run.</p>" : "<summary>\uD130\uCE58 \uC870\uC791</summary><p>\uC774\uB3D9 \uC190 \uCABD \uC544\uB798 \uC601\uC5ED\uC744 \uB204\uB974\uACE0 \uBC00\uBA74 \uADF8 \uC790\uB9AC\uC5D0 \uD328\uB4DC\uAC00 \uC0DD\uAE41\uB2C8\uB2E4. \uC190\uC744 \uB193\uC73C\uBA74 \uD45C\uB958\uD558\uACE0, \uC81C\uB3D9\uC744 \uAE38\uAC8C \uB204\uB974\uBA74 \uAC10\uC18D\uD569\uB2C8\uB2E4. \uC544\uB798 \uC124\uC815\uC774\uB098 \uB354 \uBCF4\uAE30\uC5D0\uC11C \uC88C\uC6B0\uB97C \uBC14\uAFC0 \uC218 \uC788\uC5B4\uC694.</p><p>\uAC00\uAE4C\uC6B4 \uC811\uC548\xB7\uC2B9\uD558\uC120\xB7\uC218\uC0C9 \uBC84\uD2BC\uC740 \uACF5\uACA9 \uC606\uC5D0 \uB098\uD0C0\uB0A9\uB2C8\uB2E4. \uC218\uC0C9\uC740 \uC9C4\uD589 \uB9C1\uC774 \uCC30 \uB54C\uAE4C\uC9C0 \uAE38\uAC8C \uB204\uB974\uC138\uC694. \uC791\uC740 \uD574\uB3C4\uB97C \uB204\uB974\uBA74 \uD655\uB300\uD569\uB2C8\uB2E4. \uB098\uBA38\uC9C0 \uB3C4\uAD6C\uB294 \uB354 \uBCF4\uAE30\uC5D0 \uC788\uACE0 \uC77C\uC2DC\uC815\uC9C0\uD558\uBA74 \uC800\uC7A5\uB429\uB2C8\uB2E4.</p>";
     body.prepend(help);
+    if (kakao) body.append(browserHelp(language === "en"));
     if (voyageNotes) {
       const notes = document.createElement("details");
       notes.className = "mobile-notes";
@@ -907,6 +1159,43 @@ function installHelp() {
       notes.append(title, text2);
       body.prepend(notes);
     }
+  }
+  for (const parent of document.querySelectorAll(".session-pause .session-body,.embark-options")) {
+    if (parent.querySelector("[data-mobile-move-side]")) continue;
+    const label = document.createElement("label");
+    label.className = "mobile-handedness";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.dataset.mobileMoveSide = "";
+    input.checked = moveSide === "right";
+    input.addEventListener("change", () => setMoveSide(input.checked ? "right" : "left"));
+    label.append(input, document.createTextNode(language === "en" ? "Movement on right \xB7 swap hands" : "\uC624\uB978\uC190\uC73C\uB85C \uC774\uB3D9 \xB7 \uC88C\uC6B0 \uBC18\uC804"));
+    parent.prepend(label);
+  }
+}
+function compactPreparation() {
+  const profile = document.getElementById("departureProfile"), en = language === "en";
+  if (profile && !profile.querySelector(".mobile-captain-details")) {
+    const details = document.createElement("details");
+    details.className = "mobile-captain-details";
+    const summary = document.createElement("summary");
+    summary.textContent = en ? "Stats & skill" : "\uB2A5\uB825 \uC0C1\uC138";
+    details.append(summary);
+    for (const el of profile.querySelectorAll(".embark-stats,.embark-skill")) details.append(el);
+    profile.append(details);
+  }
+  const build = document.getElementById("departureBuild");
+  if (build && !build.querySelector(".mobile-build-details")) {
+    const details = document.createElement("details");
+    details.className = "mobile-build-details";
+    const summary = document.createElement("summary");
+    summary.textContent = en ? "Handling details" : "\uC6B4\uD56D \uC0C1\uC138";
+    details.append(summary);
+    for (const el of build.querySelectorAll(".embark-build-risk,.embark-key")) {
+      el.textContent = touchText(el.textContent, language);
+      details.append(el);
+    }
+    build.append(details);
   }
 }
 function refresh() {
@@ -928,6 +1217,7 @@ function refresh() {
     window.dispatchEvent(new Event("mobile-layout"));
   }
   if (rogue) {
+    refreshContext();
     const attack = actions.querySelector('[data-code="Space"]');
     if (attack && attack.dataset.mode !== rogue.dataset.mobileMode) {
       attack.dataset.mode = rogue.dataset.mobileMode;
@@ -952,7 +1242,8 @@ function refresh() {
     }
   }
   installHelp();
-  refreshFlightHud(playing, rogue);
+  compactPreparation();
+  refreshFlightHud(playing, rogue, mobileFrame);
 }
 setInterval(refresh, 100);
 refresh();
@@ -961,6 +1252,7 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden) release();
 }, { capture: true });
 function viewportChanged() {
+  release();
   document.documentElement.style.setProperty("--mobile-height", `${Math.round(window.visualViewport?.height || innerHeight)}px`);
   if (innerWidth <= innerHeight) pause();
   refresh();

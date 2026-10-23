@@ -1,9 +1,10 @@
 // Original harbor: topology -> channel carving -> terrain -> validation.
 // Frozen v1 preserves underway saves. No third-party generation code is included.
 import {generateHarbor as legacyHarbor,validateMap as legacyValidate,waterAt as legacyWater} from './rogue-map-v1.js';
+import {generateHarbor as harborV2} from './rogue-map-v2.js';
 export {DEPTHS,random,inside} from './rogue-map-v1.js';
 import {random,inside} from './rogue-map-v1.js';
-export const GENERATOR_VERSION=2;
+export const GENERATOR_VERSION=3;
 export const TILE=40;
 export const LAND={water:0,quay:1,brick:2,deck:3,rock:4};
 export const shoreBuildings=r=>r.buildings||[{kind:'hut',x:r.x+r.w-130,y:r.y+20,w:112,h:125}];
@@ -39,7 +40,7 @@ function candidate(seed,depth,attempt){
   const rng=random(seed^Math.imul(depth+1,0x9e3779b9)^Math.imul(attempt,0x85ebca6b));
   const content=random(seed^Math.imul(depth+17,0x27d4eb2d));
   const pick=(min,n)=>min+Math.floor(rng()*n)*TILE;
-  const map={version:2,seed,depth,attempt,width:3400,height:1800,cols:85,rows:45,
+  const map={version:3,seed,depth,attempt,width:3400,height:1800,cols:85,rows:45,
     spawn:{x:180,y:900},boss:{x:2810,y:900},exit:{x:3260,y:900,angle:Math.PI/2},
     current:{x:(rng()-.5)*15,y:(rng()-.5)*12},secret:content()<.3,
     islands:[],berths:[],tiles:Array(85*45).fill(1),nodes:[],edges:[],props:[]};
@@ -82,9 +83,9 @@ function candidate(seed,depth,attempt){
     const w=pick(280,2),h=pick(240,3),x=Math.floor((n.x-w/2)/TILE)*TILE,y=n.y-160-h;
     const r={id:'rogue-yard-'+i,x,y,w,h,role:['equipment','fuel','repair'][i],equipment:rewards[Math.floor(content()*rewards.length)]};
     r.buildings=i===0?[{kind:'warehouse',x:x+24,y:y+16,w:144,h:84},
-      {kind:'bench',x:x+w-104,y:y+100,w:80,h:90}]:
-      [{kind:i===1?'pump':'shelter',x:x+w-130,y:y+20,w:112,h:125},
-      {kind:i===1?'fuel':'fish',x:x+w-100,y:y+h-88,w:74,h:52}];
+      {kind:'bench',x:x+w-88,y:y+156,w:64,h:44}]:
+      [{kind:i===1?'pump':'shelter',x:x+w-144,y:y+24,w:112,h:96},
+      {kind:i===1?'fuel':'fish',x:x+w-90,y:y+h-64,w:64,h:44}];
     fill(r,1);map.islands.push(r);
     map.berths.push({id:r.id,island:i,x:x+w/2,y:y+h+44,angle:0,
       landing:{x:x+w/2,y:y+h-25},loot:{x:x+w*.28,y:y+Math.max(i===0?126:0,h*.45)}});
@@ -103,7 +104,9 @@ function candidate(seed,depth,attempt){
     else if(x>24&&x<48&&y>13&&y<31)map.tiles[k]=2;
   }
   for(const r of map.islands)fill(r,1);
-  for(let y=100;y<1720;y+=120)for(let x=280;x<3200;x+=180){
+  // At least 60 world units between warehouse footprints: the 18-wide actor
+  // can pass with finger-steering margin instead of threading a visual seam.
+  for(let y=100;y<1720;y+=156)for(let x=280;x<3200;x+=224){
     if(decor()<.22)continue;
     const kind=decor()<.8?'warehouse':'crates';
     const p={kind,x:x+(decor()<.5?0:20),y,w:kind==='warehouse'?144:32,h:kind==='warehouse'?84:27};
@@ -151,7 +154,8 @@ export function validateMap(map){
 }
 export function generateHarbor(seed,depth=0,version=GENERATOR_VERSION){
   if(version===1)return legacyHarbor(seed,depth);
-  if(version!==2||!Number.isInteger(seed)||seed<0||seed>0xffffffff||!Number.isInteger(depth)||depth<0||depth>2)throw Error('Invalid harbor seed/depth/version');
+  if(version===2)return harborV2(seed,depth,2);
+  if(version!==3||!Number.isInteger(seed)||seed<0||seed>0xffffffff||!Number.isInteger(depth)||depth<0||depth>2)throw Error('Invalid harbor seed/depth/version');
   for(let attempt=0;attempt<8;attempt++){const map=candidate(seed,depth,attempt);if(validateMap(map).ok)return map;}
   for(let attempt=0;attempt<8;attempt++){
     const fallback=candidate(0,depth,attempt);

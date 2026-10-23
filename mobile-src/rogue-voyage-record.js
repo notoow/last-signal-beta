@@ -1,5 +1,6 @@
 // Receipts of resolved actions, never predictions or reconstructed radio text.
 // Independent of core/encounters so every damage source can record its real delta.
+import {publishImpact} from './rogue-impact.js';
 const GEAR=['motor','pump','winch','tank','plating','turbine'];
 const SOURCES=['collision','sluice','crane','lighthouse','machine','dog','rat','crab','gull'];
 const PHASES=['idle','warn','attack','recover'];
@@ -13,9 +14,11 @@ export function recordVoyage(s,kind,fields={}){
   events.push({kind,time:s.time,depth:s.depth,...fields});
   if(events.length>RECORD_LIMITS.events)events.shift();
 }
-export function recordHit(s,target,source,before,impactSpeed=null){
+export function recordHit(s,target,source,before,impactSpeed=null,contact=null){
   const r=s.voyageRecord,remaining=target==='hull'?s.hp:s.crewHp,amount=before-remaining;
-  if(!r||amount<=0)return;
+  if(amount<=0)return;
+  publishImpact(s,{target,source,amount,remaining,contact});
+  if(!r)return;
   r.damage[target][s.depth]+=amount;r.hitCount++;
   r.hits.push({time:s.time,depth:s.depth,target,source,amount,remaining,fuel:s.fuel,flood:s.flood,
     phase:s.boss?.phase||'idle',speed:impactSpeed});
@@ -42,7 +45,7 @@ export function validVoyageRecord(s){
   if(r.events.some(e=>{
     switch(e.kind){
       case 'cache':return !int(e.site,0,2)||!(e.gear===null||gear(e.gear))||typeof e.pending!=='boolean'||
-        (e.pending&&e.gear===null)||![null,'ratchet','baffle','shutter'].includes(e.tool)||!gains(e);
+        (e.pending&&e.gear===null)||(e.crew!=null&&!['grip','stride','guard'].includes(e.crew))||![null,'ratchet','baffle','shutter'].includes(e.tool)||!gains(e);
       case 'gear':return !gear(e.gear)||!(e.removed===null||gear(e.removed))||
         !(e.slot===null?e.removed===null:int(e.slot,0,5)&&e.removed!==null)||!num(e.fuel,0,15);
       case 'workshop':return e.depth!==0||!['rig','repair','fuel'].includes(e.choice)||!gains(e);

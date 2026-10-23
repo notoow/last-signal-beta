@@ -1,13 +1,13 @@
 // Mobile presentation only. World geometry, input and save data stay unchanged.
 export function mobileScale(width,height,zoom=1){
-  return Math.max(1.05,Math.min(1.5,width/700,height/300))*zoom;
+  return Math.max(1.15,Math.min(1.5,width/700,height/300))*zoom;
 }
 let sampledAt=-Infinity,blocks=[];
 export function mobileObstacles(){
   if(!globalThis.document)return [];
   if(performance.now()-sampledAt<100)return blocks;
   sampledAt=performance.now();
-  blocks=[...document.querySelectorAll('#mobileStick,#mobileActions,#mobileFlightHud>div')].flatMap(el=>{
+  blocks=[...document.querySelectorAll('#mobileStick,#mobileActions,#mobileFlightHud>div,#mobileMinimap')].flatMap(el=>{
     const r=el.getBoundingClientRect();
     return r.width&&r.height&&getComputedStyle(el).visibility!=='hidden'?[{x:r.x,y:r.y,w:r.width,h:r.height,id:el.id||el.className}]:[];
   });

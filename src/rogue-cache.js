@@ -1,6 +1,7 @@
 // A searched cache offers one random component and one build/stack alternative.
 // Offers depend only on the voyage and already installed gear, never on a clock.
 import {RIG_MODEL,rigEffects} from './rogue-salvage.js';
+import {crewOffer} from './crew-upgrades.js';
 export const CACHE_MODEL='choice-v1';
 const affinity={standard:['motor','turbine','plating'],bilge:['turbine','pump','motor'],winch:['winch','turbine','plating']};
 const count=(s,id)=>s.equipment.filter(g=>g===id).length;
@@ -15,7 +16,7 @@ export function cacheOffer(s,berthId=s.pendingCache?.berth){
     .sort((a,b)=>count(s,b)-count(s,a)||(a<b?-1:a>b?1:0));
   const alternatives=pool.filter(id=>id!==first);
   const second=stacks[0]||alternatives[roll%alternatives.length];
-  return {berth:berth.id,gear:[first,second],siteRole:site.role,
+  return {berth:berth.id,gear:[first,second],crew:crewOffer(s,berth.island),siteRole:site.role,
     supply:site.role==='repair'?{fuel:0,hp:35,flood:20}:
       {fuel:site.role==='fuel'?45:15,hp:0,flood:0}};
 }
@@ -51,7 +52,7 @@ export function validCache(s){
   if(!['legacy',CACHE_MODEL].includes(s.cacheModel))return false;
   const p=s.pendingCache;
   if(p===null)return true;
-  if(!p||s.cacheModel!==CACHE_MODEL||s.generator!==2||!s.combat||s.status!=='playing'||
+  if(!p||s.cacheModel!==CACHE_MODEL||s.generator<2||!s.combat||s.status!=='playing'||
     s.mode!=='ashore'||s.pendingGear||s.salvage?.pending||s.claimed.includes(p.berth)||!s.person)return false;
   const b=s.map.berths.find(b=>b.id===p.berth),offer=cacheOffer(s,p.berth);
   return !!b&&Math.hypot(s.person.x-b.loot.x,s.person.y-b.loot.y)<32&&

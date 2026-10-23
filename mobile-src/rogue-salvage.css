@@ -109,3 +109,22 @@
  .rogue-cache-common strong{display:block;margin-bottom:6px}
  .rogue-cache-replacements{grid-template-columns:1fr;padding:12px 20px 20px}
 }
+
+/* Voyage-only crew equipment has a visible object and a single rank gain. */
+.rogue-reward-art{display:block;width:88px;height:88px;object-fit:contain;margin:0 auto 8px;filter:drop-shadow(0 5px 8px #05181c66)}
+.rogue-crew-reward{background:#c3d3a50a}
+.rogue-salvage-options[data-crew-choice="true"]{grid-template-columns:repeat(4,minmax(0,1fr))}
+.rogue-cache-desk:has(.rogue-crew-reward) .rogue-salvage-header{padding:16px 24px;gap:18px}
+.rogue-cache-desk:has(.rogue-crew-reward) .rogue-salvage-header h2{font-size:28px}
+.rogue-cache-desk:has(.rogue-crew-reward) .rogue-salvage-options{padding-block:16px}
+.rogue-cache-desk:has(.rogue-crew-reward) .rogue-cache-note{min-height:0}
+@media(max-height:700px) and (min-width:801px){
+ .rogue-cache-desk:has(.rogue-crew-reward) .rogue-reward-art{width:64px;height:64px}
+ .rogue-cache-desk:has(.rogue-crew-reward) .rogue-salvage-option{padding-inline:12px}
+ .rogue-cache-desk:has(.rogue-crew-reward) .rogue-salvage-option-heading h3{font-size:18px}
+ .rogue-cache-desk:has(.rogue-crew-reward) .rogue-cache-effect{margin-block:8px 12px}
+ .rogue-cache-desk:has(.rogue-crew-reward) .rogue-cache-description{min-height:0;font-size:13px}
+ .rogue-cache-desk:has(.rogue-crew-reward) .rogue-cache-note{font-size:12px}
+}
+@media(max-width:800px){.rogue-salvage-options[data-crew-choice="true"]{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.rogue-salvage-options[data-crew-choice="true"]{grid-template-columns:1fr}}

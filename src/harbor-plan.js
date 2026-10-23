@@ -55,7 +55,7 @@ export function harborDestination(s){
 }
 export function validHarborIntel(s){
   const intel=s.harborIntel;if(intel===null)return true;
-  if(!intel||s.generator!==2||!s.combat||!Array.isArray(intel.sites)||intel.sites.length>3)return false;
+  if(!intel||s.generator<2||!s.combat||!Array.isArray(intel.sites)||intel.sites.length>3)return false;
   const ids=intel.sites.map(x=>x?.id);
   if(new Set(ids).size!==ids.length||intel.sites.some(x=>!s.map.berths.some(b=>b.id===x?.id)||
     !Array.isArray(x.threats)||new Set(x.threats).size!==x.threats.length||x.threats.some(k=>!Object.hasOwn(FAUNA,k))))return false;

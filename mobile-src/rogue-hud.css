@@ -51,9 +51,14 @@
 #rogue[data-hud=compact] [data-tone=ready] .rogue-gauge{color:#75b4c4}
 #rogue[data-hud=compact] .rogue-conditions{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:7px;font:400 14px/1.4 Pretendard,sans-serif;color:#b9c1c8}
 #rogue[data-hud=compact] .rogue-conditions:empty{display:none}
+#rogue[data-hud=compact] .rogue-impact{display:flex;flex-wrap:wrap;flex-basis:100%;min-height:20px;line-height:20px;gap:4px 12px;border-left:2px solid #ffbe78;padding-left:8px;color:#dfc4aa}
+#rogue[data-hud=compact] .rogue-impact:empty{border-color:transparent}
+#rogue[data-hud=compact] .rogue-impact strong{color:#ffbe78;font-size:14px;line-height:20px;font-weight:600;font-variant-numeric:tabular-nums}
+#rogue[data-hud=compact] [data-impact=true] b,#rogue[data-hud=compact] [data-impact=true] .rogue-gauge{color:#ffbe78}
 #rogue[data-hud=compact] [data-tone=warning]{color:#ffbe78}
 #rogue[data-hud=compact] .rogue-controls{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;font:500 14px/1.4 Pretendard,sans-serif;margin-top:7px;padding-top:7px;color:#f3f1e8}
 #rogue[data-hud=compact] [data-rogue-context=defense]{flex-basis:100%;color:#b9c1c8}
+#rogue[data-hud=compact] [data-rogue-context=docking]{flex-basis:100%;color:#b9c1c8}
 #rogue[data-hud=compact] .rogue-controls [data-tone=warning]{color:#ffbe78}
 #rogue[data-hud=compact] [data-rogue-context=search]{font-weight:600}
 #rogue .rogue-sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}

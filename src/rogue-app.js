@@ -2,7 +2,7 @@ import {createRun,tickRun,interact,resolveGear,resolveSalvage,returnFromWorkshop
 import {harborPlanMarkup} from './harbor-plan-ui.js';
 import {voyageRecordMarkup,voyagePreparationText} from './rogue-voyage-record-ui.js';
 import {salvageChoiceMarkup,salvageDetailsMarkup} from './rogue-salvage-ui.js';
-import {cacheChoiceMarkup,cacheReplacementMarkup} from './rogue-cache-ui.js';
+import {cacheChoiceMarkup,cacheReplacementMarkup,cacheChoiceModel} from './rogue-cache-ui.js';
 import {GENERATOR_VERSION} from './rogue-map.js';
 import {drawRogue,rogueCamera,lastRogueCamera} from './rogue-view.js';
 import {CAMERA_KEY,cameraSettings} from './rogue-camera.js';
@@ -14,6 +14,8 @@ import {sessionText,resultMarkup,pauseMarkup,activateModal,releaseModal,rogueFai
 import {hudProbe} from './hud-layout.js';
 import {waterMotion,releaseShipAssist} from './ship-motion.js';
 import {rogueHudModel,rogueHudMarkup,rogueDetailsMarkup,rogueHudText} from './rogue-hud.js';
+import {impactSequence,recentImpact} from './rogue-impact.js';
+import {rogueContextActions,rogueMinimap} from './rogue-context.js';
 const esc=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function hasRogueSave(){try{return !!restoreRun(localStorage.getItem(SAVE_KEY));}catch{return false;}}
 export function openRogue({resume=false,language='ko',paint='harbor',reduced=false,onClose=()=>{},onPaint=()=>{},onSound=()=>{}}={}){
@@ -33,6 +35,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   $('rogueChart').textContent=en?'M · Chart':'M · 해도';
   let state=null,paused=true,mapOpen=false,last=performance.now(),clock=0,frameId,closed=false,captain='woo',build='standard',saveError=false;
   let preparationReturn=null,resultView=null;
+  let lastMobileFrame=-Infinity;
   let camera=cameraSettings(null);
   try{camera=cameraSettings(JSON.parse(localStorage.getItem(CAMERA_KEY)));}catch{}
   const saveCamera=()=>{try{localStorage.setItem(CAMERA_KEY,JSON.stringify(camera));}catch{}};
@@ -58,7 +61,14 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     $('rogueModal').hidden=false;$('rogueModal').innerHTML=markup;
     activateModal($('rogueModal'),surface==='pause'?'#rogueContinue':surface==='result'?'#rogueNew':undefined);
   }
-  function close(){if(!save())return;releaseModal($('rogueModal'));closed=true;controller.abort();cancelAnimationFrame(frameId);root.remove();onClose();}
+  function close(){if(!save())return;releaseModal($('rogueModal'));closed=true;controller.abort();cancelAnimationFrame(frameId);root.remove();if(document.documentElement.dataset.mobileUi==='true')window.dispatchEvent(new CustomEvent('lastsignal:mobile-frame',{detail:null}));onClose();}
+  function launchIntro(){
+    let seen=false;try{seen=localStorage.getItem('lastsignal.mobile.intro.v1')==='seen';}catch{}
+    if(document.documentElement.dataset.mobileUi!=='true'||seen){play();return;}
+    modalSurface('intro',`<section class="mobile-voyage-intro"><span>${t('마지막 신호','Last Signal')}</span><h1>${t('명부에는 전원 대피라고 적혀 있다.','The manifest says everyone has evacuated.')}</h1><p>${t('폐항을 막은 기계선을 멈추고, 남은 사람들의 이름을 등대에 전하라.','Stop the machine ship blocking the abandoned harbor, and carry the remaining names to the lighthouse.')}</p><div><button id="rogueIntroSail">${t('바로 출항','Sail now')}</button><button id="rogueIntroSkip">${t('건너뛰기','Skip')}</button></div></section>`);
+    const sail=()=>{try{localStorage.setItem('lastsignal.mobile.intro.v1','seen');}catch{}play();};
+    bind('rogueIntroSail',sail);bind('rogueIntroSkip',sail);activateModal($('rogueModal'),'#rogueIntroSail');
+  }
   function loadout({sameMap=false}={}){
     preparationReturn=state&&state.status!=='playing'?state:null;
     const retrySeed=sameMap?preparationReturn?.seed:null;
@@ -142,7 +152,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     activateModal($('rogueModal'),'[data-captain][aria-pressed=true]');bind('rogueHome',()=>preparationReturn?end():close());bind('rogueLaunch',()=>{
       const value=$('rogueSeed').value.trim(),seed=value===''?crypto.getRandomValues(new Uint32Array(1))[0]:Number(value);
       if(!/^\d{1,10}$/.test(value)&&value!==''||!Number.isInteger(seed)||seed<0||seed>0xffffffff){$('rogueSeed').setCustomValidity(t('0~4294967295 범위의 정수를 입력하세요.','Enter an integer from 0 to 4294967295.'));$('rogueSeed').reportValidity();return;}
-      state=createRun(seed,captain,build,paint);preparationReturn=null;mapOpen=false;save();play();
+      state=createRun(seed,captain,build,paint);preparationReturn=null;mapOpen=false;save();launchIntro();
     });
   }
   function gearChoice(){
@@ -154,7 +164,9 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     paused=true;keys.clear();save();
     modalSurface('cache',cacheChoiceMarkup(state,language));saveStatus();
     root.querySelectorAll('[data-cache-choice]').forEach(b=>b.addEventListener('click',()=>{
+      const crew=cacheChoiceModel(state,language)?.crew,choice=b.dataset.cacheChoice;
       if(!resolveCache(state,b.dataset.cacheChoice))return;
+      if(document.documentElement.dataset.mobileUi==='true'&&crew&&choice==='crew:'+crew.id)window.dispatchEvent(new CustomEvent('lastsignal:mobile-reward',{detail:{id:crew.id,name:en?crew.en:crew.name,rank:crew.rank+1,image:`assets/art/crew-upgrade-${crew.id}-v1.png`}}));
       onSound('lift');save();play();
     },options));
     bind('rogueCacheLeave',()=>{if(resolveCache(state,'leave')){save();play();}});
@@ -281,15 +293,22 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
         const signalBefore=state.boss.lighthouse?.sentAt??-1;
         const shellBefore=state.boss.lighthouse?.impactAt??-1;
         const salvageUses=state.salvage?.uses??0;
+        const hitBefore=impactSequence(state);
         tickRun(state,{x:axis('KeyD','ArrowRight','KeyA','ArrowLeft'),y:axis('KeyS','ArrowDown','KeyW','ArrowUp'),boost:keys.has('ShiftLeft')||keys.has('ShiftRight'),precision:keys.has('KeyC'),brake:keys.has('Space'),melee:keys.has('Space'),ranged:keys.has('KeyV'),recover:keys.has('KeyF'),equipment:keys.has('KeyR')},dt);
-        if((state.boss.crane?.impactAt??-1)>impactBefore)onSound('anchor');
-        if((state.boss.sluice?.hitAt??-1)>gateBefore)onSound(state.boss.sluice.lastImpact==='opened'?'lift':'hurt');
-        if((state.boss.lighthouse?.impactAt??-1)>shellBefore)onSound(state.boss.lighthouse.hit?'hurt':'anchor');
+        const hit=impactSequence(state)>hitBefore?recentImpact(state):null;
+        // Play one resolved-loss cue. Proximity, blocked damage and restored
+        // hit history cannot produce a hurt sound; scrap theft is a metal cue.
+        if(hit)onSound(hit.target==='scrap'?'anchor':'hurt');
+        if((state.boss.crane?.impactAt??-1)>impactBefore&&!hit)onSound('anchor');
+        if((state.boss.sluice?.hitAt??-1)>gateBefore){
+          if(state.boss.sluice.lastImpact==='opened')onSound('lift');
+          else if(!hit)onSound('anchor');
+        }
+        if((state.boss.lighthouse?.impactAt??-1)>shellBefore&&!hit)onSound('anchor');
         if((state.boss.lighthouse?.sentAt??-1)>signalBefore)onSound('lift');
         if((state.salvage?.uses??0)>salvageUses)onSound('lift');
         if(before&&state.combat){
           if(state.combat.shotId>before.shotId)onSound('anchor');
-          if(state.combat.hitId>before.hitId)onSound('hurt');
           if(state.combat.killId>before.killId)onSound('lift');
         }
         clock+=dt;if(clock>2){clock=0;save();}
@@ -321,6 +340,10 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
           pin.style.top=(Number(pin.dataset.mapY)*frame.scale+frame.oy)+'px';
         });
       }else drawRogue($('rogueSea'),resultView||state,{reduced,mapOpen,camera,occupied:hudRects,language});
+      if(document.documentElement.dataset.mobileUi==='true'&&now-lastMobileFrame>=100){
+        lastMobileFrame=now;
+        window.dispatchEvent(new CustomEvent('lastsignal:mobile-frame',{detail:{mode:state.mode,mapOpen,active:!paused,context:rogueContextActions(state),minimap:rogueMinimap(state)}}));
+      }
     }
     frameId=requestAnimationFrame(frame);
   }

@@ -5,23 +5,25 @@ import {newEncounter,tickEncounter,shoreAttack,validateEncounter,toolBerth,FLOOR
 import {newSurvey,updateSurvey,validSurvey,visibleAt} from './rogue-vision.js';
 import {newRogueTow,towControl,tickRogueTow,deliverRogueTow,canDeliverRogueTow,validRogueTow} from './rogue-tow.js';
 import {WATER_PROFILE,waterMotion,stepShipMotion,releaseShipAssist} from './ship-motion.js';
+import {terrainTurnPose} from './ship-contact.js';
 import {dockStatus,dockHint,dockingAlignment} from './docking-readiness.js';
 import {DREDGER_MODEL,CRANE,usesDredger,newCrane,beginCrane,trackCrane,strikeCrane,craneHitsHull,hullHitsCircle,validCrane,craneWarningTime} from './dredger-counterplay.js';
 import {newSalvage,recoverSalvage,tickSalvage,clearSalvageCharge,catchWinch,dischargeWinch,dischargeBilge,validSalvage,SALVAGE_NAMES,RIG_MODEL,rigEffects} from './rogue-salvage.js';
 import {SLUICE_MODEL,SLUICE,usesSluice,newSluice,beginSluice,trackSluice,sluiceGate,sluiceCleat,applySluiceFlow,sluiceContact,sluiceStatus,validSluice} from './sluice-counterplay.js';
 import {LIGHTHOUSE_MODEL,LIGHTHOUSE,usesLighthouse,newLighthouse,relayPosition,relayApproach,lighthouseStatus,tickLighthouse,lighthouseBlocked,validLighthouse} from './lighthouse-counterplay.js';
 import {CACHE_MODEL,cacheOffer,validCache} from './rogue-cache.js';
+import {CREW_UPGRADES,crewEffects,validCrewUpgrades} from './crew-upgrades.js';
 import {newHarborIntel,refreshHarborIntel,harborPlan,harborDestination,planHarbor,validHarborIntel} from './harbor-plan.js';
 import {newVoyageRecord,recordVoyage,recordHit,resourceSnapshot,resourceGains,validVoyageRecord} from './rogue-voyage-record.js';
 import {newShoreRescue,rescueStatus,rescueBerth,rescuePendingAt,orderRescue,tickRescue,boardRescue,leaveRescue,validRescue} from './shore-rescue.js';
 export {planHarbor};
-export const RUN_VERSION=16;
+export const RUN_VERSION=17;
 export const SUPPLY_MODEL='carried-v1';
 export {CAPTAINS};
 export const BUILDS={standard:'표준선',bilge:'침수 발전선',winch:'축력 윈치선'};
 export const GEAR={motor:'개량 추진기',pump:'배수 펌프',winch:'강화 견인줄',tank:'보조 연료통',plating:'충격 격벽',turbine:'침수 터빈'};
 export const SAVE_KEY='lastsignal.rogue.v1';
-const SHORE_RANGE={search:32,boarding:36};
+export const SHORE_RANGE=Object.freeze({search:32,boarding:36});
 const searchInterruptions=new WeakMap();
 const searchCache=s=>s.person?s.map.berths.find(b=>!s.claimed.includes(b.id)&&distance(s.person,b.loot)<SHORE_RANGE.search):null;
 function interruptSearch(s,reason,work=s.work){
@@ -58,7 +60,7 @@ function floor(s){
   });
   if(s.combat!==null)s.combat=newEncounter(s,s.combat?.ammo??12);
   s.survey=s.combat?newSurvey():null;
-  s.tow=s.combat&&s.generator===2?newRogueTow(s):null;
+  s.tow=s.combat&&s.generator>=2?newRogueTow(s):null;
   s.boss={active:false,cleared:false,phase:'idle',timer:0,cycle:0,aim:0,parts:Array(s.depth===0?2:3).fill(30),hook:-1,rest:70,tension:0};
   s.boss.crane=s.bossModel===DREDGER_MODEL&&s.depth===0?newCrane():null;
   s.boss.sluice=s.sluiceModel===SLUICE_MODEL&&s.depth===1?newSluice():null;
@@ -70,11 +72,11 @@ function floor(s){
   if(s.combat)say(s,'counter-clue-'+s.depth,'Park: '+SHORE_SITES[toolBerth(s).island]+'에 '+
     (usesLighthouse(s)?'차광 신호기가 있어. 탐조등에 발각되기까지 시간을 더 벌 수 있어.':FLOOR_TOOLS[s.depth].clue));
 }
-export function createRun(seed,captain='woo',build='standard',paint='harbor'){
+export function createRun(seed,captain='woo',build='standard',paint='harbor',generator=GENERATOR_VERSION){
   if(!Object.hasOwn(CAPTAINS,captain)||!Object.hasOwn(BUILDS,build)||!['harbor','ochre','red'].includes(paint))throw Error('Unknown loadout');
-  const s={version:RUN_VERSION,physicsProfile:WATER_PROFILE,bossModel:DREDGER_MODEL,sluiceModel:SLUICE_MODEL,lighthouseModel:LIGHTHOUSE_MODEL,supplyModel:SUPPLY_MODEL,cacheModel:CACHE_MODEL,rigModel:RIG_MODEL,generator:GENERATOR_VERSION,seed,depth:0,captain,build,paint,
+  const s={version:RUN_VERSION,physicsProfile:WATER_PROFILE,bossModel:DREDGER_MODEL,sluiceModel:SLUICE_MODEL,lighthouseModel:LIGHTHOUSE_MODEL,supplyModel:SUPPLY_MODEL,cacheModel:CACHE_MODEL,rigModel:RIG_MODEL,generator,seed,depth:0,captain,build,paint,
     status:'playing',time:0,fuel:140,hp:CAPTAINS[captain].hp,boost:CAPTAINS[captain].boost,
-    flood:0,valve:false,charge:0,crewHp:100,equipment:[],pendingGear:null,salvage:newSalvage(),harborIntel:newHarborIntel(),voyageRecord:newVoyageRecord(),log:[],radio:null,reason:'',debris:false,netChoices:[],skill:newSkillState(),tools:[],combat:undefined};
+    flood:0,valve:false,charge:0,crewHp:100,crewUpgrades:[],equipment:[],pendingGear:null,salvage:newSalvage(),harborIntel:newHarborIntel(),voyageRecord:newVoyageRecord(),log:[],radio:null,reason:'',debris:false,netChoices:[],skill:newSkillState(),tools:[],combat:undefined};
   floor(s);return s;
 }
 export function hullPoints(b){
@@ -82,13 +84,32 @@ export function hullPoints(b){
   return [-end,0,end].map(d=>({x:b.x+Math.cos(b.angle)*d,y:b.y+Math.sin(b.angle)*d}));
 }
 function hullClear(s,b){return hullPoints(b).every(p=>waterAt(s.map,p,b.width/2));}
-export const berthReadiness=(s,b)=>dockStatus({boat:s.boat,berth:b,sailing:s.mode==='sailing',clear:hullClear(s,s.boat),spinningMatters:waterMotion(s)});
+export const berthReadiness=(s,b)=>{
+  const result=dockStatus({boat:s.boat,berth:b,sailing:s.mode==='sailing',clear:hullClear(s,s.boat),spinningMatters:waterMotion(s)});
+  // Working jetties catch a slow vessel with a line. Final evacuation docking
+  // remains deliberate; no snap across walls or other hulls is permitted.
+  if(s.generator>=3&&s.map.berths.includes(b)&&result.near){
+    const heading=Math.min(result.heading,Math.PI-result.heading);
+    let clear=true;
+    const delta=angleDiff(b.angle,s.boat.angle),steps=Math.ceil(Math.max(result.distance/4,Math.abs(delta)/.04));
+    for(let i=0;i<=steps&&clear;i++){
+      const t=steps?i/steps:1;
+      clear=!vesselBlocked(s,{...s.boat,x:s.boat.x+(b.x-s.boat.x)*t,y:s.boat.y+(b.y-s.boat.y)*t,angle:s.boat.angle+delta*t});
+    }
+    const checks={clearance:clear,position:result.distance<64,speed:result.speed<30,heading:heading<.85,spin:Math.abs(s.boat.omega||0)<.6};
+    const reason=s.mode!=='sailing'?'inactive':!clear?'clearance':!checks.position?'position':!checks.speed?'speed':!checks.heading?'heading':!checks.spin?'spin':'ready';
+    return {...result,checks,reason,ready:reason==='ready',assisted:true,limits:{distance:64,heading:.85,speed:30,spin:.6,near:160}};
+  }
+  return result;
+};
 export const berthReady=(s,b)=>berthReadiness(s,b).ready;
-function vesselBlocked(s,pose){
-  return !hullClear(s,pose)||
-    (usesLighthouse(s)?lighthouseBlocked(s,pose):!usesSluice(s)&&!s.boss.cleared&&[-110,0,110].some(dx=>distance(pose,{x:s.map.boss.x+dx,y:s.map.boss.y})<58))||
-    (usesDredger(s)&&s.boss.parts.some((_,i)=>hullHitsCircle(partPosition(s,i),pose,CRANE.driveRadius)));
+function vesselContact(s,pose){
+  if(!hullClear(s,pose))return 'terrain';
+  if(usesLighthouse(s)?lighthouseBlocked(s,pose):!usesSluice(s)&&!s.boss.cleared&&[-110,0,110].some(dx=>distance(pose,{x:s.map.boss.x+dx,y:s.map.boss.y})<58))return 'structure';
+  if(usesDredger(s)&&s.boss.parts.some((_,i)=>hullHitsCircle(partPosition(s,i),pose,CRANE.driveRadius)))return 'drive';
+  return null;
 }
+const vesselBlocked=(s,pose)=>!!vesselContact(s,pose);
 // Presentation query only. It never selects a destination or changes a save.
 export function berthAlignment(s){
   if(s.status!=='playing'||s.mode!=='sailing'||s.boss.active&&!s.boss.cleared||
@@ -98,6 +119,7 @@ export function berthAlignment(s){
   if(!berth)return null;
   const status=berthReadiness(s,berth);if(!status.near)return null;
   return dockingAlignment({boat:s.boat,berth,status,poseClear:pose=>!vesselBlocked(s,pose),
+    turnPose:waterMotion(s)?(pose,angle)=>terrainTurnPose(pose,angle,p=>hullClear(s,p),p=>!vesselBlocked(s,p)):null,
     spinningMatters:waterMotion(s),fuel:s.fuel>0,ability:s.skill.left>0&&['woo','park'].includes(s.captain),exit:berth===s.map.exit});
 }
 export function partPosition(s,i){
@@ -105,6 +127,20 @@ export function partPosition(s,i){
   if(usesLighthouse(s))return relayPosition(i);
   const count=s.boss.parts.length,a=Math.PI+(i-(count-1)/2)*.7;
   return {x:s.map.boss.x+Math.cos(a)*190,y:s.map.boss.y+Math.sin(a)*190};
+}
+function nearestDredgerDrive(s,range=Infinity){
+  let index=-1,nearest=range;
+  s.boss.parts.forEach((hp,i)=>{
+    const d=distance(s.boat,partPosition(s,i));
+    if(hp>0&&d<nearest){index=i;nearest=d;}
+  });
+  return index;
+}
+export function bossLinkCandidate(s){
+  if(s.mode!=='sailing'||s.tow?.connected||s.boss.hook>=0||s.boss.cleared)return -1;
+  if(!(s.boss.phase==='recover'||(usesSluice(s)||usesLighthouse(s))&&s.boss.active))return -1;
+  return usesDredger(s)?nearestDredgerDrive(s,105):s.boss.parts.findIndex((h,i)=>h>0&&
+    (usesLighthouse(s)?distance(s.boat,partPosition(s,i))<=LIGHTHOUSE.linkRange:distance(s.boat,partPosition(s,i))<105));
 }
 export function objective(s){
   if(s.status==='lost')return {text:s.reason,target:null};
@@ -164,26 +200,31 @@ export function objective(s){
       return {text:'다음 방류 준비 · 상류로 돌아가 가속 거리 확보',target:{x:2520,y:SLUICE.laneYs[s.boss.parts.findIndex(h=>h>0)]}};
     }
     if(s.boss.hook>=0)return {text:'고리에서 멀어지며 견인 · 줄이 붉어지면 E로 놓기',target:partPosition(s,s.boss.hook)};
-    if(s.boss.phase==='recover')return {text:'노출된 구동 고리에 접근 · E로 연결',target:partPosition(s,s.boss.parts.findIndex(h=>h>0))};
+    if(s.boss.phase==='recover')return {text:'노출된 구동 고리에 접근 · E로 연결',target:partPosition(s,usesDredger(s)?nearestDredgerDrive(s):s.boss.parts.findIndex(h=>h>0))};
     if(usesDredger(s))return {text:s.boss.phase==='attack'?'낙하 지점에서 벗어나기':s.boss.crane.locked?'표적 고정 · 지금 원 밖으로 회피':'크레인을 구동부 위로 유인 · 고정되면 회피',target:null};
     return {text:s.depth===0?'흡입류·크레인 예고 밖으로 이동':s.depth===1?'방류 예고 띠에서 벗어나기':'탐조등이 멈추면 빛 밖으로 회피',target:null};
   }
+  // Passing a quay must not replace a route deliberately chosen on the chart.
+  // Local interaction remains available; only mooring/landing changes the task.
+  const planned=harborDestination(s);
+  if(planned){
+    if(planned.id==='boss')return {text:'기계선으로 · 바깥 해역 입구',target:planned.point,planBoss:true};
+    const docking=berthReadiness(s,planned.point);
+    return {text:docking.near?dockHint(docking):SHORE_SITES[planned.point.island]+' · 선택한 목적지',target:planned.point,planSite:planned.id};
+  }
   const nearby=s.map.berths.find(b=>(!s.claimed.includes(b.id)||rescuePendingAt(s,b.id))&&distance(s.boat,b)<130);
   if(nearby)return {text:dockHint(berthReadiness(s,nearby)),target:nearby};
-  const planned=harborDestination(s);
-  if(planned)return planned.id==='boss'?{text:'기계선으로 · 바깥 해역 입구',target:planned.point,planBoss:true}:
-    {text:SHORE_SITES[planned.point.island]+' · 선택한 목적지',target:planned.point,planSite:planned.id};
   const special=s.combat&&!hasTool(s,FLOOR_TOOLS[s.depth].id)?toolBerth(s):null;
   const berth=special||s.map.berths.find(b=>!s.claimed.includes(b.id));
   if(special)return {text:SHORE_SITES[special.island]+' 수색 · '+FLOOR_TOOLS[s.depth].name+' 확보 / 기존 장비로 돌파도 가능',target:special};
   return {text:berth?'부두에 평행하게 감속 · E 계류 / 장비 없이 보스 진입도 가능':'바깥 해역의 기계선을 정지시켜 탈출로 열기',target:berth||s.map.boss};
 }
-function damage(s,n,reason,source,impactSpeed=null){
+function damage(s,n,reason,source,impactSpeed=null,contact=null){
   if(s.boat.inv>0||s.status!=='playing')return;
   const before=s.hp;
   const brace=s.captain==='woo'&&s.skill.left>0?.25:1;
   s.hp=Math.max(0,s.hp-n*brace/(1+level(s,'plating')*.15));s.boat.inv=.8;
-  recordHit(s,'hull',source,before,impactSpeed);
+  recordHit(s,'hull',source,before,impactSpeed,contact);
   if(s.hp<=0){s.status='lost';s.reason=reason;}
 }
 export function interact(s,action,input={}){
@@ -251,7 +292,7 @@ export function interact(s,action,input={}){
     return true;
   }
   if((s.boss.phase==='recover'||(usesSluice(s)||usesLighthouse(s))&&s.boss.active&&!s.boss.cleared)&&!s.tow?.connected){
-    const id=s.boss.parts.findIndex((h,i)=>h>0&&(usesLighthouse(s)?distance(b,partPosition(s,i))<=LIGHTHOUSE.linkRange:distance(b,partPosition(s,i))<105));
+    const id=bossLinkCandidate(s);
     if(id>=0){clearSalvageCharge(s);s.boss.hook=id;s.boss.rest=usesLighthouse(s)?45:clamp(distance(b,partPosition(s,id)),45,95);return true;}
   }
   const berth=s.map.berths.find(x=>berthReady(s,x));
@@ -317,7 +358,7 @@ export function salvageChoicePreview(s,choice){
     crewHp:Math.min(100,s.crewHp+cargo),rank:choice==='rig'?2:s.salvage?.rank||0,
     cargoDelivered:cargo>0};
 }
-function reward(s,berth,equipment,selectedGear=null,supply=null){
+function reward(s,berth,equipment,selectedGear=null,supply=null,crew=null){
   const before=resourceSnapshot(s);
   const island=s.map.islands[berth.island];
   let foundTool=null,gear=null;
@@ -327,7 +368,10 @@ function reward(s,berth,equipment,selectedGear=null,supply=null){
       foundTool=FLOOR_TOOLS[s.depth];s.tools.push(foundTool.id);
     }
   }
-  if(selectedGear||!supply&&(equipment||island.role==='equipment')){
+  if(crew){
+    s.crewUpgrades.push(crew);
+    say(s,'crew-loot-'+s.depth+'-'+berth.id,'Park: '+CREW_UPGRADES[crew].name+'. 이번 항해에서 내가 직접 쓸게.');
+  }else if(selectedGear||!supply&&(equipment||island.role==='equipment')){
     const id=selectedGear||island.equipment;
     gear=id;
     if(s.equipment.length>=6)s.pendingGear=id;
@@ -340,7 +384,7 @@ function reward(s,berth,equipment,selectedGear=null,supply=null){
   }else if(island.role==='fuel')s.fuel=Math.min(maxFuel(s),s.fuel+45);
   else{s.hp=Math.min(maxHp(s),s.hp+35);s.flood=Math.max(0,s.flood-20);}
   s.claimed.push(berth.id);s.work=0;
-  recordVoyage(s,'cache',{site:berth.island,gear,pending:!!s.pendingGear,tool:foundTool?.id||null,...resourceGains(s,before)});
+  recordVoyage(s,'cache',{site:berth.island,gear,crew,pending:!!s.pendingGear,tool:foundTool?.id||null,...resourceGains(s,before)});
   if(s.harborIntel?.target===berth.id&&!rescuePendingAt(s,berth.id))s.harborIntel.target=null;
   say(s,'discovery-'+s.depth,DEPTHS[s.depth].discovery);
   if(foundTool){
@@ -359,10 +403,11 @@ export function resolveCache(s,choice){
   if(!s.pendingCache||!validCache(s))return false;
   if(choice==='leave'){s.pendingCache=null;s.work=0;return true;}
   const offer=cacheOffer(s);
-  if(choice!=='supplies'&&!offer.gear.includes(choice))return false;
+  const crew=offer.crew&&choice==='crew:'+offer.crew?offer.crew:null;
+  if(!crew&&choice!=='supplies'&&!offer.gear.includes(choice))return false;
   const berth=s.map.berths.find(b=>b.id===offer.berth);
   s.pendingCache=null;
-  reward(s,berth,choice!=='supplies',choice==='supplies'?null:choice,choice==='supplies'?offer.supply:null);
+  reward(s,berth,!crew&&choice!=='supplies',crew||choice==='supplies'?null:choice,choice==='supplies'?offer.supply:null,crew);
   return true;
 }
 export function resolveGear(s,index=null){
@@ -378,7 +423,7 @@ function shore(s,input,dt){
   const p=s.person,berth=s.map.berths.find(b=>b.id===s.mooring),island=s.map.islands[berth.island];
   const old={...p},buildings=shoreBuildings(island);
   const mag=Math.hypot(input.x||0,input.y||0),fast=input.boost;
-  if(mag){p.angle=Math.atan2(input.y,input.x);const v=(fast?100:58)*(s.combat?.action?.kind==='melee'?.55:1);
+  if(mag){p.angle=Math.atan2(input.y,input.x);const v=(fast?100:58)*crewEffects(s).speed*(s.combat?.action?.kind==='melee'?.55:1);
     if(s.generator===1){
       p.x=clamp(p.x+input.x/mag*v*dt,island.x+12,island.x+island.w-12);
       p.y=clamp(p.y+input.y/mag*v*dt,island.y+12,island.y+island.h-12);
@@ -596,11 +641,13 @@ function step(s,input,dt){
   }
   const blocked=pose=>vesselBlocked(s,pose);
   if(blocked(b)){
+    const turn={angle:b.angle,omega:b.omega};
     // The attempted turn can touch a drive while reversing still leads into
     // clear water. Reject that rotation independently instead of cancelling
     // every escape step and trapping the hull at the edge of the machinery.
     b.angle=old.angle;b.omega=0;
-    if(blocked(b)){
+    const contact=vesselContact(s,b);
+    if(contact){
       // A current into the wall must not cancel propulsion along it. Test each
       // translation with the same whole-hull/machinery predicates, then retain
       // the larger clear component. Never move to an unchecked diagonal pose.
@@ -615,7 +662,11 @@ function step(s,input,dt){
       }else{
         Object.assign(b,{x:old.x,y:old.y,vx:-vx*.18,vy:-vy*.18});impact=Math.hypot(vx,vy);
       }
-      if(impact>38)damage(s,(impact-25)*.15,'충돌로 선체가 파손됐다','collision',impact);
+      if(impact>38)damage(s,(impact-25)*.15,'충돌로 선체가 파손됐다','collision',impact,contact);
+    }
+    if(waterMotion(s)){
+      const pivot=terrainTurnPose(b,turn.angle,pose=>hullClear(s,pose),pose=>!blocked(pose));
+      if(pivot)Object.assign(b,{x:pivot.x,y:pivot.y,angle:pivot.angle,omega:turn.omega});
     }
   }
   // Cutting is fast; loose nets impede the next layer's northern shortcut.
@@ -630,7 +681,9 @@ export function restoreRun(raw){
   try{
     if(typeof raw!=='string'||raw.length>160000)return null;
     const s=JSON.parse(raw),finite=(v,min,max)=>Number.isFinite(v)&&v>=min&&v<=max;
-    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,RUN_VERSION].includes(s.version)||![1,GENERATOR_VERSION].includes(s.generator)||!Number.isInteger(s.seed)||!finite(s.seed,0,0xffffffff)||!Number.isInteger(s.depth)||!finite(s.depth,0,2))return null;
+    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,RUN_VERSION].includes(s.version)||![1,2,GENERATOR_VERSION].includes(s.generator)||!Number.isInteger(s.seed)||!finite(s.seed,0,0xffffffff)||!Number.isInteger(s.depth)||!finite(s.depth,0,2))return null;
+    if(s.version<17)s.crewUpgrades=null;
+    if(!validCrewUpgrades(s))return null;
     if(s.version<15)s.rescue=null;
     if(s.version===15&&s.rescue)s.rescue.quay=s.rescue.site;
     if(s.version<14)s.voyageRecord=null;

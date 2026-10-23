@@ -1,5 +1,5 @@
 import {touchText} from './mobile-touch-text.js';
-import {objective,berthReadiness,berthAlignment,shoreSearchStatus,CAPTAINS,BUILDS,GEAR,maxHp,maxFuel} from './rogue-core.js';
+import {objective,berthAlignment,shoreSearchStatus,CAPTAINS,BUILDS,GEAR,maxHp,maxFuel} from './rogue-core.js';
 import {dockAlignmentHint} from './docking-readiness.js';
 import {DEPTHS} from './rogue-map.js';
 import {FLOOR_TOOLS,SHORE_SITES} from './shore-encounters.js';
@@ -9,10 +9,12 @@ import {towBow} from './rogue-tow.js';
 import {salvageHudCondition,salvageDeviceName} from './rogue-salvage-ui.js';
 import {rigEffects} from './rogue-salvage.js';
 import {harborPlanSummary,pendingRescueDestination} from './harbor-plan-ui.js';
+import {harborDestination} from './harbor-plan.js';
 import {usesSluice,sluiceStatus} from './sluice-counterplay.js';
 import {usesLighthouse,lighthouseStatus,LIGHTHOUSE} from './lighthouse-counterplay.js';
 import {rescueStatus,rescueBerth} from './shore-rescue.js';
 import {visibleAt} from './rogue-vision.js';
+import {recentImpact} from './rogue-impact.js';
 
 const escape=x=>String(touchText(x)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const translations={
@@ -271,16 +273,32 @@ export function shoreHudContext(s,language='ko'){
   return result;
 }
 const gauge=(value,max,label,marks=[])=>({value,max,label,marks});
+// Display the resolved loss, never a guessed collision or the previous log hit.
+export function impactPresentation(hit,language='ko'){
+  if(!hit)return null;
+  const en=language==='en',amount=hit.amount<.1?'<0.1':String(Number(hit.amount.toFixed(1)));
+  const target=en?{hull:'Hull',crew:'Crew',scrap:'Scrap'}[hit.target]:{hull:'선체',crew:'선원',scrap:'고철'}[hit.target];
+  const names=en?{collision:'Collision',sluice:'Sluice surge',crane:'Crane strike',lighthouse:'Lighthouse fire',machine:'Machine attack',dog:'Dog attack',rat:'Rat attack',crab:'Crab attack',gull:'Gull attack'}:
+    {collision:'충돌',sluice:'수문 방류',crane:'크레인 낙하',lighthouse:'등대 포격',machine:'기계선 공격',dog:'들개 공격',rat:'시궁쥐 공격',crab:'대왕 게 공격',gull:'갈매기 습격'};
+  const contact=en?{terrain:'Quay / terrain collision',structure:'Machinery collision',drive:'Drive collision'}:
+    {terrain:'안벽·지형 충돌',structure:'기계 구조물 충돌',drive:'구동부 충돌'};
+  const cause=hit.target==='scrap'?(en?'Gull theft':'갈매기 약탈'):hit.source==='collision'?(contact[hit.contact]||names.collision):names[hit.source];
+  const loss=target+' −'+amount;
+  return {...hit,cause,loss,text:cause+' · '+loss,metric:hit.target==='scrap'?'ammo':hit.target};
+}
+
 // A presentation of the shared readiness query, not a second docking rule.
-export function dockAlignmentPresentation(alignment,language='ko'){
+export function dockAlignmentPresentation(alignment,language='ko',s=null){
   if(!alignment)return null;
   const en=language==='en',a=alignment;
+  const destination=s&&(harborDestination(s)?.point||(s.boss.cleared?s.map.exit:null));
+  const optional=!!destination&&(destination.x!==a.berth.x||destination.y!==a.berth.y);
   const active={brake:'speed',settle:'spin',turn:'heading',approach:'position',maneuver:'clearance'}[a.next.kind];
   const checks=[['position',en?'Position':'위치'],['heading',en?'Bow':'방향'],['speed',en?'Speed':'속도'],['spin',en?'Turn':'회전']]
     .map(([id,label])=>({id,label,ok:a.checks[id],active:active===id&&!a.checks[id],
       ratio:(id==='speed'||id==='spin')?Math.min(2,a.status[id]/a.limits[id]):null}));
   if(!a.checks.clearance)checks.unshift({id:'clearance',label:en?'Hull':'선체',ok:false,active:true,ratio:null});
-  return {title:a.exit?(en?'Exit alignment':'탈출 접안'):!a.checks.position&&['turn','approach'].includes(a.next.kind)?(en?'Approach berth':'접안점 접근'):(en?'Berth alignment':'접안 정렬'),
+  return {title:optional?(en?'Optional stop':'주변 접안(선택)'):a.exit?(en?'Exit alignment':'탈출 접안'):!a.checks.position&&['turn','approach'].includes(a.next.kind)?(en?'Approach berth':'접안점 접근'):(en?'Berth alignment':'접안 정렬'),optional,
     hint:dockAlignmentHint(a,language),kind:a.next.kind,ready:a.status.ready,checks,
     tone:a.status.ready?'ready':['maneuver','resource','ability'].includes(a.next.kind)?'warning':'normal'};
 }
@@ -347,13 +365,15 @@ export function rogueHudModel(s,language='ko'){
       model.mission=en?'Return to check on the mechanic':'정비공에게 돌아가서 확인';model.fullObjective=model.mission;
     }
   }
-  const planned=harborPlanSummary(s,guide,language);
+  // objective() supplies the immediate interaction and can name a passing
+  // quay. Read the explicit chart destination separately for the voyage goal.
+  const destination=sailing&&s.status==='playing'&&!s.pendingCache&&!s.pendingGear&&!s.salvage?.pending?harborDestination(s):null;
+  const planGuide=destination?{target:destination.point,...(destination.id==='boss'?{planBoss:true}:{planSite:destination.id})}:guide;
+  const planned=harborPlanSummary(s,planGuide,language);
   if(planned){
-    const docking=guide.planSite&&sailing&&berthReadiness(s,guide.target).near;
-    model.mission=docking?tr(guide.text):planned.title;
-    model.plan=(docking?planned.title+' · ':'')+planned.detail;
+    model.mission=planned.title;
+    model.plan=planned.detail;
     model.fullObjective=model.mission+' · '+model.plan;
-    if(docking)model.action=tr(guide.text);
   }
   // The locked circle takes priority over a lingering tow prompt. Recovery
   // still uses the existing hook, tension and captain-skill eligibility.
@@ -520,16 +540,22 @@ export function rogueHudModel(s,language='ko'){
   }
   if(sluice&&s.captain==='jeong')model.skill.name=en?'Hold discharge':'방류 붙잡기';
   if(lighthouse&&s.captain==='jeong')model.skill.name=en?'Hold searchlight':'탐조등 붙잡기';
-  const alignment=berthAlignment(s);model.docking=dockAlignmentPresentation(alignment,language);
+  const alignment=berthAlignment(s);model.docking=dockAlignmentPresentation(alignment,language,s);
   if(model.docking){
     const berth=s.map.berths.find(b=>b.id===alignment.berth.id);
-    // A nearby optional berth must not replace an intentionally selected
-    // destination (for example returning from the exit to a waiting mechanic).
-    if(guide.target?.x===alignment.berth.x&&guide.target?.y===alignment.berth.y)
-      model.mission=alignment.exit?(en?'Exit berth · Docking':'탈출 부두 · 접안'):
+    const target=destination?.point||(s.boss.cleared?s.map.exit:guide.target);
+    const arriving=target?.x===alignment.berth.x&&target?.y===alignment.berth.y;
+    if(model.docking.optional){
+      const name=alignment.exit?(en?'Exit berth':'탈출 부두'):tr(SHORE_SITES[berth.island]);
+      // Keep the real local E/steering opportunity, explicitly subordinate to
+      // the chosen route. Its instructions must not replace the primary action.
+      model.context.push({id:'docking',tone:'normal',text:(en?'Optional stop':'주변 접안(선택)')+' · '+name+' · '+model.docking.hint});
+    }else{
+      if(arriving)model.mission=alignment.exit?(en?'Exit berth · Docking':'탈출 부두 · 접안'):
         (berth?tr(SHORE_SITES[berth.island])+' · ':'')+(en?'Docking':'접안');
-    model.fullObjective=model.mission+' · '+model.docking.hint;
-    model.action=model.docking.hint;model.actionTone=model.docking.tone;
+      model.fullObjective=model.mission+' · '+model.docking.hint;
+      model.action=model.docking.hint;model.actionTone=model.docking.tone;
+    }
   }
   const context=shoreHudContext(s,language);
   if(context.search){
@@ -542,15 +568,21 @@ export function rogueHudModel(s,language='ko'){
     const defense=context.defense||defensePrompt(s,language,true);
     model.action=defense.text;model.actionTone=defense.tone;
   }else if(context.defense)model.context.push(context.defense);
+  model.impact=impactPresentation(recentImpact(s),language);
+  if(model.impact){
+    const affected=model.metrics.find(m=>m.id===model.impact.metric);
+    if(affected)affected.impact=true;
+  }
   if(s.work>0)model.work={value:s.work,max:ashore?1.8:3,label:ashore?(en?'Searching':'수색 중'):(en?'Recovering':'회수 중')};
   return model;
 }
 export function rogueHudMarkup(model){
+  const dockChecks=model.docking?`<span class="rogue-dock-checks" data-dock-kind="${model.docking.kind}" data-dock-optional="${!!model.docking.optional}" aria-label="${escape(model.docking.title)}">${model.docking.checks.map(c=>`<span data-dock-check="${c.id}" data-ok="${c.ok}" data-active="${c.active}"><i aria-hidden="true">${c.ok?'✓':'○'}</i> ${escape(c.label)}<span class="rogue-sr-only"> · ${model.language==='en'?(c.ok?'ready':'not ready'):(c.ok?'충족':'미충족')}</span></span>`).join('')}</span>`:'';
   return {
     mission:`<small>${escape(model.region)}</small><strong>${escape(model.mission)}</strong>${model.plan?`<div class="rogue-plan-summary">${escape(model.plan)}</div>`:''}${model.boss?`<div class="rogue-boss-state">${escape(model.boss)}</div>`:''}`,
-    readings:model.metrics.map(m=>`<span data-rogue-metric="${m.id}"${m.gauge?' class="rogue-instrument"':''}><span>${escape(m.label)}</span><b>${escape(m.value)}</b>${m.max!==undefined?`<span class="rogue-maximum">/${m.max}</span>`:''}${instrument(m.gauge)}</span>`).join(''),
-    conditions:model.conditions.map(c=>`<span data-rogue-condition="${c.id}" data-tone="${c.tone}"${c.gauge?' class="rogue-instrument"':''}>${c.emphasis?`<strong>${escape(c.text)}</strong>`:escape(c.text)}${instrument(c.gauge)}</span>`).join(''),
-    controls:`${model.docking?`<span class="rogue-dock-checks" data-dock-kind="${model.docking.kind}" aria-label="${escape(model.docking.title)}">${model.docking.checks.map(c=>`<span data-dock-check="${c.id}" data-ok="${c.ok}" data-active="${c.active}"><i aria-hidden="true">${c.ok?'✓':'○'}</i> ${escape(c.label)}<span class="rogue-sr-only"> · ${model.language==='en'?(c.ok?'ready':'not ready'):(c.ok?'충족':'미충족')}</span></span>`).join('')}</span>`:''}<span data-rogue-action="primary" data-tone="${model.actionTone||'normal'}">${escape(model.action)}</span>${model.context.map(c=>`<span data-rogue-context="${c.id}" data-tone="${c.tone}">${escape(c.text)}</span>`).join('')}${model.work?`<label class="rogue-work">${escape(model.work.label)}<progress max="${model.work.max}" value="${model.work.value}" aria-label="${escape(model.work.label)}"></progress></label>`:''}`,
+    readings:model.metrics.map(m=>`<span data-rogue-metric="${m.id}"${m.impact?' data-impact="true"':''}${m.gauge?' class="rogue-instrument"':''}><span>${escape(m.label)}</span><b>${escape(m.value)}</b>${m.max!==undefined?`<span class="rogue-maximum">/${m.max}</span>`:''}${instrument(m.gauge)}</span>`).join(''),
+    conditions:(model.impact?`<span class="rogue-impact" data-impact-id="${model.impact.id}" data-impact-target="${model.impact.target}" data-impact-source="${model.impact.source}"><span>${escape(model.impact.cause)}</span><strong>${escape(model.impact.loss)}</strong></span>`:'<span class="rogue-impact" aria-hidden="true"></span>')+model.conditions.map(c=>`<span data-rogue-condition="${c.id}" data-tone="${c.tone}"${c.gauge?' class="rogue-instrument"':''}>${c.emphasis?`<strong>${escape(c.text)}</strong>`:escape(c.text)}${instrument(c.gauge)}</span>`).join(''),
+    controls:`${model.docking?.optional?'':dockChecks}<span data-rogue-action="primary" data-tone="${model.actionTone||'normal'}">${escape(model.action)}</span>${model.context.map(c=>`<span data-rogue-context="${c.id}" data-tone="${c.tone}">${escape(c.text)}</span>${c.id==='docking'?dockChecks:''}`).join('')}${model.work?`<label class="rogue-work">${escape(model.work.label)}<progress max="${model.work.max}" value="${model.work.value}" aria-label="${escape(model.work.label)}"></progress></label>`:''}`,
     skill:`<kbd>G</kbd><span><b>${escape(model.skill.name)}</b><small>${escape(model.skill.reason)}${model.skill.active?' · '+model.skill.remaining.toFixed(1)+(model.language==='en'?'s':'초'):''}</small>${model.skill.ready?`<small>${model.language==='en'?'Boost':'부스터'} ${model.skill.boost} · ${model.language==='en'?'fuel':'연료'} ${model.skill.fuel}</small>`:''}</span>${!model.skill.compact?`<progress aria-label="${model.language==='ko'?'기술 재사용 준비':'Skill cooldown'}" max="${model.skill.cooldown}" value="${model.skill.cooldown-model.skill.remainingCooldown}"></progress>`:''}`
   };
 }
@@ -562,6 +594,7 @@ export function rogueDetailsMarkup(s,language='ko'){
     [en?'Between regions':'해역 이동',s.supplyModel==='legacy'?(en?'Fuel +30, up to tank capacity':'연료 +30 · 탱크 최대치까지'):(en?'Remaining fuel carries over · no automatic refuel':'남은 연료 이월 · 자동 보충 없음')],
     [en?'Crew / scrap':'선원 / 고철',`${Math.ceil(s.crewHp)}/100 · ${s.combat?.ammo??0}/12`],
     [en?'Equipment':'장비',s.equipment.map(id=>tr(GEAR[id])).join(' · ')||(en?'None':'없음')],
+    [en?'Crew equipment · this voyage':'선원 장비 · 이번 항해',[...new Set(s.crewUpgrades||[])].map(id=>(en?{grip:'Iron grip',stride:'Deck footwork',guard:'Padded vest'}:{grip:'강철 손아귀',stride:'갑판 발놀림',guard:'충격 안감'})[id]+' '+s.crewUpgrades.filter(x=>x===id).length).join(' · ')||(en?'None':'없음')],
     [en?'Recovered tools':'회수 도구',s.tools.map(id=>tr(FLOOR_TOOLS.find(t=>t.id===id).name)).join(' · ')||(en?'None':'없음')],
     [en?'Build':'선체 개조',tr(BUILDS[s.build])],
     [en?'Time underway':'항해 경과',`${Math.floor(s.time/60)}:${String(Math.floor(s.time%60)).padStart(2,'0')}`]

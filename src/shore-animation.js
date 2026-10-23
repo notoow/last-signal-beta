@@ -87,12 +87,18 @@ export function drawShoreEncounter(c,s,reduced){
     const frame=animationFrame(pose,enemy?null:fight.action);
     const lift=bird?16+(reduced?0:Math.sin(s.time*7+p.homeX)*2):0;
     const alpha=enemy&&p.hp===0?p.dead/.65:1;
-    const drawP={...p,y:p.y-lift,angle:!enemy&&!worker&&fight.action?fight.action.angle:p.angle};
+    // The stride comes from distance actually travelled, not elapsed frames.
+    // A small continuous weight transfer softens contact-pose changes while
+    // preserving planted feet at rest and never blending double silhouettes.
+    const stride=enemy||worker?p.stride:fight.stride,moving=enemy||worker?p.moving:fight.moving;
+    const stepLift=!reduced&&moving?Math.sin(stride/8*Math.PI)**2*(enemy?1:1.5):0;
+    const drawP={...p,y:p.y-lift-stepLift,angle:!enemy&&!worker&&fight.action?fight.action.angle:p.angle};
     if(enemy){
       const breath=!reduced&&!p.moving&&p.phase==='idle'?Math.sin(s.time*2.8+p.homeX)*.018:0;
       sprite(c,fauna,faunaRows[p.kind],frame,drawP,size,alpha,1+breath);
     }else if(worker)workerSprite(c,s,drawP,reduced);
     else crewSprite(c,s,drawP,reduced);
+    if(enemy&&p.asleep&&p.hp>0){c.fillStyle='#c3d7db';c.font='600 12px Pretendard';c.textAlign='center';c.fillText('z Z',p.x,p.y-size-10);}
     if(enemy&&p.hp>0&&(p.alert||p.hp<FAUNA[p.kind].hp)){
       c.fillStyle='#081c20cc';c.fillRect(p.x-15,p.y-size-8,30,3);
       c.fillStyle=p.kind==='crab'&&p.phase==='recover'?'#a7e1bc':'#dfaa7c';c.fillRect(p.x-15,p.y-size-8,30*p.hp/FAUNA[p.kind].hp,3);
