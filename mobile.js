@@ -951,6 +951,7 @@ var language = "";
 var deckHeight = 0;
 var handledPointers = /* @__PURE__ */ new Set();
 var blockedClicks = /* @__PURE__ */ new Map();
+var touchClickBound = /* @__PURE__ */ new WeakSet();
 var thumb = document.getElementById("mobileThumb");
 var voyageNotes = "";
 var mobileFrame = null;
@@ -1099,6 +1100,30 @@ function bindMenuToggle(button, toggle) {
   });
   button.addEventListener("click", (e) => {
     if (e.detail === 0 && playing) toggle();
+  });
+}
+function bindTouchClick(button) {
+  if (touchClickBound.has(button)) return;
+  touchClickBound.add(button);
+  let pointer = null;
+  button.style.touchAction = "none";
+  button.addEventListener("pointerdown", (e) => {
+    if (!playing || e.pointerType !== "touch" || e.button !== 0) return;
+    e.preventDefault();
+    handledPointers.add(e.pointerId);
+    if (pointer !== null) return;
+    pointer = e.pointerId;
+    button.setPointerCapture(pointer);
+  });
+  button.addEventListener("pointerup", (e) => {
+    if (e.pointerId !== pointer) return;
+    pointer = null;
+    e.preventDefault();
+    const r = button.getBoundingClientRect();
+    if (playing && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) button.click();
+  });
+  for (const type of ["pointercancel", "lostpointercapture"]) button.addEventListener(type, (e) => {
+    if (e.pointerId === pointer) pointer = null;
   });
 }
 function bindAction(button) {
@@ -1342,6 +1367,7 @@ function refresh() {
   installHelp();
   compactPreparation();
   refreshFlightHud(playing, rogue, mobileFrame);
+  for (const button of document.querySelectorAll("#mobileMinimap,#roguePause,#playPause,#mobileInfo,#mobileSwap")) bindTouchClick(button);
 }
 setInterval(refresh, 100);
 refresh();

@@ -273,6 +273,28 @@ html,body{height:var(--mobile-height,100dvh);overflow:hidden}
 }
 @media(max-width:900px) and (orientation:landscape){.rogue-cache-desk .rogue-salvage-header h2+p::after{content:' · 옆으로 넘기기 →';color:#dfbd7f}html[lang=en] .rogue-cache-desk .rogue-salvage-header h2+p::after{content:' · Swipe →'}}
 
+/* A Rogue result has one bounded record scroll, with decisions always visible.
+   Keep shared Story, pause, preparation and reward surfaces on their own rules. */
+html[data-mobile-ui=true] #rogue[data-surface=result] #rogueModal{box-sizing:border-box;height:var(--mobile-height,100dvh);max-height:var(--mobile-height,100dvh);padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));overflow:hidden;place-items:stretch center}
+html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result{height:100%;max-height:100%;width:min(720px,100%);min-height:0;display:grid!important;grid-template-rows:auto minmax(0,1fr) auto;margin:0}
+html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result .session-kicker{font-size:12px;line-height:16px;margin:0 0 4px}
+html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result h2{font-size:26px;line-height:1.1}
+html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result h2:after{height:2px;margin:4px auto}
+html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result .session-lead{font-size:14px!important;line-height:1.35;margin:6px 0 0}
+html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result .session-facts{margin:4px 0 8px}
+html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result .session-facts>div{display:flex;justify-content:center;align-items:baseline;gap:6px;padding:0 4px}
+html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result .session-facts dt{font-size:12px;line-height:18px;margin:0}
+html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result .session-facts dd{font-size:14px;line-height:18px}
+html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result>.session-body{min-height:0;overflow:auto;overscroll-behavior:contain;max-height:none!important;font-size:14px;padding:0 0 4px;scroll-padding-block:4px}
+html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result .rogue-rescue-result{font-size:13px;line-height:18px;margin:0 0 6px}
+html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result .session-body details{padding:0}
+html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result .session-body summary{font-size:14px;min-height:44px;padding:10px 0;box-sizing:border-box}
+html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result>.session-actions{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:4px 8px;margin:0;padding:8px 0 0;background:#10191f;border-top:1px solid #b9c1c833}
+html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result>.session-actions>button{max-width:none;min-width:0;min-height:48px;padding:8px 10px;font-size:14px;line-height:18px}
+html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result>.session-actions>#rogueNew,html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result>.session-actions>#rogueHome{min-height:44px;border:0;background:none;color:#b9c1c8;padding:6px 10px;font-size:13px}
+html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result>.session-actions>.session-save{grid-column:1/-1;margin:0;padding:0 4px;font-size:13px;line-height:18px;text-align:left}
+html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result>.session-actions>.session-save[data-save-state=saved]{display:none}
+
 /* Visual hierarchy: navigation in the world, vital bars below, light resources
    above. Opaque surfaces belong to menus, not the sailing HUD. */
 .mobile-playing #rogueHud,.mobile-playing #hud{display:none!important}

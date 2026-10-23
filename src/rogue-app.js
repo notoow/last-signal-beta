@@ -306,7 +306,14 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
       reward:voyageRecordMarkup(state,language)+'<p id="rogueSaveStatus" class="session-save" role="status" data-save-state="'+(saveError?'failed':'saved')+'">'+(saveError?ui.saveFailed:ui.saved)+'</p>',
       details:state.log.map(l=>'<p>'+esc(rogueHudText(l.text,language))+'</p>').join(''),
       actions:'<button id="rogueReprepare" class="primary">'+esc(voyagePreparationText(state,language).button)+'</button><button id="rogueRetry">'+t('바로 재도전','Retry immediately')+'</button><button id="rogueNew">'+t('새 해도 준비','New random chart')+'</button><button id="rogueHome" class="secondary">'+ui.harbor+'</button>',language}));
-    root.querySelector('.session-result').classList.add('rogue-debrief-result');
+    const result=root.querySelector('.session-result');result.classList.add('rogue-debrief-result');
+    if(document.documentElement.dataset.mobileUi==='true'){
+      // Keep the title and decisions outside the scrollable record on mobile.
+      // Long saved reasons belong in the scroll area too, never under buttons.
+      const body=result.querySelector('.session-body');
+      body.prepend(result.querySelector('.session-lead'),result.querySelector('.session-facts'));
+      result.querySelector('.session-actions').prepend(result.querySelector('#rogueSaveStatus'));
+    }
     // The radio log remains separate from the factual choice and damage record.
     root.querySelector('.session-records>summary')?.replaceChildren(document.createTextNode(ui.radio));
     activateModal($('rogueModal'),'#rogueReprepare');

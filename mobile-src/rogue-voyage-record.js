@@ -4,6 +4,7 @@ import {publishImpact} from './rogue-impact.js';
 const GEAR=['motor','pump','winch','tank','plating','turbine'];
 const SOURCES=['collision','sluice','crane','lighthouse','machine','dog','rat','crab','gull'];
 const PHASES=['idle','warn','attack','recover'];
+const CONTACTS={collision:['terrain','structure','drive'],sluice:['opened','pier','closed','angle','slow']};
 export const RECORD_LIMITS=Object.freeze({events:48,hits:8});
 export const newVoyageRecord=()=>({events:[],hits:[],damage:{hull:[0,0,0],crew:[0,0,0]},hitCount:0});
 export const resourceSnapshot=s=>({fuel:s.fuel,hp:s.hp,flood:s.flood,crew:s.crewHp});
@@ -21,7 +22,7 @@ export function recordHit(s,target,source,before,impactSpeed=null,contact=null){
   if(!r)return;
   r.damage[target][s.depth]+=amount;r.hitCount++;
   r.hits.push({time:s.time,depth:s.depth,target,source,amount,remaining,fuel:s.fuel,flood:s.flood,
-    phase:s.boss?.phase||'idle',speed:impactSpeed});
+    phase:s.boss?.phase||'idle',speed:impactSpeed,...(contact===null?{}:{contact})});
   if(r.hits.length>RECORD_LIMITS.hits)r.hits.shift();
 }
 export function voyageDebrief(s){
@@ -62,7 +63,8 @@ export function validVoyageRecord(s){
   }))return false;
   if(r.hits.some(h=>!['hull','crew'].includes(h.target)||!SOURCES.includes(h.source)||!num(h.amount,Number.EPSILON,210)||
     !num(h.remaining,0,h.target==='hull'?210:100)||!num(h.fuel,0,320)||!num(h.flood,0,100)||!PHASES.includes(h.phase)||
-    !(h.speed===null||['collision','sluice'].includes(h.source)&&num(h.speed,0,3000))))return false;
+    !(h.speed===null||['collision','sluice'].includes(h.source)&&num(h.speed,0,3000))||
+    h.contact!=null&&!CONTACTS[h.source]?.includes(h.contact)))return false;
   // Totals may exceed the recent-hit ring, but may never be smaller.
   return ['hull','crew'].every(k=>r.damage[k].every((total,d)=>total+1e-7>=
     r.hits.filter(h=>h.target===k&&h.depth===d).reduce((sum,h)=>sum+h.amount,0)));

@@ -14,7 +14,7 @@ import {usesSluice,sluiceStatus} from './sluice-counterplay.js';
 import {usesLighthouse,lighthouseStatus,LIGHTHOUSE} from './lighthouse-counterplay.js';
 import {rescueStatus,rescueBerth} from './shore-rescue.js';
 import {visibleAt} from './rogue-vision.js';
-import {recentImpact} from './rogue-impact.js';
+import {recentImpact,gateImpactText} from './rogue-impact.js';
 
 const escape=x=>String(touchText(x)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const translations={
@@ -282,7 +282,7 @@ export function impactPresentation(hit,language='ko'){
     {collision:'충돌',sluice:'수문 방류',crane:'크레인 낙하',lighthouse:'등대 포격',machine:'기계선 공격',dog:'들개 공격',rat:'시궁쥐 공격',crab:'대왕 게 공격',gull:'갈매기 습격'};
   const contact=en?{terrain:'Quay / terrain collision',structure:'Machinery collision',drive:'Drive collision'}:
     {terrain:'안벽·지형 충돌',structure:'기계 구조물 충돌',drive:'구동부 충돌'};
-  const cause=hit.target==='scrap'?(en?'Gull theft':'갈매기 약탈'):hit.source==='collision'?(contact[hit.contact]||names.collision):names[hit.source];
+  const cause=hit.target==='scrap'?(en?'Gull theft':'갈매기 약탈'):hit.source==='sluice'?gateImpactText(hit.contact,language):hit.source==='collision'?(contact[hit.contact]||names.collision):names[hit.source];
   const loss=target+' −'+amount;
   return {...hit,cause,loss,text:cause+' · '+loss,metric:hit.target==='scrap'?'ammo':hit.target};
 }

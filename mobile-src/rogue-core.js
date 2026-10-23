@@ -634,7 +634,13 @@ function step(s,input,dt){
   if(sluice){
     const impact=speed(b);
     Object.assign(b,{x:old.x,y:old.y,omega:0,vx:-Math.abs(b.vx)*(sluice.opened?.32:.18),vy:b.vy*.18});
-    if(sluice.damage)damage(s,sluice.damage*(s.shielded?.6:1),'수문 충돌로 선체가 파손됐다','sluice',impact);
+    if(sluice.damage){
+      const contact=sluice.opened?'opened':s.boss.sluice.lastImpact;
+      const reason={opened:'잠금판을 뚫었지만 선체 충격을 견디지 못했다',pier:'수문 기둥에 부딪혀 선체가 파손됐다',
+        closed:'닫힌 잠금판에 부딪혀 선체가 파손됐다',angle:'선수가 어긋난 채 수문에 부딪혀 파손됐다',
+        slow:'돌파 속도가 부족한 채 잠금판에 부딪혀 파손됐다'}[contact]||'수문 충돌로 선체가 파손됐다';
+      damage(s,sluice.damage*(s.shielded?.6:1),reason,'sluice',impact,contact);
+    }
     if(sluice.opened){
       clearSalvageCharge(s);
       say(s,'sluice-open-'+sluice.lane,'Woo: '+(sluice.lane+1)+'번 잠금 풀렸어! 열린 수로는 다시 닫히지 않아.');
