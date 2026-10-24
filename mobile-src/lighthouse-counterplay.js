@@ -15,8 +15,12 @@ export const newLighthouse=seed=>({direction:seed%2?1:-1,exposure:0,target:null,
   impactAt:-1,hit:false,progress:[0,0,0],lastSent:-1,sentAt:-1,decoyUsed:0});
 export const relayPosition=i=>RELAYS[i];
 export function relayApproach(s,i){
-  const p=RELAYS[i],a=Math.atan2(s.map.boss.y-p.y,s.map.boss.x-p.x);
-  return {x:p.x-Math.cos(a)*90,y:p.y-Math.sin(a)*90,angle:a};
+  // Suggest clear water with room for a keyboard heading and current drift.
+  // This is a navigation cue, not a required berth: the physical link still
+  // accepts every position/heading allowed by lighthouseStatus.
+  const p=RELAYS[i],a=[-Math.PI*3/4,-Math.PI/2,Math.PI][i];
+  const x=p.x+Math.cos(a)*90,y=p.y+Math.sin(a)*90;
+  return {x,y,angle:Math.atan2(s.map.boss.y-y,s.map.boss.x-x)};
 }
 function pointSegment(p,a,b){
   const dx=b.x-a.x,dy=b.y-a.y,t=clamp(((p.x-a.x)*dx+(p.y-a.y)*dy)/(dx*dx+dy*dy||1),0,1);

@@ -523,10 +523,26 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
     if(!dredger&&!sluice&&!lighthouse&&s.boss.active&&!s.boss.cleared)points.push({p:s.map.boss,text:boss.phase==='warn'?'보스 · 공격 예고':'보스',color:boss.phase==='warn'?'#f4ad7d':'#e4ca9b'});
     for(const {p,text,color} of points){
       const mark=edgeMarker(frame,p);if(!mark)continue;
+      const relayDirection=connectionMarker&&p===target;
+      let captionText=text;
+      if(relayDirection){
+        // Same public objective coordinate; only distinguish a direction cue
+        // from the world-space connection point. A HUD-hidden point is not
+        // described as offscreen when it is still inside the physical canvas.
+        const q=projectWorld(frame,p),outside=q.x<0||q.y<0||q.x>width||q.y>height;
+        const number=String(connectionMarker.index+1).padStart(2,'0');
+        captionText=language==='en'?(outside?'RELAY '+number+' · OFFSCREEN':'TO RELAY '+number):
+          (outside?'중계기 '+number+' · 화면 밖':'중계기 '+number+' 방향');
+      }
       c.save();c.translate(mark.x,mark.y);c.rotate(mark.angle);c.fillStyle=color;
-      c.beginPath();c.moveTo(11,0);c.lineTo(-7,-6);c.lineTo(-7,6);c.closePath();c.fill();c.restore();
-      const caption=(connectionMarker||driveTarget)&&p===target?relayEdgeLabel(c,text,mark,frame):{x:Math.max(74,Math.min(width-74,mark.x)),y:mark.y-17};
-      label(c,text,caption.x,caption.y,color,12);
+      c.beginPath();
+      if(relayDirection){
+        for(const x of [-9,1]){c.moveTo(x,-5);c.lineTo(x+7,0);c.lineTo(x,5);}
+        c.strokeStyle='#071c20';c.lineWidth=4;c.stroke();c.strokeStyle=color;c.lineWidth=2;c.stroke();
+      }else{c.moveTo(11,0);c.lineTo(-7,-6);c.lineTo(-7,6);c.closePath();c.fill();}
+      c.restore();
+      const caption=(connectionMarker||driveTarget)&&p===target?relayEdgeLabel(c,captionText,mark,frame):{x:Math.max(74,Math.min(width-74,mark.x)),y:mark.y-17};
+      label(c,captionText,caption.x,caption.y,color,12);
     }
   }
   return frame;
