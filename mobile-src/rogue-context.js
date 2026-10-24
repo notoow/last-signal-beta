@@ -101,7 +101,13 @@ export function rogueMinimap(s){
   if(!s)return null;
   const known=p=>s.harborIntel?knownBerth(s,p):surveyedAt(s,p);
   const player=s.person||s.boat,rescue=rescueStatus(s),destination=harborDestination(s);
-  return {width:s.map.width,height:s.map.height,cols:s.map.cols,rows:s.map.rows,tiles:s.map.tiles?.slice()||[],
+  // Send remembered terrain, not a complete map hidden only by a paint layer.
+  // Current sight still controls actors; leaving a cell never erases its land.
+  const tiles=s.map.tiles?.map((tile,i)=>!s.survey||surveyedAt(s,{
+    x:(i%s.map.cols+.5)*s.map.width/s.map.cols,
+    y:(Math.floor(i/s.map.cols)+.5)*s.map.height/s.map.rows
+  })?tile:0)||[];
+  return {width:s.map.width,height:s.map.height,cols:s.map.cols,rows:s.map.rows,tiles,
     islands:s.map.tiles?[]:s.map.islands.map(p=>({x:p.x,y:p.y,w:p.w,h:p.h})),mode:s.mode,
     target:destination?{x:destination.point.x,y:destination.point.y}:null,
     survey:s.survey?.slice()||null,visible:visibleSurvey(s),surveyCols:SURVEY_COLS,surveyCell:SURVEY_CELL,
