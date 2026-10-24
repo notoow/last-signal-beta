@@ -1,6 +1,6 @@
 // Cached painted material response. Adapted from the approved pass09 renderer.
 // Geometry and lamp positions are supplied by the actual generated harbor.
-function groundField(source){
+function groundField(source,wearArea,variant){
   // Build one opaque world-sized field. Overlapping large source crops retain
   // painted wet/dry shapes while avoiding a repeated small puddle carpet.
   // The integer hash is fixed by patch coordinates, never time or camera.
@@ -10,16 +10,21 @@ function groundField(source){
   const t=tile.getContext('2d'),m=mask.getContext('2d');
   const feather=axis=>{const g=m.createLinearGradient(0,0,axis?0:320,axis?320:0);g.addColorStop(0,'#fff0');g.addColorStop(.18,'#fff');g.addColorStop(.82,'#fff');g.addColorStop(1,'#fff0');m.fillStyle=g;m.fillRect(0,0,320,320);};
   feather(0);m.globalCompositeOperation='destination-in';feather(1);
-  for(let row=-1;row<4;row++)for(let col=-1;col<6;col++){
-    const seed=Math.imul(col+3,73856093)^Math.imul(row+3,19349663),bits=seed>>>0;
+  // Fixed world size, bounded canvas memory. Large yards get more small
+  // painted patches instead of stretching the same puddle across the yard.
+  const width=Math.max(64,Math.min(320,field.width*12/wearArea.w));
+  const height=Math.max(64,Math.min(320,field.height*12/wearArea.h));
+  const strideX=width*.7,strideY=height*.7;
+  for(let row=-1;row<Math.ceil(field.height/strideY)+1;row++)for(let col=-1;col<Math.ceil(field.width/strideX)+1;col++){
+    const seed=Math.imul(col+3,73856093)^Math.imul(row+3,19349663)^variant,bits=seed>>>0;
     const size=.8*Math.min(source.width,source.height),sx=((bits>>>3)%101)/100*(source.width-size),sy=((bits>>>12)%101)/100*(source.height-size);
     t.clearRect(0,0,320,320);t.save();t.translate(160,160);t.rotate((bits%4)*Math.PI/2);if(bits&16)t.scale(-1,1);t.drawImage(source,sx,sy,size,size,-160,-160,320,320);t.restore();
     t.save();t.globalCompositeOperation='destination-in';t.drawImage(mask,0,0);t.restore();
-    c.drawImage(tile,col*224-48,row*224-48);
+    c.drawImage(tile,col*strideX-width*.15,row*strideY-height*.15,width,height);
   }return field;
 }
-export function bakeQuayMaterial(source,wearArea,groundLights){
-  const image=groundField(source);
+export function bakeQuayMaterial(source,wearArea,groundLights,variant=0){
+  const image=groundField(source,wearArea,variant);
   const surface=document.createElement('canvas'),sky=document.createElement('canvas'),warm=document.createElement('canvas'),sheen=document.createElement('canvas'),environment=document.createElement('canvas');
   surface.width=sky.width=warm.width=sheen.width=environment.width=image.width;surface.height=sky.height=warm.height=sheen.height=environment.height=image.height;
   const c=surface.getContext('2d',{willReadFrequently:true}),sc=sky.getContext('2d'),wc=warm.getContext('2d'),hc=sheen.getContext('2d'),ec=environment.getContext('2d');c.drawImage(image,0,0);

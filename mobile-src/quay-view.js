@@ -50,31 +50,40 @@ function clipLand(c,f,tiles){
   c.beginPath();for(const r of tiles){const p=[r,{x:r.x+TILE,y:r.y},{x:r.x+TILE,y:r.y+TILE},{x:r.x,y:r.y+TILE}].map(q=>project(f,q));
     p.forEach((q,i)=>i?c.lineTo(q.x,q.y):c.moveTo(q.x,q.y));c.closePath();}c.clip();
 }
-function buildingLights(b){return [{x:b.x+1.1*M,y:b.y+b.h,spread:3.1,reach:4.8,power:.8},
-  {x:b.x+5.35*M,y:b.y+b.h,spread:3.5,reach:5,power:1}];}
+function buildingLights(b){
+  // Lamp floor points measured on the original 1536px upright art. Its front
+  // foundation has the same slope as the ground projection, so these offsets
+  // share the sprite's 704px pivot and 98.5px/metre scale.
+  const lamp=(pixel,spread,reach,power,width,height,alpha)=>({
+    x:b.x+b.w/2+(pixel-704)/98.5*M,y:b.y+b.h,spread,reach,power,
+    reflection:{width,height,alpha}});
+  return b.visual==='warehouse'?[lamp(245,1.45,3.5,.65,3.6,4.1,.52)]:
+    [lamp(467,2.4,3.4,.8,5.2,3.2,.45),
+     lamp(874,2.1,3.1,.7,4.1,3.8,.4)];
+}
 function material(s,yard){
   let cache=materialCache.get(s.map);if(!cache){cache=new Map();materialCache.set(s.map,cache);}
   if(cache.has(yard.id))return cache.get(yard.id);
   const buildings=shoreBuildings(yard).filter(b=>b.visual==='warehouse'||b.visual==='workshop');
   const area={x:yard.x,y:yard.y,w:yard.w,h:yard.h};
   const lights=buildings.flatMap(buildingLights).map(l=>({...l,x:(l.x-area.x)/M,y:(l.y-area.y)/M}));
-  const paint=bakeQuayMaterial(art.wet,{x:0,y:0,w:area.w/M,h:area.h/M},lights);
+  const paint=bakeQuayMaterial(art.wet,{x:0,y:0,w:area.w/M,h:area.h/M},lights,Math.imul(yard.x,73856093)^Math.imul(yard.y,19349663));
   const result={area,paint};cache.set(yard.id,result);return result;
 }
 function ground(c,s,f,tiles){
   plane(c,f,()=>{
     c.beginPath();for(const t of tiles)c.rect(t.x,t.y,TILE,TILE);c.clip();
-    const pattern=c.createPattern(art.wet,'repeat');pattern.setTransform(new DOMMatrix().scale(36*M/art.wet.width));
+    const pattern=c.createPattern(art.wet,'repeat');pattern.setTransform(new DOMMatrix().scale(24*M/art.wet.width));
     c.fillStyle=pattern;c.fillRect(f.bounds.x-120,f.bounds.y-120,f.bounds.w+240,f.bounds.h+240);
     c.fillStyle='#09233460';c.fillRect(f.bounds.x-120,f.bounds.y-120,f.bounds.w+240,f.bounds.h+240);
     for(const yard of s.map.islands){
       if(!overlap(yard,{x:f.bounds.x-150,y:f.bounds.y-150,w:f.bounds.w+300,h:f.bounds.h+300}))continue;
       const {area,paint}=material(s,yard);
-      for(const [layer,alpha]of [['surface',.96],['sheen',.55],['environment',1],['sky',.9],['warm',.85]]){
+      for(const [layer,alpha]of [['surface',.96],['sheen',.55],['environment',.7],['sky',.65],['warm',.85]]){
         c.globalAlpha=alpha;c.drawImage(paint[layer],area.x,area.y,area.w,area.h);
       }c.globalAlpha=1;
       // One broad wet patch per service yard, fixed to its generated geometry.
-      c.globalAlpha=.25;c.drawImage(art.patch,yard.x+yard.w*.42,yard.y+yard.h-13*M,9*M,11*M);c.globalAlpha=1;
+      c.globalAlpha=.14;c.drawImage(art.patch,yard.x+yard.w*.42,yard.y+yard.h-10*M,7*M,8*M);c.globalAlpha=1;
     }
   });
 }
@@ -147,8 +156,8 @@ function scenery(c,s,f,tiles){
       c.drawImage(im,0,sy,1536,22,Math.sin(row*1.7)*2,sy,1536,22);
     }c.restore();
     for(const light of buildingLights(b)){
-      const q=project(f,{x:light.x,y:light.y+.35*M}),w=8.8*unit,h=4.9*unit;
-      c.globalAlpha=.62;c.drawImage(art.gold,q.x-w*.5,q.y-h*.08,w,h);
+      const q=project(f,{x:light.x,y:light.y+.35*M}),r=light.reflection,w=r.width*unit,h=r.height*unit;
+      c.globalAlpha=r.alpha;c.drawImage(art.gold,q.x-w*.5,q.y-h*.08,w,h);
     }c.restore();
   }
   return objects;

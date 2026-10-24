@@ -537,3 +537,8 @@ html[data-mobile-move-side=right] #mobileTransit{right:auto;left:0;justify-conte
 #mobileControls #mobileActions>#mobileGullHorn[hidden]{display:none}
 #mobileGullHorn svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
 #mobileControls #mobileGullHorn span{font-size:12px;line-height:16px;max-width:none;white-space:nowrap}
+
+/* The transparent grid must not swallow world input between visible controls. */
+#mobileControls #mobileActions{pointer-events:none}
+#mobileControls #mobileActions>button,#mobileControls #mobileTransit>button,
+#mobileControls #mobileTools,#mobileControls #mobileTools>button{pointer-events:auto}
