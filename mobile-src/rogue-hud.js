@@ -413,10 +413,10 @@ export function rogueHudModel(s,language='ko'){
     const names=en?['Suction pump','Crane drive']:['흡입 펌프','크레인 구동부'];
     const effects=en?['Suction weakened','Next warning extended']:['흡입 약화','다음 공격 예고 연장'];
     if(hit){
-      const part=crane.lastHit,destroyed=s.boss.parts[part]<=0;
-      condition('dredger-hit',`✓ ${en?'Self-hit':'유인 명중'} · ${names[part]} ${destroyed?(en?'destroyed':'파괴'):(en?'hit':'타격')}${destroyed?' · '+effects[part]:''}`,'ready',{emphasis:true});
+      const part=crane.lastHit,amount=crane.lastDamage<.1?'<0.1':String(Number(crane.lastDamage.toFixed(1)));
+      condition('dredger-hit',`✓ ${en?'Self-hit':'유인 명중'} · ${names[part]} −${amount}`,'ready',{emphasis:true});
     }
-    const broken=[0,1].filter(i=>s.boss.parts[i]<=0&&!(hit&&crane.lastHit===i));
+    const broken=[0,1].filter(i=>s.boss.parts[i]<=0);
     if(fighting&&broken.length)condition('dredger-effect',broken.map(i=>effects[i]).join(' · '));
   }
   if(sluice&&sailing&&combatPriority){
