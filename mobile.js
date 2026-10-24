@@ -1269,6 +1269,7 @@ function bindTouchClick(button, { scrollable = false } = {}) {
 function bindModalTouchClicks(node) {
   if (!(node instanceof Element)) return;
   const bind = (button) => {
+    if (button.closest(".rr-view")) return;
     if (button.closest("#panel,#rogueModal,#mobileRotate")) bindTouchClick(button, { scrollable: true });
   };
   if (node.matches("button,summary")) bind(node);
@@ -1474,7 +1475,9 @@ document.addEventListener("pointercancel", (e) => {
   gestureWasMulti = true;
 }, true);
 function installHelp() {
-  for (const body of document.querySelectorAll(".session-pause .session-body")) {
+  for (const section of document.querySelectorAll(".session-pause .session-body")) {
+    const body = section.closest(".rp-view") ? section.querySelector(".rp-controls>.rp-detail-content") || section.querySelector(".rp-detail-content") : section;
+    if (!body) continue;
     if (body.querySelector(".mobile-help")) continue;
     const help = document.createElement("details");
     help.className = "mobile-help";
@@ -1482,7 +1485,7 @@ function installHelp() {
     help.innerHTML = language === "en" ? "<summary>Touch controls</summary><p>Touch the lower movement side and drag: the pad appears under your thumb. Drag slightly for fine thrust, farther for more thrust. Release to drift; hold Brake to slow down. Swap sides below or from More.</p><p>Nearby mooring, boarding and search actions appear beside Attack. Hold Search until its ring fills. Tap the small chart to expand it. More contains the other tools. Pausing saves your run.</p>" : "<summary>\uD130\uCE58 \uC870\uC791</summary><p>\uC774\uB3D9 \uC190 \uCABD \uC544\uB798 \uC601\uC5ED\uC744 \uB204\uB974\uACE0 \uBC00\uBA74 \uADF8 \uC790\uB9AC\uC5D0 \uD328\uB4DC\uAC00 \uC0DD\uAE41\uB2C8\uB2E4. \uC870\uAE08 \uBC00\uBA74 \uBBF8\uC138 \uCD94\uC9C4, \uB354 \uBC00\uBA74 \uAC15\uD55C \uCD94\uC9C4\uC785\uB2C8\uB2E4. \uC190\uC744 \uB193\uC73C\uBA74 \uD45C\uB958\uD558\uACE0, \uC81C\uB3D9\uC744 \uAE38\uAC8C \uB204\uB974\uBA74 \uAC10\uC18D\uD569\uB2C8\uB2E4. \uC544\uB798 \uC124\uC815\uC774\uB098 \uB354 \uBCF4\uAE30\uC5D0\uC11C \uC88C\uC6B0\uB97C \uBC14\uAFC0 \uC218 \uC788\uC5B4\uC694.</p><p>\uAC00\uAE4C\uC6B4 \uC811\uC548\xB7\uC2B9\uD558\uC120\xB7\uC218\uC0C9 \uBC84\uD2BC\uC740 \uACF5\uACA9 \uC606\uC5D0 \uB098\uD0C0\uB0A9\uB2C8\uB2E4. \uC218\uC0C9\uC740 \uC9C4\uD589 \uB9C1\uC774 \uCC30 \uB54C\uAE4C\uC9C0 \uAE38\uAC8C \uB204\uB974\uC138\uC694. \uC791\uC740 \uD574\uB3C4\uB97C \uB204\uB974\uBA74 \uD655\uB300\uD569\uB2C8\uB2E4. \uB098\uBA38\uC9C0 \uB3C4\uAD6C\uB294 \uB354 \uBCF4\uAE30\uC5D0 \uC788\uACE0 \uC77C\uC2DC\uC815\uC9C0\uD558\uBA74 \uC800\uC7A5\uB429\uB2C8\uB2E4.</p>";
     body.prepend(help);
     if (kakao) body.append(browserHelp(language === "en"));
-    if (voyageNotes) {
+    if (voyageNotes && !section.closest(".rp-view")) {
       const notes = document.createElement("details");
       notes.className = "mobile-notes";
       const title = document.createElement("summary");
@@ -1493,7 +1496,9 @@ function installHelp() {
       body.prepend(notes);
     }
   }
-  for (const parent of document.querySelectorAll(".session-pause .session-body,.embark-options")) {
+  for (const section of document.querySelectorAll(".session-pause .session-body,.embark-options")) {
+    const parent = section.closest(".rp-view") ? section.querySelector(".rp-controls>.rp-detail-content") || section.querySelector(".rp-detail-content") : section;
+    if (!parent) continue;
     if (parent.querySelector("[data-mobile-move-side]")) continue;
     const label = document.createElement("label");
     label.className = "mobile-handedness";
@@ -1575,6 +1580,7 @@ function refresh() {
   playing = !!active && landscape;
   if (playing) voyageNotes = [...document.querySelectorAll("#rogueMission,#rogueRadio,#rogueConditions,#rogueControls,#hud .mission-objective,#hud .radio-panel,#hud .compact-conditions,#hud .compact-actions,#hud .passenger-status,#hud .hud-hint")].map((el) => el.textContent.trim()).filter(Boolean).join("\n\n");
   pad.hidden = !playing;
+  pad.inert = !playing;
   document.body.classList.toggle("mobile-playing", playing);
   const height = 0;
   if (deckHeight !== height) {
@@ -1606,8 +1612,23 @@ function refresh() {
   compactPreparation();
   compactHome();
   refreshFlightHud(playing, rogue, mobileFrame);
+  document.getElementById("mobileFlightHud").inert = !playing;
   for (const button of document.querySelectorAll("#mobileMinimap,#roguePause,#playPause,#mobileInfo,#mobileSwap")) bindTouchClick(button);
 }
+var surfaceObserver = new MutationObserver(() => refresh());
+var watchedSurfaces = /* @__PURE__ */ new WeakSet();
+function watchSurfaces() {
+  for (const el of [document.getElementById("panel"), document.getElementById("rogueModal")]) {
+    if (!el || watchedSurfaces.has(el)) continue;
+    watchedSurfaces.add(el);
+    surfaceObserver.observe(el, { attributes: true, attributeFilter: el.id === "panel" ? ["class"] : ["hidden"] });
+  }
+}
+new MutationObserver(() => {
+  watchSurfaces();
+  refresh();
+}).observe(document.body, { childList: true });
+watchSurfaces();
 setInterval(refresh, 100);
 refresh();
 window.addEventListener("blur", (event) => {

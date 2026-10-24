@@ -342,6 +342,9 @@ html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result>.ses
 .mobile-playing #rogueHud,.mobile-playing #hud{display:none!important}
 #mobileFlightHud{position:fixed;inset:0;z-index:80;pointer-events:none;color:#f0f3ed;font:500 13px/1.35 Pretendard,sans-serif;text-shadow:0 1px 3px #00121f,0 0 8px #00121f}
 #mobileFlightHud[hidden],#mobileFlightHud [hidden]{display:none!important}
+/* Gate the first frame from the actual game surface, before observer delivery. */
+html[data-mobile-ui=true]:has(#rogueModal:not([hidden])) :is(#mobileControls,#mobileFlightHud),
+html[data-mobile-ui=true]:not(:has(#rogue)):has(#panel:not(.playing)) :is(#mobileControls,#mobileFlightHud){display:none!important;pointer-events:none!important}
 #mobileFlightHud svg{width:22px;height:22px;flex:none;filter:drop-shadow(0 1px 2px #00121f)}
 #mobileObjective{position:absolute;left:max(14px,env(safe-area-inset-left));top:max(12px,env(safe-area-inset-top));display:flex;gap:9px;max-width:48vw;align-items:center}
 #mobileObjective>svg{color:#f2c879;width:26px;height:26px}

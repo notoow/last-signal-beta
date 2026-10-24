@@ -1,10 +1,10 @@
 import {steeringInput} from './steering-input.js';
 import {drawNavigationMap,navigationViewport} from './navigation-map.js';
-import {createRun,tickRun,interact,resolveGear,resolveSalvage,returnFromWorkshop,resolveCache,planHarbor,encodeRun,restoreRun,SAVE_KEY,RUN_VERSION,CAPTAINS,BUILDS,GEAR,maxHp} from './rogue-core.js';
+import {createRun,tickRun,interact,resolveGear,resolveSalvage,returnFromWorkshop,cacheSelectionToken,resolveCacheSelection,planHarbor,encodeRun,restoreRun,SAVE_KEY,RUN_VERSION,CAPTAINS,BUILDS,GEAR,maxHp,maxFuel} from './rogue-core.js';
 import {harborPlanMarkup} from './harbor-plan-ui.js';
 import {voyageRecordMarkup,voyagePreparationText} from './rogue-voyage-record-ui.js';
 import {salvageChoiceMarkup,salvageDetailsMarkup} from './rogue-salvage-ui.js';
-import {cacheChoiceMarkup,cacheReplacementMarkup,cacheChoiceModel} from './rogue-cache-ui.js';
+import {rewardPresentation,rewardInputGuard} from './rogue-reward.js';
 import {GENERATOR_VERSION} from './rogue-map.js';
 import {drawRogue,lastRogueCamera} from './rogue-view.js';
 import {CAMERA_KEY,cameraSettings,project,unproject,screenVectorToWorld} from './rogue-camera.js';
@@ -26,6 +26,8 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   root.innerHTML='<canvas id="rogueSea" aria-label="세 해역 항해"></canvas><div class="rogue-top" id="rogueHud"><div class="rogue-top-stack"><div id="rogueMission"></div><div class="rogue-radio" id="rogueRadio" aria-live="polite"></div></div><div class="rogue-console"><div class="rogue-readings" id="rogueReadings"></div><div class="rogue-conditions" id="rogueConditions"></div><div class="rogue-controls" id="rogueControls"></div></div></div><button id="roguePause" class="play-pause" hidden></button><button id="rogueSkill" class="rogue-skill" hidden></button><div class="rogue-modal" id="rogueModal"></div>';
   document.body.append(root);
   const $=id=>root.querySelector('#'+id),keys=new Set(),controller=new AbortController(),options={signal:controller.signal};
+  const rewardGuard=rewardInputGuard(root,controller.signal);
+  let rewardView=null,rewardToken=null;
   $('roguePause').insertAdjacentHTML('beforebegin','<button id="rogueChart" class="play-pause" hidden></button>');
   $('roguePause').insertAdjacentHTML('beforebegin','<div id="rogueQuayAssets" hidden><span id="rogueQuayAssetMessage" role="status" aria-live="polite"><span class="quay-asset-long"></span><span class="quay-asset-short"></span></span><span id="rogueQuayAssetCount" aria-hidden="true"></span><button id="rogueQuayRetry" type="button" aria-controls="rogueSea" hidden></button></div>');
   const ui=sessionText(language),en=language==='en';
@@ -121,7 +123,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     $('rogueModal').hidden=false;$('rogueModal').innerHTML=markup;
     activateModal($('rogueModal'),surface==='pause'?'#rogueContinue':surface==='result'?'#rogueNew':undefined);
   }
-  function close(){if(!save())return;releaseControls();releaseModal($('rogueModal'));closed=true;controller.abort();cancelAnimationFrame(frameId);root.remove();if(document.documentElement.dataset.mobileUi==='true')window.dispatchEvent(new CustomEvent('lastsignal:mobile-frame',{detail:null}));onClose();}
+  function close(){if(rewardView?.finished&&saveError){showReward();return;}if(!save())return;releaseControls();releaseModal($('rogueModal'));closed=true;controller.abort();cancelAnimationFrame(frameId);root.remove();if(document.documentElement.dataset.mobileUi==='true')window.dispatchEvent(new CustomEvent('lastsignal:mobile-frame',{detail:null}));onClose();}
   function launchIntro(){
     let seen=false;try{seen=localStorage.getItem('lastsignal.mobile.intro.v1')==='seen';}catch{}
     if(document.documentElement.dataset.mobileUi!=='true'||seen){play();return;}
@@ -130,6 +132,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     bind('rogueIntroSail',sail);bind('rogueIntroSkip',sail);activateModal($('rogueModal'),'#rogueIntroSail');
   }
   function loadout({sameMap=false}={}){
+    rewardView=null;rewardToken=null;
     preparationReturn=state&&state.status!=='playing'?state:null;
     const retrySeed=sameMap?preparationReturn?.seed:null;
     const retryText=sameMap?voyagePreparationText(preparationReturn,language):null;
@@ -215,22 +218,34 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
       state=createRun(seed,captain,build,paint);preparationReturn=null;mapOpen=false;save();launchIntro();
     });
   }
+  function showReward(view=rewardView,focus){
+    if(!view||closed)return;paused=true;releaseControls();view.setSaveError(saveError);rewardGuard.transition();
+    modalSurface(view.surface,view.markup());view.mount($('rogueModal'),focus);
+  }
+  function newReward(legacy=false){
+    rewardToken=legacy?state.pendingGear:cacheSelectionToken(state);
+    if(!rewardToken){pause();return;}
+    const pendingToken=rewardToken;
+    rewardView=rewardPresentation({initial:state,language,reduced,legacy,guard:rewardGuard,present:showReward,
+      onConfirm:(choice,slot)=>{
+        if(!rewardView||rewardView.finished)return;
+        const before=structuredClone(state);
+        const applied=legacy?state.pendingGear===pendingToken&&resolveGear(state,slot):resolveCacheSelection(state,choice,{token:pendingToken,...(slot!==undefined?{slot}:{})});
+        if(!applied)return;
+        rewardView.complete(before,state,choice,slot);onSound('lift');save();showReward();
+      },
+      onLeave:()=>{
+        if(!rewardView||rewardView.finished||!resolveCacheSelection(state,'leave',{token:pendingToken}))return;
+        rewardView.complete(state,state,'leave');if(save()){rewardView=null;rewardToken=null;play();}else showReward();
+      },
+      onContinue:()=>{if(!rewardView?.finished||saveError)return;rewardView=null;rewardToken=null;play();},
+      onRetry:()=>{if(!rewardView?.finished)return;save();showReward();},onPause:pause});
+  }
   function gearChoice(){
-    paused=true;releaseControls();save();modalSurface('inventory',cacheReplacementMarkup(state,language));saveStatus();
-    root.querySelectorAll('[data-replace]').forEach(b=>b.addEventListener('click',()=>{resolveGear(state,Number(b.dataset.replace));save();play();},options));
-    bind('rogueTrade',()=>{resolveGear(state);save();play();});activateModal($('rogueModal'),'[data-replace]');
+    paused=true;releaseControls();save();if(!rewardView?.legacy||rewardToken!==state.pendingGear)newReward(true);showReward();
   }
   function cacheChoice(){
-    paused=true;releaseControls();save();
-    modalSurface('cache',cacheChoiceMarkup(state,language));saveStatus();
-    root.querySelectorAll('[data-cache-choice]').forEach(b=>b.addEventListener('click',()=>{
-      const crew=cacheChoiceModel(state,language)?.crew,choice=b.dataset.cacheChoice;
-      if(!resolveCache(state,b.dataset.cacheChoice))return;
-      if(document.documentElement.dataset.mobileUi==='true'&&crew&&choice==='crew:'+crew.id)window.dispatchEvent(new CustomEvent('lastsignal:mobile-reward',{detail:{id:crew.id,name:en?crew.en:crew.name,rank:crew.rank+1,image:`assets/art/crew-upgrade-${crew.id}-v1.png`}}));
-      onSound('lift');save();play();
-    },options));
-    bind('rogueCacheLeave',()=>{if(resolveCache(state,'leave')){save();play();}});
-    activateModal($('rogueModal'),'[data-cache-choice]');
+    paused=true;releaseControls();save();if(!rewardView||rewardView.legacy||rewardToken!==cacheSelectionToken(state))newReward();showReward();
   }
   function salvageChoice(){
     paused=true;releaseControls();save();
@@ -259,6 +274,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     activateModal($('rogueModal'),'#harborPlanClose');
   }
   function play(){if(root.dataset.surface==='salvage'&&saveError&&!state?.salvage?.pending&&!save())return;
+    if(rewardView?.finished){showReward();return;}
     if(state?.pendingGear){gearChoice();return;}if(state?.pendingCache){cacheChoice();return;}if(state?.salvage?.pending){salvageChoice();return;}
     resultView=null;paused=false;releaseControls();root.dataset.surface='playing';releaseModal($('rogueModal'));$('rogueModal').hidden=true;
     $('rogueSea').focus({preventScroll:true});probe.invalidate();last=performance.now();}
@@ -294,11 +310,17 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   bind('roguePause',pause);
   bind('rogueChart',()=>{if(state?.harborIntel)harborChart();else if(!paused){mapOpen=!mapOpen;releaseControls();}});
   function pause(){
-    if(!state)return;paused=true;releaseControls();releaseShipAssist(state);const saved=save();
+    if(!state)return;
+    if(rewardView?.finished&&saveError){showReward();return;}
+    paused=true;releaseControls();releaseShipAssist(state);const saved=save();
+    if(rewardView?.finished&&!saved){showReward();return;}
     const controls=(en?'WASD move · C precision · Space brake · Shift boost<br>E moor / disembark / board / hook · Q unmoor / lure<br>F supplies · R equipment · B ship device · M chart<br>Ashore: Space melee · V / click throw scrap<br>T tow supply boat · H supply boat anchor':'WASD 이동 · C 정밀 운항 · Space 제동 · Shift 부스터<br>E 계류 / 하선 / 재승선 / 고리 · Q 계류 해제 / 유인<br>F 보급 · R 장비 · B 선박 장치 · M 해도<br>상륙: Space 근접 공격 · V / 클릭 고철 투척<br>T 보급정 견인 · H 보급정 닻')+(waterMotion(state)?'<br><br>'+(en?'Release movement to drift. C alone does not brake. Hold Space for powered braking and position assist; it uses fuel and can be overcome by strong flow or tow load. Pausing releases assist.':'손을 놓으면 해류를 따라 표류합니다. C만 눌러도 멈추지 않습니다. Space를 누르고 있으면 연료를 써서 감속·정지를 돕지만 강한 해류나 견인 하중에는 밀릴 수 있습니다. 일시정지하면 보조가 해제됩니다.'):'');
     modalSurface('pause',pauseMarkup({kicker:CAPTAINS[state.captain].name+' · '+(state.depth+1)+' / 3 · '+(en?'Voyage no. ':'항해 번호 ')+state.seed,saved,saveId:'rogueSaveStatus',language,
+      facts:[{label:en?'Hull':'선체',value:state.hp,max:maxHp(state)},{label:en?'Fuel':'연료',value:state.fuel,max:maxFuel(state)}],
       actions:'<button id="rogueContinue" class="primary">'+ui.resume+'</button><button id="rogueHome" class="secondary">'+ui.home+'</button>',
-      details:rogueDetailsMarkup(state,language)+salvageDetailsMarkup(state,language)+'<details><summary>'+ui.controls+'</summary><p>'+controls+'</p><p>'+(en?'Anchor the supply boat separately before leaving your tug. Deliver it to the exit for +20 fuel and crew health.':'하선 전 보급정 닻을 따로 내려주세요. 탈출 부두에 데려오면 연료·선원 체력 +20.')+'</p></details><details><summary>'+ui.camera+'</summary>'+cameraMarkup()+'</details><details><summary>'+ui.radio+'</summary>'+state.log.map(l=>'<p>'+esc(rogueHudText(l.text,language))+'</p>').join('')+'</details>'}));
+      menuDetails:'<details class="rp-page mobile-notes"><summary>'+ui.records+'</summary><div class="rp-detail-content">'+rogueDetailsMarkup(state,language)+salvageDetailsMarkup(state,language)+'<details><summary>'+ui.radio+'</summary>'+state.log.map(l=>'<p>'+esc(rogueHudText(l.text,language))+'</p>').join('')+'</details></div></details>'+
+        '<details class="rp-page rp-controls"><summary>'+ui.controls+'</summary><div class="rp-detail-content"><p>'+controls+'</p><p>'+(en?'Anchor the supply boat separately before leaving your tug. Deliver it to the exit for +20 fuel and crew health.':'하선 전 보급정 닻을 따로 내려주세요. 탈출 부두에 데려오면 연료·선원 체력 +20.')+'</p></div></details>'+
+        '<details class="rp-page"><summary>'+ui.camera+'</summary><div class="rp-detail-content">'+cameraMarkup()+'</div></details>'}));
     bindCamera();bind('rogueHome',close);bind('rogueContinue',play);
   }
   function end(){
@@ -328,6 +350,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   }
   function key(e,down){
     e.stopImmediatePropagation();
+    if(down)rewardGuard.keyboard();
     if(e.target===$('rogueQuayRetry')&&['Enter','NumpadEnter','Space'].includes(e.code)){
       e.preventDefault();keys.delete(e.code);if(down&&!e.repeat)void retryHarborArt();return;
     }
@@ -339,7 +362,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
       e.preventDefault();if(!e.repeat)play();return;
     }
     if(e.code==='Escape'&&!e.repeat){e.preventDefault();if(state?.status==='playing'){
-      if(['cache','inventory'].includes(root.dataset.surface))pause();else paused?play():pause();
+      if(['cache','inventory','reward'].includes(root.dataset.surface)){if(!rewardView?.escape())pause();}else paused?play():pause();
     }else if(!state)close();return;}
     if(paused)return;
     // Menus clear game input. Repeating a key held across the transition

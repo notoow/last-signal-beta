@@ -1,3 +1,5 @@
+@import url('./rogue-reward.css');
+
 .rogue-modal:not([hidden]):has(.rogue-salvage-desk){padding:24px;background:#101519eb;backdrop-filter:blur(3px)}
 .rogue-salvage-desk{
   --salvage-ink:#f3f1e8;--salvage-muted:#b9c1c8;--salvage-line:#52606a;--salvage-accent:#f3a343;

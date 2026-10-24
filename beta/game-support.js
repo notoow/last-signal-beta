@@ -5,7 +5,7 @@ link.href=new URL('./feedback.html',import.meta.url).href;link.target='_blank';l
 link.className='beta-report-link';
 document.body.append(link);
 function visible(){
-  const body=document.querySelector('.session-body');
+  const body=document.querySelector('.rp-view')||document.querySelector('.session-body');
   if(body){
     if(link.parentElement!==body)body.append(link);
     if(link.hidden)link.hidden=false;

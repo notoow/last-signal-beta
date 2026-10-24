@@ -4,3 +4,4 @@ body:has(.beta-form){background:#15191d;color:#f3f1e8;font:16px/1.6 sans-serif;m
 .beta-form{max-width:720px;margin:auto}.beta-form textarea{box-sizing:border-box;width:100%;font:inherit;color:inherit;background:#252b30;padding:12px}
 .beta-form button{font:inherit;background:#f3a343;color:#15191d;border:0;padding:12px 24px;margin-top:16px;cursor:pointer}
 .beta-form button:disabled{opacity:.6}.beta-form pre{white-space:pre-wrap}.beta-form :focus-visible{outline:2px solid #75b4c4;outline-offset:2px}
+.rp-view>.beta-report-link{position:absolute;top:0;right:22px;min-height:44px;display:flex;align-items:center;margin:0;padding:8px 10px;font-size:11px;max-width:42%;box-sizing:border-box;z-index:3}

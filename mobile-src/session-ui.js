@@ -44,11 +44,15 @@ export function resultMarkup({outcome='success',title,kicker='',summary='',facts
     '<div class="session-body">'+reward+(details?'<details class="session-records"><summary>'+t.records+'</summary>'+details+'</details>':'')+'</div>'+
     '<footer class="session-actions">'+actions+'</footer></section>';
 }
-export function pauseMarkup({kicker='',saved=true,error='',actions='',details='',language='ko',saveId='sessionSaveStatus'}){
+export function pauseMarkup({kicker='',saved=true,error='',actions='',details='',menuDetails='',facts=[],language='ko',saveId='sessionSaveStatus'}){
   const t=sessionText(language);
-  return '<section class="session-pause"><header><p class="session-kicker">'+escapeUi(kicker)+'</p><h2>'+t.paused+'</h2><p class="session-lead">'+t.pauseBody+'</p></header>'+
-    '<nav class="session-pause-actions">'+actions+'</nav><div class="session-body">'+details+'</div>'+
-    '<p id="'+saveId+'" class="session-save" role="status" data-save-state="'+(saved?'saved':'failed')+'">'+escapeUi(saved?t.saved:error||t.saveFailed)+'</p></section>';
+  const back=language==='en'?'Back to menu':'메뉴로 돌아가기';
+  const records=menuDetails||(details?'<details class="rp-page mobile-notes"><summary>'+t.records+'</summary><div class="rp-detail-content">'+details+'</div></details>':'');
+  return '<section class="session-pause rp-view"><header><p class="rp-brand">LAST SIGNAL</p><h2>'+t.paused+'</h2>'+
+    '<p id="'+saveId+'" class="session-save" role="status" data-save-state="'+(saved?'saved':'failed')+'">'+escapeUi(saved?t.saved:error||t.saveFailed)+'</p></header>'+
+    '<div class="rp-menu"><nav class="session-pause-actions">'+actions+'</nav><div class="session-body">'+records.replaceAll('<div class="rp-detail-content">','<div class="rp-detail-content"><button type="button" class="rp-close">← '+back+'</button>')+'</div></div>'+
+    (facts.length?'<aside class="rp-context"><strong>'+(language==='en'?'Current voyage':'현재 항해')+'</strong><p>'+escapeUi(kicker)+'</p>'+facts.map(f=>'<div class="rp-meter"><span>'+escapeUi(f.label)+'</span><meter min="0" max="'+f.max+'" value="'+f.value+'" aria-label="'+escapeUi(f.label)+'"></meter><b>'+Math.ceil(f.value)+' / '+f.max+'</b></div>').join('')+'</aside>':'')+
+    '<footer class="rp-footer"><p class="session-kicker">'+escapeUi(kicker)+'</p><span><kbd>Esc</kbd>'+t.resume+'</span></footer></section>';
 }
 
 // Keep game keys held across a result/pause transition from clicking a menu.
@@ -59,6 +63,7 @@ const focusables=()=>[...active.querySelectorAll('button:not(:disabled),a[href],
 if(typeof window!=='undefined'){
   window.addEventListener('keydown',e=>{
     held.add(e.code);if(!live())return;
+    if(e.code==='Escape'&&!e.repeat){const page=active.querySelector('.rp-page[open]');if(page){e.preventDefault();e.stopImmediatePropagation();page.open=false;page.querySelector('summary')?.focus({preventScroll:true});return;}}
     if(['Space','Enter','NumpadEnter'].includes(e.code)&&(blocked.has(e.code)||e.repeat)){e.preventDefault();e.stopImmediatePropagation();return;}
     if(e.code==='Tab'){
       const items=focusables();if(!items.length){e.preventDefault();return;}
@@ -81,6 +86,10 @@ export function activateModal(container,preferred){
   dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');
   const heading=dialog.querySelector('h1,h2');
   if(heading){heading.id||='session-heading-'+(++headingSerial);dialog.setAttribute('aria-labelledby',heading.id);}
+  for(const page of dialog.querySelectorAll('.rp-page')){
+    page.addEventListener('toggle',()=>{if(page.open)for(const other of dialog.querySelectorAll('.rp-page[open]'))if(other!==page)other.open=false;});
+    page.querySelector('.rp-close')?.addEventListener('click',()=>{page.open=false;page.querySelector('summary')?.focus({preventScroll:true});});
+  }
   if(preferred)container.querySelector(preferred)?.focus({preventScroll:true});
 }
 export function releaseModal(container){if(active===container){active=null;blocked.clear();}}

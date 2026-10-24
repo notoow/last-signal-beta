@@ -414,6 +414,26 @@ export function cacheSupplyPreview(s){
   const flood=Math.max(0,s.flood-offer.supply.flood);
   return {fuel,hp,flood,fuelGain:fuel-s.fuel,hpGain:hp-s.hp,floodRemoved:s.flood-flood};
 }
+// A preview has no authority to claim a later offer. Keep its identity separate
+// from presentation phases; nothing new is stored in the voyage schema.
+export function cacheSelectionToken(s){
+  if(!s.pendingCache||!validCache(s))return null;
+  const offer=cacheOffer(s);
+  return JSON.stringify([s.seed,s.depth,offer.berth,offer.gear,offer.crew,
+    s.equipment,s.crewUpgrades,s.hp,s.fuel,s.flood,s.combat.ammo,s.tools,s.salvage?.rank]);
+}
+// Full-hold previews choose a slot before claiming anything. Validate every
+// input first, then resolve both existing operations in the same synchronous
+// action: no observer/save can see a half-claimed cache or duplicate its extras.
+export function resolveCacheSelection(s,choice,selection={}){
+  const token=cacheSelectionToken(s);
+  if(!token||selection?.token!==token)return false;
+  const slot=selection.slot,full=s.equipment.length>=6&&cacheOffer(s).gear.includes(choice);
+  if(full?!(slot===null||Number.isInteger(slot)&&slot>=0&&slot<s.equipment.length):slot!==undefined)return false;
+  if(!resolveCache(s,choice))return false;
+  if(full)resolveGear(s,slot);
+  return true;
+}
 export function resolveCache(s,choice){
   if(!s.pendingCache||!validCache(s))return false;
   if(choice==='leave'){s.pendingCache=null;s.work=0;return true;}

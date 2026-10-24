@@ -27,6 +27,18 @@ const effectCopy={
   }
 };
 
+// One gear's read-only comparison also serves a restored legacy pendingGear.
+export function cacheGearModel(s,id,language='ko'){
+  const lang=language==='en'?'en':'ko',effect=gearEffect(s,id);
+  if(!effect)return null;
+  const capacity=id==='tank'?maxFuel(s):id==='plating'?maxHp(s):null;
+  return {id,name:cacheGearName(id,language),...effect,
+    before:capacity??effect.before,after:capacity===null?effect.after:capacity+effect.after-effect.before,
+    prefix:['thrustBonus','pullBonus'].includes(effect.kind)?'+':'',
+    label:effectCopy[lang][id][0],suffix:effectCopy[lang][id][1],description:effectCopy[lang][id][2],
+    needsRig:!s.salvage?.rank,count:s.equipment.filter(x=>x===id).length};
+}
+
 function gearDescription(g,en){
   if(g.pressureJet){const p=g.pressureJet;return en?
     `Max jet ${number(p.before.water)}% → ${number(p.after.water)}% · impulse ${number(p.before.power)} → ${number(p.after.power)}`:
@@ -60,14 +72,7 @@ export function cacheChoiceModel(s,language='ko'){
   const crew=offer.crew?{id:offer.crew,rank:crewRank(s,offer.crew),...CREW_UPGRADES[offer.crew]}:null;
   return {full:s.equipment.length>=6,slots:s.equipment.length,crew,
     site:en?['Salvage yard','Fuel wharf','Fish-market landing'][berth.island]:SHORE_SITES[berth.island],
-    gear:offer.gear.map(id=>{
-      const effect=gearEffect(s,id),capacity=id==='tank'?maxFuel(s):id==='plating'?maxHp(s):null;
-      return {id,name:cacheGearName(id,language),...effect,
-        before:capacity??effect.before,after:capacity===null?effect.after:capacity+effect.after-effect.before,
-        prefix:['thrustBonus','pullBonus'].includes(effect.kind)?'+':'',
-        label:effectCopy[lang][id][0],suffix:effectCopy[lang][id][1],description:effectCopy[lang][id][2],
-        needsRig:!s.salvage?.rank,count:s.equipment.filter(x=>x===id).length};
-    }),supply,offered:offer.supply,siteRole:offer.siteRole,common};
+    gear:offer.gear.map(id=>cacheGearModel(s,id,language)),supply,offered:offer.supply,siteRole:offer.siteRole,common};
 }
 
 export function cacheChoiceMarkup(s,language='ko'){
