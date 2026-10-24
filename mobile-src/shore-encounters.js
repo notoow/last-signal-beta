@@ -37,7 +37,24 @@ export function sightLine(map,a,b){
       const minY=r.footprint?Math.min(...r.footprint.map(p=>p.y)):r.y,maxY=r.footprint?Math.max(...r.footprint.map(p=>p.y)):r.y+r.h;
       return maxX+pad>=left&&minX-pad<=right&&maxY+pad>=top&&minY-pad<=bottom;
     });
-    if(!candidates.length)return true;
+    // Clip each solid's sample interval, retaining the original global sample
+    // spacing and exact polygon predicate. Empty water needs no fine sampling.
+    for(const r of candidates){
+      const xs=r.footprint?.map(p=>p.x),ys=r.footprint?.map(p=>p.y);
+      const bounds=[[a.x,b.x-a.x,(xs?Math.min(...xs):r.x)-pad,(xs?Math.max(...xs):r.x+r.w)+pad],
+        [a.y,b.y-a.y,(ys?Math.min(...ys):r.y)-pad,(ys?Math.max(...ys):r.y+r.h)+pad]];
+      let enter=0,leave=1;
+      for(const [origin,delta,low,high] of bounds){
+        if(delta===0){if(origin<low||origin>high){leave=-1;break;}continue;}
+        const t0=(low-origin)/delta,t1=(high-origin)/delta;
+        enter=Math.max(enter,Math.min(t0,t1));leave=Math.min(leave,Math.max(t0,t1));
+      }
+      if(enter>leave)continue;
+      // Include a neighbouring sample to avoid floating-point boundary loss.
+      const first=Math.max(1,Math.floor(enter*n)-1),last=Math.min(n-1,Math.ceil(leave*n)+1);
+      for(let i=first;i<=last;i++)if(shoreSolid({x:a.x+(b.x-a.x)*i/n,y:a.y+(b.y-a.y)*i/n},r,pad))return false;
+    }
+    return true;
   }
   for(let i=1;i<n;i++){
     const p={x:a.x+(b.x-a.x)*i/n,y:a.y+(b.y-a.y)*i/n};
