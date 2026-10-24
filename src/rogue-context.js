@@ -7,7 +7,7 @@ import {salvageStatus,winchBurstReady,winchStoreReady,winchLaunchReady} from './
 import {usesSluice} from './sluice-counterplay.js';
 import {usesLighthouse} from './lighthouse-counterplay.js';
 import {harborDestination,rigRecoveryBerth} from './harbor-plan.js';
-import {gullRecovery} from './shore-encounters.js';
+import {gullRecovery,gullHornStatus} from './shore-encounters.js';
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const action=(id,code,labelKo,labelEn,enabled=true,hold=false,progress=0)=>({id,code,labelKo,labelEn,enabled,hold,progress});
 // One persistent control slot. Its label changes with the action the same B
@@ -55,8 +55,10 @@ export function rogueSpecialAction(s){
 // Read-only affordances. Inputs still pass through interact/tickRun; no UI can
 // award an item, snap a hull, reveal an enemy, or suppress the attack control.
 export function rogueContextActions(s){
-  const result={primary:null,secondary:[],transit:[],attack:null,special:rogueSpecialAction(s)};
+  const result={primary:null,secondary:[],transit:[],response:null,attack:null,special:rogueSpecialAction(s)};
   if(!s||s.status!=='playing'||s.pendingGear||s.pendingCache||s.salvage?.pending)return result;
+  const horn=s.mode==='sailing'&&!s.person?gullHornStatus(s):null;
+  if(horn)result.response={...action('horn','KeyQ','경적','Horn'),amount:horn.amount,count:horn.count};
   if(s.person){
     result.attack=action('attack','Space','공격','Attack',true,true);
     const b=s.map.berths.find(b=>b.id===s.mooring),search=shoreSearchStatus(s),rescue=rescueStatus(s),scrap=gullRecovery(s);

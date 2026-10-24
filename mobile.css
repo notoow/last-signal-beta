@@ -525,3 +525,15 @@ html[data-mobile-move-side=right] #mobileTransit{right:auto;left:0;justify-conte
 #mobileMinimap{width:128px;height:74px;top:48px;background:#07151cd9;border-color:#a8c1bc66;border-radius:2px}
 .mobile-playing #rogueChart{display:none!important}
 @media(max-width:600px){#mobileVitals{left:40%;width:132px}html[data-mobile-move-side=right] #mobileVitals{left:60%}#mobileMinimap{width:106px;height:64px;top:44px}}
+/* Contextual response above the fixed controls and reserved device-status row. */
+#mobileControls #mobileActions>#mobileGullHorn{
+ position:absolute;left:0;bottom:calc(100% + 32px);
+ display:flex;flex-direction:row;align-items:center;justify-content:center;gap:6px;
+ width:72px;height:44px;min-height:44px;padding:6px;
+ border:1px solid #eacb85aa;border-radius:22px;
+ background:#102e39ef;color:#f7dfa6;box-shadow:0 2px 7px #00121f66;
+ touch-action:none;
+}
+#mobileControls #mobileActions>#mobileGullHorn[hidden]{display:none}
+#mobileGullHorn svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+#mobileControls #mobileGullHorn span{font-size:12px;line-height:16px;max-width:none;white-space:nowrap}

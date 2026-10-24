@@ -1,40 +1,42 @@
 import {advanceGait,sampleLayeredLegs} from './shore-gait.js';
-import {WOO_SIDE_RIG as rig} from './shore-rig-data.js';
+import {WOO_SIDE_RIG,PARK_SIDE_RIG} from './shore-rig-data.js';
 
-const cycles=new WeakMap(),parts={};
-let foreground,ready=false;
-const load=async name=>{const img=new Image();img.src='assets/art/'+rig.prefix+name+'.png';await img.decode();return img;};
-// Failed/unfinished loading uses the existing complete atlas, never partial limbs.
-Promise.all([...rig.parts.map(async p=>{parts[p.id]={...p,image:await load(p.id)};}),
- load('foreground').then(img=>{foreground=img;})]).then(()=>{ready=true;}).catch(()=>{});
-
-function paintBone(c,id,a,b){
- const p=parts[id],dx=p.end[0]-p.pivot[0],dy=p.end[1]-p.pivot[1];
- c.save();c.translate(a.x,a.y);c.rotate(Math.atan2(b.y-a.y,b.x-a.x)-Math.atan2(dy,dx));
- c.scale(rig.commonScale,rig.commonScale);c.drawImage(p.image,-p.pivot[0],-p.pivot[1]);c.restore();
+const cycles=new WeakMap();
+const rigs={woo:{rig:WOO_SIDE_RIG,cycle:180,restHipY:365},park:{rig:PARK_SIDE_RIG,cycle:160,restHipY:367}};
+// Each captain becomes ready atomically. A missing Park limb cannot disable
+// Woo, and an incomplete rig always falls back to the complete original atlas.
+for(const entry of Object.values(rigs)){
+  entry.parts={};entry.ready=false;
+  const load=async name=>{const img=new Image();img.src='assets/art/'+entry.rig.prefix+name+'.png';await img.decode();return img;};
+  Promise.all([...entry.rig.parts.map(async p=>{entry.parts[p.id]={...p,image:await load(p.id)};}),
+    load('foreground').then(img=>{entry.foreground=img;})]).then(()=>{entry.ready=true;}).catch(()=>{});
 }
-function paintFlat(c,id,point){
- const p=parts[id];c.save();c.translate(point.x,point.y);c.scale(rig.commonScale,rig.commonScale);
- c.drawImage(p.image,-p.pivot[0],-p.pivot[1]);c.restore();
+function paintBone(c,entry,id,a,b){
+  const p=entry.parts[id],dx=p.end[0]-p.pivot[0],dy=p.end[1]-p.pivot[1];
+  c.save();c.translate(a.x,a.y);c.rotate(Math.atan2(b.y-a.y,b.x-a.x)-Math.atan2(dy,dx));
+  c.scale(entry.rig.commonScale,entry.rig.commonScale);c.drawImage(p.image,-p.pivot[0],-p.pivot[1]);c.restore();
+}
+function paintFlat(c,entry,id,point){
+  const p=entry.parts[id];c.save();c.translate(point.x,point.y);c.scale(entry.rig.commonScale,entry.rig.commonScale);
+  c.drawImage(p.image,-p.pivot[0],-p.pivot[1]);c.restore();
 }
 export function drawCrewRig(c,s,p,reduced,unit,row,flip){
- if(!s.person||s.captain!=='woo')return false;
- const fight=s.combat,eligible=row===2&&!fight.action&&!fight.hit&&!s.work,old=cycles.get(s.person);
- const base=old?.eligible&&eligible?old:null;
- const gait=advanceGait(base,{travel:base?Math.max(0,fight.stride-base.stride)*rig.referenceBodyHeight/55:0,
-  dt:base?Math.max(0,s.time-base.time):0,moving:eligible&&fight.moving},180);
- cycles.set(s.person,{...gait,stride:fight.stride,time:s.time,eligible});
- if(!ready||!eligible)return false;
- const legs=sampleLayeredLegs(gait,rig,{reduced}),k=55*unit/rig.referenceBodyHeight;
- c.save();c.translate(p.x,p.y);c.scale(flip?-k:k,k);c.translate(-256,-480);
- for(const leg of legs){
-  paintFlat(c,leg.name+'-boot',leg.ankle);
-  paintBone(c,leg.name+'-shin',leg.knee,leg.ankle);
-  paintBone(c,leg.name+'-thigh',leg.hip,leg.knee);
- }
- paintFlat(c,'pelvis',{x:250,y:365});
- // Only the fixed upper body breathes. Soles and collision origin stay planted.
- const breath=!fight.moving&&!reduced?(1-gait.blend)*Math.sin(s.time*2.1)*.006:0;
- c.translate(0,365);c.scale(1,1+breath);c.drawImage(foreground,0,-365);c.restore();
- return true;
+  const entry=rigs[s.captain];if(!s.person||!entry)return false;
+  const {rig,cycle,restHipY}=entry,fight=s.combat,eligible=row===2&&!fight.action&&!fight.hit&&!s.work,old=cycles.get(s.person);
+  const base=old?.captain===s.captain&&old.eligible&&eligible?old:null;
+  const gait=advanceGait(base,{travel:base?Math.max(0,fight.stride-base.stride)*rig.referenceBodyHeight/55:0,
+    dt:base?Math.max(0,s.time-base.time):0,moving:eligible&&fight.moving},cycle);
+  cycles.set(s.person,{...gait,stride:fight.stride,time:s.time,eligible,captain:s.captain});
+  if(!entry.ready||!eligible)return false;
+  const legs=sampleLayeredLegs(gait,rig,{cycle,restHipY,reduced}),k=55*unit/rig.referenceBodyHeight;
+  c.save();c.translate(p.x,p.y);c.scale(flip?-k:k,k);c.translate(-256,-480);
+  for(const leg of legs){
+    paintFlat(c,entry,leg.name+'-boot',leg.ankle);
+    paintBone(c,entry,leg.name+'-shin',leg.knee,leg.ankle);
+    paintBone(c,entry,leg.name+'-thigh',leg.hip,leg.knee);
+  }
+  paintFlat(c,entry,'pelvis',{x:250,y:365});
+  const breath=!fight.moving&&!reduced?(1-gait.blend)*Math.sin(s.time*2.1)*.006:0;
+  c.translate(0,365);c.scale(1,1+breath);c.drawImage(entry.foreground,0,-365);c.restore();
+  return true;
 }

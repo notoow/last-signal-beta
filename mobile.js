@@ -1195,6 +1195,31 @@ var labels = {
   rogue: [["Space", "\uC81C\uB3D9 / \uACF5\uACA9", "Brake / Hit"], ["KeyE", "\uC791\uC5C5", "Interact"], ["ShiftLeft", "\uBD80\uC2A4\uD130", "Boost"], ["KeyC", "\uC815\uBC00", "Precision"], ["KeyQ", "\uD574\uC81C / \uC720\uC778", "Unmoor / Lure"], ["KeyF", "\uBCF4\uAE09", "Supplies"], ["KeyR", "\uC7A5\uBE44", "Gear"], ["KeyG", "\uC120\uC7A5 \uAE30\uC220", "Skill"], ["KeyM", "\uD574\uB3C4", "Chart"], ["KeyB", "\uC120\uBC15 \uC7A5\uBE44", "Ship gear"], ["KeyV", "\uD22C\uCC99", "Throw"], ["KeyX", "\uADF8\uBB3C \uC808\uB2E8", "Cut net"], ["KeyT", "\uACAC\uC778", "Tow"], ["KeyH", "\uBCF4\uAE09\uC815 \uB2FB", "Cargo anchor"]],
   story: [["Space", "\uC5ED\uCD94\uC9C4", "Reverse"], ["KeyQ", "\uBD80\uD45C", "Buoy"], ["KeyE", "\uC791\uC5C5", "Interact"], ["ShiftLeft", "\uBD80\uC2A4\uD130", "Boost"], ["KeyC", "\uC815\uBC00", "Precision"], ["KeyF", "\uD604\uC7A5 \uC791\uC5C5", "Work"], ["KeyZ", "\uC904 \uD480\uAE30", "Pay out"], ["KeyX", "\uC904 \uAC10\uAE30", "Reel in"], ["KeyB", "\uC120\uBC15 \uC7A5\uBE44", "Ship gear"], ["KeyG", "\uC6B0\uD68C", "Detour"], ["KeyI", "\uC120\uB0B4", "Interior"], ["KeyR", "\uBB34\uC804", "Radio"], ["KeyM", "\uD574\uB3C4", "Chart"]]
 };
+function installGullHorn() {
+  if (mode !== "rogue") return;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.id = "mobileGullHorn";
+  button.dataset.code = "KeyQ";
+  button.dataset.ready = "false";
+  button.hidden = true;
+  button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10h5l7-5v14l-7-5H4zM7 14v5h3v-4M19 8q4 4 0 8"/></svg><span></span>';
+  bindAction(button);
+  actions.append(button);
+}
+function updateGullHorn(action, en) {
+  const button = document.getElementById("mobileGullHorn");
+  if (!button) return;
+  const ready = action?.id === "horn" && action.enabled && !pad.classList.contains("expanded") && playing;
+  button.hidden = !ready;
+  button.dataset.ready = String(ready);
+  const label = action ? en ? action.labelEn : action.labelKo : en ? "Horn" : "\uACBD\uC801";
+  if (button.dataset.label !== label) {
+    button.querySelector("span").textContent = label;
+    button.dataset.label = label;
+    button.setAttribute("aria-label", en ? "Horn \xB7 recover nearby stolen scrap" : "\uACBD\uC801 \xB7 \uAC00\uAE4C\uC6B4 \uAC08\uB9E4\uAE30\uC758 \uACE0\uCCA0 \uD68C\uC218");
+  }
+}
 function render(next) {
   release();
   if (mode !== next) mobileFrame = null;
@@ -1283,6 +1308,7 @@ function render(next) {
   tools.setAttribute("aria-label", language === "en" ? "Additional controls" : "\uCD94\uAC00 \uC870\uC791");
   for (const button of [...actions.children]) if (button.classList.contains("mobile-extra")) tools.append(button);
   actions.append(tools);
+  installGullHorn();
 }
 function bindMenuToggle(button, toggle) {
   let pointer = null;
@@ -1385,6 +1411,7 @@ document.addEventListener("click", (e) => {
 }, true);
 function refreshContext() {
   const context = mobileFrame?.active ? mobileFrame.context : null, available = [context?.primary, ...context?.secondary || []].filter(Boolean), en = language === "en";
+  updateGullHorn(context?.response, en);
   const captain = mobileFrame?.captain, skill = actions.querySelector(".mobile-captain-skill");
   if (skill) {
     const label = captain?.name || (en ? "Captain skill" : "\uC120\uC7A5 \uAE30\uC220"), name = { woo: "hull", park: "boost", han: "buoy", jeong: "winch" }[captain?.id] || "objective";

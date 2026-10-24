@@ -88,11 +88,21 @@ function releaseScrap(s,e){
   s.radio={text:`Woo: 고철 ${returned}개 되찾았어!${held>returned?' 나머지는 둥지에 남아 있어.':''}`,left:4};
   effect(s,e.x,e.y,'shell');return returned;
 }
+function nearbyGullThieves(s){
+  if(!s?.combat)return [];const p=s.person||s.boat;
+  return s.combat.enemies.filter(e=>e.kind==='gull'&&e.hp>0&&e.stolen>0&&dist(e,p)<(s.person?70*shoreScale(s):110)&&sightLine(s.map,p,e));
+}
+// Readiness uses the same range and obstruction rule as the real Q action.
+// Querying it must neither reveal distant thieves nor recover their cargo.
+export function gullHornStatus(s){
+  if(!s||s.status!=='playing'||s.pendingGear||s.pendingCache||s.salvage?.pending)return null;
+  const targets=nearbyGullThieves(s);
+  return targets.length?{available:true,amount:targets.reduce((n,e)=>n+e.stolen,0),count:targets.length}:null;
+}
 export function startleGulls(s){
-  if(!s.combat)return false;const p=s.person||s.boat;let caught=false;
-  for(const e of s.combat.enemies)if(e.kind==='gull'&&e.hp>0&&e.stolen>0&&dist(e,p)<(s.person?70*shoreScale(s):110)&&sightLine(s.map,p,e)){
-    releaseScrap(s,e);e.phase='recover';e.left=6;e.alert=false;caught=true;
-  }return caught;
+  const targets=nearbyGullThieves(s);
+  for(const e of targets){releaseScrap(s,e);e.phase='recover';e.left=6;e.alert=false;}
+  return targets.length>0;
 }
 export function gullRecovery(s){
   if(!s.person||!s.combat)return null;

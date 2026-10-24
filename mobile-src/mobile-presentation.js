@@ -26,14 +26,16 @@ export function mobileObstacles(){
   // Share layout reads between camera and labels within this frame, while
   // resize/font/layout changes are remeasured by the next rendered frame.
   if(!clearScheduled){clearScheduled=true;requestAnimationFrame(()=>{blocks=null;clearScheduled=false;});}
-  blocks=[...document.querySelectorAll('#mobileStick,#mobileActions,#mobileTools,#mobileFlightHud>div,#mobileMinimap')].flatMap(el=>{
+  blocks=[...document.querySelectorAll('#mobileStick,#mobileActions,#mobileTools,#mobileFlightHud>div,#mobileMinimap,#mobileGullHorn')].flatMap(el=>{
     let r=visibleRect(el);if(!r)return [];
     // Grid children and transformed bars can protrude beyond their parent's
     // rectangle. Keep the group id, but include every visible child boundary.
     if(!['mobileStick','mobileTools'].includes(el.id))for(const child of el.querySelectorAll('*')){
       // The tools tray clips its scrolled children and has its own occupied
       // rectangle; do not turn the empty gap above main controls into a box.
-      if(el.id==='mobileActions'&&child.closest('#mobileTools'))continue;
+      // The temporary horn owns its small rectangle; do not reserve the empty
+      // sea between it and the normal action grid as part of one large box.
+      if(el.id==='mobileActions'&&child.closest('#mobileTools,#mobileGullHorn'))continue;
       if(!(child instanceof HTMLElement)&&child.tagName.toLowerCase()!=='svg')continue;
       const bounds=visibleRect(child);if(bounds)r=union(r,bounds);
     }
