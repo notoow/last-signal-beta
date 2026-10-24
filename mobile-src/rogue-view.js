@@ -26,7 +26,7 @@ import {floatPose,drawWake} from './sea-surface.js';
 import {quaySprite} from './quay-details.js';
 import {usesDredger,CRANE,craneLockTime} from './dredger-counterplay.js';
 import {dredgerAttention} from './dredger-target.js';
-import {dredgerReadability} from './dredger-readability.js';
+import {dredgerReadability,dredgerBreakMotion} from './dredger-readability.js';
 import {rigActionPresentation} from './rig-feedback-ui.js';
 import {usesSluice,SLUICE} from './sluice-counterplay.js';
 import {drawSluice} from './sluice-view.js';
@@ -239,6 +239,58 @@ function dredgerSprite(c,id,x,y){
   c.drawImage(image,x-image.naturalWidth/2*scale,y-pivotY*scale,image.naturalWidth*scale,image.naturalHeight*scale);
   return true;
 }
+function dredgerDrive(c,hp,part,motion){
+  if(motion?.cable>0){
+    // Only a short, loosening end remains; never redraw an attached gameplay
+    // rope after the authoritative hook has released.
+    const length=28*motion.pixel*motion.cable,v=motion.vector;
+    c.save();c.globalAlpha=motion.cable;c.strokeStyle='#c4ad7b';c.lineWidth=2*motion.pixel;
+    c.beginPath();c.moveTo(part.x+v.x*20,part.y+v.y*20);
+    c.quadraticCurveTo(part.x+v.x*(20+length*.6),part.y+v.y*(20+length*.6)+6*motion.pixel,
+      part.x+v.x*(20+length),part.y+v.y*(20+length)+3*motion.pixel);c.stroke();c.restore();
+  }
+  c.save();c.translate(part.x+(motion?.x||0),part.y+(motion?.y||0));
+  if(motion){c.rotate(motion.angle);c.scale(1,motion.squash);}
+  if(!dredgerSprite(c,hp<=0?'winch-destroyed':hp<30?'winch-damaged':'winch-intact',0,0)){
+    // Missing/slow broken art must still show a broken drum, not an empty quay
+    // or the intact artwork. This fallback also stays stable in reduced motion.
+    c.fillStyle='#263a3c';c.strokeStyle=hp<=0?'#89958c':'#c5a257';c.lineWidth=2;
+    c.fillRect(-24,9,48,7);c.strokeRect(-24,9,48,7);
+    for(const side of [-1,1]){
+      c.save();c.translate(side*12,0);if(hp<=0)c.rotate(side*.25);
+      c.fillStyle='#36494a';c.fillRect(-10,-13,20,24);c.strokeRect(-10,-13,20,24);
+      c.strokeStyle='#b4aaa0';c.lineWidth=1;for(let x=-6;x<=6;x+=4){c.beginPath();c.moveTo(x,-9);c.lineTo(x,8);c.stroke();}c.restore();
+    }
+    if(hp<=0){c.strokeStyle='#c4b59c';c.lineWidth=2;c.beginPath();c.moveTo(-4,-4);c.lineTo(-7,8);c.lineTo(6,18);c.stroke();}
+  }
+  c.restore();
+}
+function clearDredgerMotion(e,frame){
+  const image=dredgerArt['winch-destroyed'],w=(ready(image)?image.naturalWidth:428)*48/428,h=(ready(image)?image.naturalHeight:270)*48/428;
+  const {scale,ox,oy,width,height,occupied}=frame,sweeps=[];
+  // Bound the actual sprite sweep, not a large square that needlessly cancels
+  // the whole reaction beside the controls on a short phone viewport.
+  for(const phase of [0,.25,.5,.75,1]){
+    const points=[];
+    const angle=e.peak.angle*phase,cos=Math.cos(angle),sin=Math.sin(angle),squash=1+(e.peak.squash-1)*phase;
+    const x=e.point.x+e.peak.x*phase,y=e.point.y+e.peak.y*phase;
+    for(const dx of [-w/2,w/2])for(const dy of [-h/2,h/2])points.push({x:(x+dx*cos-dy*squash*sin)*scale+ox,y:(y+dx*sin+dy*squash*cos)*scale+oy});
+    sweeps.push(points);
+  }
+  const bounds=points=>{
+    const x=Math.min(...points.map(p=>p.x))-2,y=Math.min(...points.map(p=>p.y))-2;
+    const r={x,y,w:Math.max(...points.map(p=>p.x))+2-x,h:Math.max(...points.map(p=>p.y))+2-y};
+    return r;
+  };
+  const overlap=(r,b)=>Math.max(0,Math.min(r.x+r.w,b.x+b.w)-Math.max(r.x,b.x))*Math.max(0,Math.min(r.y+r.h,b.y+b.h)-Math.max(r.y,b.y));
+  const base=bounds(sweeps[0]),inside=r=>r.x>=0&&r.y>=0&&r.x+r.w<=width&&r.y+r.h<=height;
+  // A wreck may already touch the reserved receipt row. A pull away from it
+  // must not be cancelled merely because the unanimated baseline overlaps.
+  if(sweeps.map(bounds).some(r=>!inside(r)||occupied.some(b=>overlap(r,b)>overlap(base,b)+.5)))return null;
+  const tail=bounds([20,20+28*e.pixel].map(d=>({x:(e.point.x+e.vector.x*d)*scale+ox,y:(e.point.y+e.vector.y*d+6*e.pixel)*scale+oy})));
+  const cable=inside(tail)&&!occupied.some(b=>dockOverlap(tail,b));
+  return cable?e:{...e,cable:0};
+}
 function craneWarning(c,s){
   const b=s.boss,a=b.crane,t=a.target;if(!t||!['warn','attack'].includes(b.phase))return;
   const locked=a.locked,color=locked?'#f39668':'#e5c87f';
@@ -292,6 +344,7 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   dockFrames.delete(canvas);
   frames.set(canvas,{map:s.map,time:s.time,frame});
   const {width,height,scale,ox,oy}=frame;
+  const breaks=dredgerBreakMotion(s,{reduced,overview:mapOpen||chartPins,scale}).map(e=>clearDredgerMotion(e,frame)).filter(Boolean);
   const dpr=Math.min(devicePixelRatio||1,2);
   if(canvas.width!==Math.round(width*dpr)||canvas.height!==Math.round(height*dpr)){canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);}
   const c=canvas.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,width,height);
@@ -379,7 +432,7 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
       const mount={x:p.x-85,y:p.y+(i===0?24:-24)},dx=part.x-mount.x,dy=part.y-mount.y;
       workSprite(c,'gangway',(mount.x+part.x)/2,(mount.y+part.y)/2,Math.hypot(dx,dy)+28,25,Math.atan2(dy,dx));
       workSprite(c,'dock',part.x,part.y+7,48,37);
-      dredgerSprite(c,hp<=0?'winch-destroyed':hp<30?'winch-damaged':'winch-intact',part.x,part.y);
+      dredgerDrive(c,hp,part,breaks.find(e=>e.index===i));
       if(boss.active||boss.cleared){
         const copy=driveView.parts[i],t=c.getTransform(),labelScale=Math.hypot(t.a,t.b)/Math.min(devicePixelRatio||1,2);
         // Two screen-space baselines retain an 18px gap at every manual zoom.

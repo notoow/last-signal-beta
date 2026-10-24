@@ -7,6 +7,28 @@ export const craneLockTime=s=>CRANE.lockTime+(s.boss.parts[1]<=0?.6:0);
 export const craneWarningTime=s=>1.4+craneLockTime(s);
 export const newCrane=()=>({target:null,locked:false,impact:false,selfHits:0,lastHit:-1,hitAt:-1,impactAt:-1,lastDamage:0});
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+// Ephemeral physical outcomes, not inferred from a rendered or restored state.
+// All three damage paths publish at the positive-to-zero transition itself.
+const driveBreaks=new WeakMap();
+export function recordDredgerBreak(s,index,before,position,cause){
+  if(!usesDredger(s)||s.status!=='playing'||!s.boss.active||!(before>0)||
+    ![0,1].includes(index)||s.boss.parts[index]!==0||!['tow','winch','crane'].includes(cause))return;
+  const old=driveBreaks.get(s);
+  if(old?.boss===s.boss&&old.events.some(e=>e.index===index))return;
+  const dx=s.boat.x-position.x,dy=s.boat.y-position.y,d=Math.hypot(dx,dy)||1;
+  const event=Object.freeze({id:(old?.id??0)+1,index,cause,time:s.time,depth:s.depth,life:1.1,
+    point:Object.freeze({x:position.x,y:position.y}),
+    vector:Object.freeze(cause==='crane'?{x:0,y:1}:{x:dx/d,y:dy/d})});
+  driveBreaks.set(s,{id:event.id,boss:s.boss,events:[...(old?.boss===s.boss?old.events:[]),event].slice(-2)});
+}
+export function recentDredgerBreaks(s){
+  if(!usesDredger(s)||s.status!=='playing'||s.mode!=='sailing')return [];
+  const current=driveBreaks.get(s);
+  return (current?.boss===s.boss?current.events:[]).flatMap(event=>{
+    const age=s.time-event.time;
+    return event.depth===s.depth&&age>=0&&age<event.life?[Object.freeze({...event,age})]:[];
+  });
+}
 function aimedPoint(s){
   const origin=s.map.boss,target=s.skill.left>0&&s.skill.decoy?s.skill.decoy:s.boat;
   const d=distance(origin,target),scale=d>CRANE.reach?CRANE.reach/d:1;
@@ -41,8 +63,10 @@ export function strikeCrane(s,positions){
     if(b.parts[i]>0&&d<=nearest){part=i;nearest=d;}
   });
   if(part>=0){
+    const before=b.parts[part];
     c.lastDamage=Math.min(b.parts[part],CRANE.partDamage);
     b.parts[part]-=c.lastDamage;c.lastHit=part;c.hitAt=s.time;c.selfHits++;
+    recordDredgerBreak(s,part,before,positions[part],'crane');
   }
   return {hitHull:craneHitsHull(c.target,s.boat),part};
 }

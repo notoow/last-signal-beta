@@ -7,7 +7,7 @@ import {newRogueTow,towControl,tickRogueTow,deliverRogueTow,canDeliverRogueTow,v
 import {WATER_PROFILE,waterMotion,stepShipMotion,releaseShipAssist} from './ship-motion.js';
 import {terrainTurnPose} from './ship-contact.js';
 import {dockStatus,dockHint,dockingAlignment} from './docking-readiness.js';
-import {DREDGER_MODEL,CRANE,usesDredger,newCrane,beginCrane,trackCrane,strikeCrane,craneHitsHull,hullHitsCircle,validCrane,craneWarningTime} from './dredger-counterplay.js';
+import {DREDGER_MODEL,CRANE,usesDredger,newCrane,beginCrane,trackCrane,strikeCrane,craneHitsHull,hullHitsCircle,validCrane,craneWarningTime,recordDredgerBreak} from './dredger-counterplay.js';
 import {newSalvage,recoverSalvage,tickSalvage,clearSalvageCharge,catchWinch,dischargeWinch,dischargeBilge,validSalvage,SALVAGE_NAMES,RIG_MODEL,rigEffects,winchBurstReady} from './rogue-salvage.js';
 import {SLUICE_MODEL,SLUICE,usesSluice,newSluice,beginSluice,trackSluice,sluiceGate,sluiceCleat,applySluiceFlow,sluiceContact,sluiceStatus,validSluice} from './sluice-counterplay.js';
 import {LIGHTHOUSE_MODEL,LIGHTHOUSE,usesLighthouse,newLighthouse,relayPosition,relayApproach,lighthouseStatus,tickLighthouse,lighthouseBlocked,validLighthouse} from './lighthouse-counterplay.js';
@@ -264,6 +264,7 @@ export function interact(s,action,input={}){
       const force=120*rigEffects(s).winchLaunchMultiplier;
       b.vx+=(b.x-p.x)/d*force;b.vy+=(b.y-p.y)/d*force;
       s.boss.parts[s.boss.hook]=Math.max(0,s.boss.parts[s.boss.hook]-s.charge*.22);
+      recordDredgerBreak(s,index,before,p,'winch');
       s.charge=0;s.fuel=Math.max(0,s.fuel-3);
       publishRigAction(s,{kind:'winch-pull',index,amount:before-s.boss.parts[index],remaining:s.boss.parts[index],charge,fuel:fuel-s.fuel,partPoint:p});return true;
     }return false;
@@ -591,7 +592,11 @@ function updateBossLine(s,dt){
     b.tension=clamp((d-b.rest)/85,0,1);
     const outward=boat.vx*dx+boat.vy*dy;
     boat.vx-=dx*b.tension*45*dt;boat.vy-=dy*b.tension*45*dt;
-    if(!sluice&&!signal&&b.tension>.15&&outward>4)b.parts[b.hook]=Math.max(0,b.parts[b.hook]-outward*.3*b.tension*(1+level(s,'winch')*.3)*CAPTAINS[s.captain].pull*dt);
+    if(!sluice&&!signal&&b.tension>.15&&outward>4){
+      const before=b.parts[b.hook];
+      b.parts[b.hook]=Math.max(0,b.parts[b.hook]-outward*.3*b.tension*(1+level(s,'winch')*.3)*CAPTAINS[s.captain].pull*dt);
+      recordDredgerBreak(s,b.hook,before,anchor,'tow');
+    }
     if(s.build==='winch')s.charge=clamp(s.charge+(b.tension>.15?rigEffects(s).winchChargeRate:-12)*dt,0,100);
     if(d>(signal?LIGHTHOUSE.breakRange:260)||b.parts[b.hook]<=0){b.hook=-1;s.charge=0;b.tension=0;}
   }else b.tension=0;
