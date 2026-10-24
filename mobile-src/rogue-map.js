@@ -6,7 +6,9 @@ export {DEPTHS,random,inside} from './rogue-map-v1.js';
 import {random,inside} from './rogue-map-v1.js';
 import {WORLD_UNITS_PER_METRE as METRE,crewRadius} from './shore-scale.js';
 import {branchGraph} from './harbor-branch-graph.js';
-export const GENERATOR_VERSION=6;
+import {placeShoreSearch} from './shore-search-layout.js';
+import {shoreRoute} from './shore-navigation.js';
+export const GENERATOR_VERSION=7;
 export const TILE=40;
 export const LAND={water:0,quay:1,brick:2,deck:3,rock:4};
 export const shoreBuildings=r=>r.buildings||[{kind:'hut',x:r.x+r.w-130,y:r.y+20,w:112,h:125}];
@@ -210,7 +212,8 @@ export function validateMap(map){
     if(!r||!inside(b.landing,r,-pad)||!inside(b.loot,r,-pad))errors.push('shore access');
     const endpoint=b.searchPoint||b.loot;
     const walk=[b.landing,{x:endpoint.x,y:b.landing.y},endpoint];
-    for(let i=1;i<walk.length;i++){
+    if(map.version>=7&&!shoreRoute(map,b.landing,endpoint,shoreRadius))errors.push('blocked salvage path');
+    for(let i=1;map.version<7&&i<walk.length;i++){
       const a=walk[i-1],p=walk[i],n=Math.ceil(Math.hypot(p.x-a.x,p.y-a.y)/8);
       for(let k=0;k<=n;k++)if(!walkableAt(map,{x:a.x+(p.x-a.x)*k/n,y:a.y+(p.y-a.y)*k/n},shoreRadius))errors.push('blocked salvage path');
     }
@@ -244,6 +247,13 @@ export function generateHarbor(seed,depth=0,version=GENERATOR_VERSION){
   if(version===2)return harborV2(seed,depth,2);
   if(version===4)return humanHarbor(seed,depth);
   if(version===6)return generateBranchingHarbor(seed,depth);
+  if(version===7){
+    const map=generateBranchingHarbor(seed,depth);map.version=7;
+    placeShoreSearch(map,seed,depth);
+    const validation=validateMap(map);
+    if(!validation.ok)throw Error('Search harbor failed validation: '+validation.errors.join(', '));
+    return map;
+  }
   if(version===5){
     for(let attempt=0;attempt<32;attempt++){
       const map=candidate(seed,depth,attempt,true);

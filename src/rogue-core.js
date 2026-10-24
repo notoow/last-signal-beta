@@ -744,7 +744,7 @@ export function restoreRun(raw){
   try{
     if(typeof raw!=='string'||raw.length>160000)return null;
     const s=JSON.parse(raw),finite=(v,min,max)=>Number.isFinite(v)&&v>=min&&v<=max;
-    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,RUN_VERSION].includes(s.version)||![1,2,3,4,5,6].includes(s.generator)||!Number.isInteger(s.seed)||!finite(s.seed,0,0xffffffff)||!Number.isInteger(s.depth)||!finite(s.depth,0,2))return null;
+    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,RUN_VERSION].includes(s.version)||![1,2,3,4,5,6,7].includes(s.generator)||!Number.isInteger(s.seed)||!finite(s.seed,0,0xffffffff)||!Number.isInteger(s.depth)||!finite(s.depth,0,2))return null;
     if(s.version<18){s.daylight=newDaylight();if(s.combat?.enemies)for(const e of s.combat.enemies)e.stash=0;}
     if(!validDaylight(s))return null;
     if(s.version<17)s.crewUpgrades=null;

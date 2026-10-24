@@ -1,6 +1,6 @@
 let saved={};
 try{saved=JSON.parse(localStorage.getItem('lastsignal.rogue.v1')||'{}')||{};}catch{}
-const context={version:'0.80.5',viewport:`${innerWidth}x${innerHeight}`,browser:navigator.userAgent};
+const context={version:'0.80.7',viewport:`${innerWidth}x${innerHeight}`,browser:navigator.userAgent};
 for(const key of ['seed','captain','build','depth','status'])
   if(['number','string'].includes(typeof saved[key]))context[key]=String(saved[key]).slice(0,150);
 document.querySelector('#context').textContent=JSON.stringify(context,null,2);
