@@ -1,11 +1,13 @@
 import {berthReadiness,shoreSearchStatus,bossLinkCandidate} from './rogue-core.js';
 import {rescueStatus} from './shore-rescue.js';
-import {visibleAt,SURVEY_COLS,SURVEY_CELL} from './rogue-vision.js';
+import {visibleAt,visibleSurvey,SURVEY_COLS,SURVEY_CELL} from './rogue-vision.js';
+import {campStatus} from './voyage-daylight.js';
 import {shoreRanges} from './shore-scale.js';
 import {salvageStatus,winchBurstReady,winchStoreReady,winchLaunchReady} from './rogue-salvage.js';
 import {usesSluice} from './sluice-counterplay.js';
 import {usesLighthouse} from './lighthouse-counterplay.js';
 import {harborDestination} from './harbor-plan.js';
+import {gullRecovery} from './shore-encounters.js';
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const action=(id,code,labelKo,labelEn,enabled=true,hold=false,progress=0)=>({id,code,labelKo,labelEn,enabled,hold,progress});
 // One persistent control slot. Its label changes with the action the same B
@@ -50,29 +52,36 @@ export function rogueSpecialAction(s){
 // Read-only affordances. Inputs still pass through interact/tickRun; no UI can
 // award an item, snap a hull, reveal an enemy, or suppress the attack control.
 export function rogueContextActions(s){
-  const result={primary:null,secondary:[],attack:null,special:rogueSpecialAction(s)};
+  const result={primary:null,secondary:[],transit:[],attack:null,special:rogueSpecialAction(s)};
   if(!s||s.status!=='playing'||s.pendingGear||s.pendingCache||s.salvage?.pending)return result;
   if(s.person){
     result.attack=action('attack','Space','공격','Attack',true,true);
-    const b=s.map.berths.find(b=>b.id===s.mooring),search=shoreSearchStatus(s),rescue=rescueStatus(s);
-    if(search?.berth){
+    const b=s.map.berths.find(b=>b.id===s.mooring),search=shoreSearchStatus(s),rescue=rescueStatus(s),scrap=gullRecovery(s);
+    if(scrap)result.primary=action('scrap','KeyF','고철 회수','Recover scrap',scrap.available);
+    else if(search?.berth){
       result.primary=action('search','KeyF',search.choiceMode?'수색':'보급 회수',search.choiceMode?'Search':'Supplies',!['choice','hit'].includes(search.blocked),true,search.progress/search.required);
       if(!search.choiceMode)result.secondary.push(action('equipment','KeyR','장비 회수','Equipment',result.primary.enabled,true,result.primary.progress));
     }
     if(b&&distance(s.person,b.landing)<shoreRanges(s).boarding){
       const together=rescue?.ready,alone=rescue?.active&&rescue.discovered;
       const board=action('board','KeyE',together?'함께 승선':alone?'혼자 승선':'승선',together?'Board together':alone?'Board alone':'Board');
-      if(result.primary)result.secondary.push(board);else result.primary=board;
+      result.transit.push(board);
     }
-    if(rescue?.near&&!rescue.boarding){
+    if(rescue?.near&&!rescue.boarding&&!result.transit.length){
       const escort=action('rescue','KeyE',rescue.stage==='following'?'기다려':'따라와',rescue.stage==='following'?'Wait':'Follow');
       if(result.primary)result.secondary.push(escort);else result.primary=escort;
     }
     return result;
   }
   if(s.mode==='moored'){
-    result.primary=action('land','KeyE','하선','Go ashore');
-    result.secondary.push(action('unmoor','KeyQ','출항','Cast off'));return result;
+    result.transit.push(action('land','KeyE','하선','Go ashore'),action('unmoor','KeyQ','출항','Cast off'));
+    const camp=campStatus(s);
+    if(camp?.night){
+      const reasons={ready:['아침까지 휴식 · 연료 8 · 선원 체력 +15','Rest until dawn · 8 fuel · crew +15'],resting:['난로 준비 중 · 출항하면 취소','Lighting stove · casting off cancels'],spent:['이 부두에서는 이미 쉬었습니다','Already rested at this quay'],danger:['위험이 가까워 쉴 수 없습니다','Danger nearby'],fuel:['휴식 연료가 부족합니다','Not enough fuel to rest'],choice:['선택을 먼저 마치세요','Finish the current choice']};
+      const [detailKo,detailEn]=reasons[camp.reason]||reasons.ready;
+      result.transit.push({...action('rest','KeyL',camp.reason==='resting'?'난로 준비':'휴식 −8',camp.reason==='resting'?'Lighting stove':'Rest −8',camp.available,false,camp.progress),detailKo,detailEn,reason:camp.reason});
+    }
+    return result;
   }
   if(s.boss.hook>=0){
     const store=winchStoreReady(s);
@@ -90,9 +99,10 @@ export function rogueMinimap(s){
   return {width:s.map.width,height:s.map.height,cols:s.map.cols,rows:s.map.rows,tiles:s.map.tiles?.slice()||[],
     islands:s.map.tiles?[]:s.map.islands.map(p=>({x:p.x,y:p.y,w:p.w,h:p.h})),mode:s.mode,
     target:destination?{x:destination.point.x,y:destination.point.y}:null,
-    survey:s.survey?.slice()||null,surveyCols:SURVEY_COLS,surveyCell:SURVEY_CELL,
+    survey:s.survey?.slice()||null,visible:visibleSurvey(s),surveyCols:SURVEY_COLS,surveyCell:SURVEY_CELL,
     player:{x:player.x,y:player.y,angle:player.angle},boat:{x:s.boat.x,y:s.boat.y},
     berths:s.map.berths.filter(known).map(b=>({x:b.x,y:b.y,claimed:s.claimed.includes(b.id)})),
     rescue:rescue?.active&&rescue.discovered&&visibleAt(s,rescue.point)?{x:rescue.point.x,y:rescue.point.y,stage:rescue.stage,blocked:rescue.blocked}:null,
+    stashes:s.combat?.enemies.filter(e=>e.kind==='gull'&&e.stash>0&&visibleAt(s,{x:e.homeX,y:e.homeY})).map(e=>({x:e.homeX,y:e.homeY,amount:e.stash}))||[],
     enemies:s.combat?.enemies.filter(e=>e.hp>0&&visibleAt(s,e)).map(e=>({x:e.x,y:e.y,kind:e.kind,asleep:!!e.asleep}))||[]};
 }

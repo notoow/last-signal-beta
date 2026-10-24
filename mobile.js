@@ -686,9 +686,13 @@ function drawNavigationMap(canvas, map) {
     for (let y = 0; y < map.rows; y++) for (let x = 0; x < map.cols; x++) if (map.tiles[y * map.cols + x]) c.fillRect(x * tw, y * th, tw + 0.5, th + 0.5);
   } else for (const p of map.islands || []) c.fillRect(p.x, p.y, p.w, p.h);
   if (map.survey) {
-    c.fillStyle = "#07151c";
-    for (let y = 0; y < Math.ceil(map.height / map.surveyCell); y++) for (let x = 0; x < map.surveyCols; x++)
-      if (map.survey[y * map.surveyCols + x] !== 1) c.fillRect(x * map.surveyCell, y * map.surveyCell, map.surveyCell + 0.5, map.surveyCell + 0.5);
+    for (let y = 0; y < Math.ceil(map.height / map.surveyCell); y++) for (let x = 0; x < map.surveyCols; x++) {
+      const cell = y * map.surveyCols + x;
+      if (map.visible?.[cell] === 1) continue;
+      if (map.survey[cell] === 1 && !map.visible) continue;
+      c.fillStyle = map.survey[cell] === 1 ? "#07151ca8" : "#07151c";
+      c.fillRect(x * map.surveyCell, y * map.surveyCell, map.surveyCell + 0.5, map.surveyCell + 0.5);
+    }
   }
   if (map.viewport?.length) {
     c.beginPath();
@@ -706,8 +710,15 @@ function drawNavigationMap(canvas, map) {
     c.arc(p.x, p.y, r / s, 0, Math.PI * 2);
     c.fill();
   };
-  for (const b of map.berths || []) dot(b, 3, b.claimed ? "#829b95" : "#e6c27b");
+  for (const b of map.berths || []) {
+    const memory = map.visible && map.visible[Math.floor(b.y / map.surveyCell) * map.surveyCols + Math.floor(b.x / map.surveyCell)] !== 1;
+    dot(b, 3, memory ? "#79847e" : b.claimed ? "#829b95" : "#e6c27b");
+  }
   for (const e of map.enemies || []) dot(e, 2.5, e.asleep ? "#b69078" : "#ef8772");
+  for (const p of map.stashes || []) {
+    c.fillStyle = "#e4d0a0";
+    c.fillRect(p.x - 2.5 / s, p.y - 2.5 / s, 5 / s, 5 / s);
+  }
   if (map.target) {
     c.strokeStyle = "#f5cd70";
     c.lineWidth = 1.5 / s;
@@ -759,6 +770,8 @@ var paths = {
   gear: "M4 20 14 10m-2-7 3 3 3-1 1-3c5 4 1 11-4 9L5 22l-3-3 10-10c-1-2-2-4 0-6Z",
   board: "M3 18h18M6 18V7h12v11M9 7V3h6v4M10 11h4m-4 3h4",
   land: "M3 20h18M5 16V8h7m-3 4 4 4 4-4m-4 4V3",
+  sail: "M3 16h16l-3 5H6l-3-5Zm7 0V3l8 9h-8M3 8h4m-2-2 2 2-2 2",
+  fire: "M12 2c2 6 7 7 7 13a7 7 0 0 1-14 0c0-3 2-5 4-7 0 3 1 4 2 5 2-4 2-7 1-11Z",
   chart: "m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2V5Zm6-2v16m6-14v16"
 };
 var icon = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="${paths[name] || paths.objective}"/></svg>`;
@@ -808,7 +821,7 @@ function createMobileHud({ onMap = () => {
   const mini = document.createElement("button");
   mini.id = "mobileMinimap";
   mini.type = "button";
-  mini.innerHTML = '<canvas width="224" height="128" aria-hidden="true"></canvas><span id="mobileRescueMarker" hidden aria-hidden="true">' + icon("crew") + "</span>" + icon("chart");
+  mini.innerHTML = '<canvas width="224" height="128" aria-hidden="true"></canvas><span id="mobileClock" hidden></span><span id="mobileRescueMarker" hidden aria-hidden="true">' + icon("crew") + "</span>" + icon("chart");
   mini.addEventListener("click", onMap);
   mini.hidden = true;
   root.append(mini);
@@ -864,7 +877,11 @@ function createMobileHud({ onMap = () => {
     const en = document.documentElement.lang === "en", source = rogue ? document.getElementById("rogueMission") : document.querySelector("#hud .mission-objective");
     const special = presentation?.context?.special, actions2 = document.getElementById("mobileActions");
     const expanded = document.getElementById("mobileControls")?.classList.contains("expanded");
-    const goal = text(source?.querySelector("strong")) || text(source), region = text(source?.querySelector("small"));
+    const sky = source?.querySelector(".rogue-clock"), clock = mini.querySelector("#mobileClock");
+    clock.hidden = !sky;
+    clock.textContent = text(sky);
+    clock.setAttribute("aria-label", sky?.getAttribute("aria-label") || "");
+    const goal = text(source?.querySelector("strong")) || text(source), region = text(source?.querySelector("small")).replace(text(sky), "").trim();
     set(nodes.mobileObjective, icon("objective") + `<div>${region ? `<small>${escape2(region)}</small>` : ""}<strong>${escape2(goal)}</strong></div>`);
     const metrics = rogue ? [...document.querySelectorAll("[data-rogue-metric]")].map((el) => {
       const g = el.querySelector("[role=meter]");
@@ -888,7 +905,7 @@ function createMobileHud({ onMap = () => {
     const notices = rogue ? [...document.querySelectorAll("#rogueConditions>[data-tone=warning],#rogueConditions>.rogue-impact[data-impact-id],#rogueMission .rogue-boss-state")] : [...document.querySelectorAll("#hud .compact-risks>*,#hud .compact-environment>[data-tone=warning]")];
     set(nodes.mobileNotice, notices.map((el) => `<span>${escape2(text(el))}</span>`).join(""));
     const work = document.querySelector(rogue ? "#rogueControls .rogue-work" : "#hud .compact-work"), progress = work?.querySelector("progress");
-    const context = rogue ? [...document.querySelectorAll("#rogueControls [data-rogue-context]")].map(text) : [...document.querySelectorAll("#hud .compact-actions [data-hud-item=context],#hud .anchor-state")].map(text);
+    const context = rogue ? [...document.querySelectorAll("#rogueControls [data-rogue-context]:not([data-rogue-context=camp])")].map(text) : [...document.querySelectorAll("#hud .compact-actions [data-hud-item=context],#hud .anchor-state")].map(text);
     if (rogue && rogue.dataset.mobileMode !== "sailing") context.unshift(text(document.querySelector("#rogueControls [data-rogue-action=primary]")));
     const dock = document.querySelector("#rogueControls .rogue-dock-checks");
     const checks = dock && getComputedStyle(dock).clipPath === "none" ? [...dock.children].map((el) => `<i class="${el.dataset.ok === "true" ? "ready" : ""}">${escape2(text(el))}</i>`).join("") : "";
@@ -1171,6 +1188,25 @@ function render(next) {
     bindAction(button);
     actions.append(button);
   }
+  if (mode === "rogue") {
+    const transit = document.createElement("div");
+    transit.id = "mobileTransit";
+    transit.hidden = true;
+    transit.setAttribute("role", "group");
+    transit.setAttribute("aria-label", language === "en" ? "Boarding and departure" : "\uC2B9\uD558\uC120\xB7\uCD9C\uD56D");
+    for (let i = 0; i < 3; i++) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.transitSlot = i;
+      button.hidden = true;
+      bindAction(button);
+      transit.append(button);
+    }
+    const note = document.createElement("small");
+    note.id = "mobileTransitNote";
+    transit.append(note);
+    actions.append(transit);
+  }
   const tools = document.createElement("div");
   tools.id = "mobileTools";
   tools.setAttribute("role", "group");
@@ -1318,6 +1354,36 @@ function refreshContext() {
   }
   actions.dataset.contextCount = available.length;
   actions.dataset.mode = mobileFrame?.mode || "";
+  const transit = document.getElementById("mobileTransit"), transitActions = context?.transit || [];
+  if (transit) {
+    transit.hidden = !transitActions.length;
+    for (const button of transit.querySelectorAll("button")) {
+      const action = transitActions[Number(button.dataset.transitSlot)];
+      button.hidden = !action;
+      if (!action) {
+        delete button.dataset.code;
+        button.dataset.ready = "false";
+        continue;
+      }
+      const label = en ? action.labelEn : action.labelKo, code = action.code.replace("Key", ""), name = action.id === "land" ? "land" : action.id === "board" ? "board" : action.id === "rest" ? "fire" : "sail";
+      if (button.dataset.action !== action.id || button.dataset.label !== label) {
+        buttonFace(button, label, name);
+        button.insertAdjacentHTML("beforeend", `<kbd aria-hidden="true">${code}</kbd>`);
+        button.dataset.action = action.id;
+        button.dataset.label = label;
+      }
+      button.dataset.code = action.code;
+      button.dataset.ready = String(action.enabled);
+      button.setAttribute("aria-disabled", String(!action.enabled));
+      button.setAttribute("aria-label", `${label} \xB7 ${code}${action.detailKo ? " \xB7 " + (en ? action.detailEn : action.detailKo) : ""}`);
+      button.title = button.getAttribute("aria-label");
+      button.dataset.state = action.reason || "";
+      button.style.setProperty("--camp-progress", Math.max(0, Math.min(1, action.progress || 0)) * 100 + "%");
+    }
+    const rest = transitActions.find((a) => a.id === "rest"), note = document.getElementById("mobileTransitNote");
+    note.hidden = !rest;
+    note.textContent = rest ? en ? rest.detailEn : rest.detailKo : "";
+  }
   for (const button of actions.querySelectorAll("[data-context-slot]")) {
     const action = available[Number(button.dataset.contextSlot)];
     button.hidden = !action && button.dataset.contextSlot !== "0";
@@ -1334,7 +1400,7 @@ function refreshContext() {
       }
       continue;
     }
-    const label = en ? action.labelEn : action.labelKo, name = action.id === "rescue" ? "crew" : action.code === "KeyF" ? "search" : action.code === "KeyR" ? "gear" : action.id === "land" ? "land" : action.id === "board" ? "board" : "interact";
+    const label = en ? action.labelEn : action.labelKo, name = action.id === "rescue" ? "crew" : action.id === "scrap" ? "ammo" : action.code === "KeyF" ? "search" : action.code === "KeyR" ? "gear" : action.id === "land" ? "land" : action.id === "board" ? "board" : "interact";
     if (button.dataset.action !== action.id || button.dataset.label !== label) {
       buttonFace(button, label, name);
       button.dataset.label = label;

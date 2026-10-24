@@ -3,7 +3,7 @@ import {shoreWaypoint} from './shore-navigation.js';
 import {recordHit} from './rogue-voyage-record.js';
 import {publishImpact} from './rogue-impact.js';
 import {crewEffects} from './crew-upgrades.js';
-import {shoreScale,crewRadius,HUMAN_SCALE,humanShore} from './shore-scale.js';
+import {shoreScale,crewRadius,HUMAN_SCALE,humanShore,shoreRanges} from './shore-scale.js';
 
 export const FAUNA={
   rat:{name:'시궁쥐',hp:20,speed:73,radius:7,reach:23,notice:115,windup:.38,recovery:.7,damage:6},
@@ -62,7 +62,7 @@ export function newEncounter(s,ammo=12){
         {x:b.loot.x+65+j*29,y:Math.max(b.loot.y+30,yard.y+173)},spec.radius);
       if(!p)return;
       enemies.push({...p,id:i+'-'+j,kind,homeX:p.x,homeY:p.y,angle:0,hp:spec.hp,phase:'idle',left:0,hit:0,stride:0,moving:false,stolen:0,dead:0,alert:false,
-        ...(s.generator>=3?{asleep:kind!=='gull'&&(s.seed+i+j)%3===0,awareness:0}: {})});
+        stash:0,...(s.generator>=3?{asleep:kind!=='gull'&&(s.seed+i+j)%3===0,awareness:0}: {})});
     });
   });
   if(s.generator>=3){
@@ -73,18 +73,45 @@ export function newEncounter(s,ammo=12){
       const r=props[((s.seed>>>0)+i*19+s.depth*7)%props.length],kind=i%2?'rat':'dog',spec=fauna(s,kind);
       const p=place(s.map,{x:r.x+r.w/2,y:r.y+r.h+34},spec.radius);
       if(!p||s.map.berths.some(b=>dist(p,b.loot)<125)||enemies.some(e=>dist(e,p)<60))continue;
-      enemies.push({...p,id:'alley-'+i,kind,homeX:p.x,homeY:p.y,angle:Math.PI/2,hp:spec.hp,phase:'idle',left:0,hit:0,stride:0,moving:false,stolen:0,dead:0,alert:false,asleep:i%2===0,awareness:0});
+      enemies.push({...p,id:'alley-'+i,kind,homeX:p.x,homeY:p.y,angle:Math.PI/2,hp:spec.hp,phase:'idle',left:0,hit:0,stride:0,moving:false,stolen:0,stash:0,dead:0,alert:false,asleep:i%2===0,awareness:0});
     }
   }
   return {ammo,enemies,shots:[],effects:[],cooldown:0,action:null,hit:0,stride:0,moving:false,shotId:0,hitId:0,killId:0};
 }
 function effect(s,x,y,kind){s.combat.effects.push({x,y,kind,left:.3});}
+// A thief carries only loose throwables. A hit or close horn makes it release
+// them; an escaped load remains at its shore home, including after its death.
+function releaseScrap(s,e){
+  const held=e.stolen;if(!held)return 0;
+  const returned=Math.min(held,12-s.combat.ammo);
+  s.combat.ammo+=returned;e.stolen=0;e.stash=(e.stash||0)+held-returned;
+  s.radio={text:`Woo: 고철 ${returned}개 되찾았어!${held>returned?' 나머지는 둥지에 남아 있어.':''}`,left:4};
+  effect(s,e.x,e.y,'shell');return returned;
+}
+export function startleGulls(s){
+  if(!s.combat)return false;const p=s.person||s.boat;let caught=false;
+  for(const e of s.combat.enemies)if(e.kind==='gull'&&e.hp>0&&e.stolen>0&&dist(e,p)<(s.person?70*shoreScale(s):110)&&sightLine(s.map,p,e)){
+    releaseScrap(s,e);e.phase='recover';e.left=6;e.alert=false;caught=true;
+  }return caught;
+}
+export function gullRecovery(s){
+  if(!s.person||!s.combat)return null;
+  const e=s.combat.enemies.filter(e=>e.kind==='gull'&&(e.stash||0)>0&&dist(s.person,{x:e.homeX,y:e.homeY})<Math.max(shoreRanges(s).search,12*shoreScale(s))&&sightLine(s.map,s.person,{x:e.homeX,y:e.homeY}))
+    .sort((a,b)=>dist(s.person,{x:a.homeX,y:a.homeY})-dist(s.person,{x:b.homeX,y:b.homeY}))[0];
+  return e?{id:e.id,point:{x:e.homeX,y:e.homeY},amount:e.stash,available:s.combat.ammo<12&&!s.combat.action&&s.combat.hit===0}:null;
+}
+export function recoverGullScrap(s){
+  const r=gullRecovery(s);if(!r?.available)return false;
+  const e=s.combat.enemies.find(e=>e.id===r.id),amount=Math.min(e.stash,12-s.combat.ammo);
+  e.stash-=amount;s.combat.ammo+=amount;s.radio={text:`Woo: 둥지에서 고철 ${amount}개 회수했어.`,left:4};return true;
+}
 function hurtEnemy(s,e,n,angle){
   if(e.hp<=0)return;
   const armor=e.kind==='crab'&&e.phase!=='recover'? .3:1;
   e.hp=Math.max(0,e.hp-n*armor);e.hit=.22;s.combat.hitId++;
   if('asleep'in e){e.asleep=false;e.awareness=.3;e.alert=true;}
   effect(s,e.x,e.y,armor<1?'shell':'hit');
+  if(e.kind==='gull'&&e.stolen)releaseScrap(s,e);
   // A crab telegraph is committed: poking its shell cannot cancel its attack.
   if(e.kind!=='crab'){e.phase='recover';e.left=.5;}
   const push=16*shoreScale(s),p={x:e.x+Math.cos(angle)*push,y:e.y+Math.sin(angle)*push};
@@ -139,9 +166,9 @@ function enemyHit(s,e){
     if(!s.crewHp){s.status='lost';s.reason=spec.name+'의 공격으로 선원이 쓰러졌다';}
   }else if(e.kind==='gull'){
     if(s.boat.inv>0)return;
-    if(c.ammo>0){const stolen=Math.min(2,c.ammo);c.ammo-=stolen;e.stolen+=stolen;
-      publishImpact(s,{target:'scrap',source:'gull',amount:stolen,remaining:c.ammo});}
-    else{const before=s.hp;s.hp=Math.max(0,s.hp-3);recordHit(s,'hull','gull',before);if(!s.hp){s.status='lost';s.reason='갈매기 습격으로 손상된 선체가 침몰했다';}}
+    if(c.ammo>0&&(e.stash||0)<4){const stolen=Math.min(2,c.ammo,4-(e.stash||0));c.ammo-=stolen;e.stolen+=stolen;
+      publishImpact(s,{target:'scrap',source:'gull',amount:stolen,remaining:c.ammo});
+      s.radio={text:'Park: 갈매기가 고철을 물었어! 가까울 때 Q 경적, 아니면 투척! 놓쳐도 부두 둥지에서 되찾을 수 있어.',left:7};}
     s.boat.inv=.8;c.hitId++;
   }
   effect(s,p.x,p.y,'hurt');
@@ -183,7 +210,7 @@ export function tickEncounter(s,input,dt){
       e.left-=dt;if(e.left<=0){if(e.phase==='strike'){e.phase='recover';e.left=spec.recovery;}else e.phase='idle';}
       continue;
     }
-    const away=dist(e,home)>560*unit||e.stolen>0;
+    const away=dist(e,home)>560*unit||e.stolen>0||(e.kind==='gull'&&((e.stash||0)>=4||!s.person&&c.ammo===0));
     if(e.asleep){
       const heard=s.noise?.left>0&&dist(e,s.noise)<145*unit&&sightLine(s.map,e,s.noise);
       const close=dist(e,p)<(input.boost&&c.moving?100:42)*unit&&sightLine(s.map,e,p);
@@ -198,7 +225,8 @@ export function tickEncounter(s,input,dt){
     const canSee=perceived&&(!('awareness'in e)||e.alert||e.awareness>=.3||dist(e,p)<spec.reach+8*unit);
     const target=away?home:lure?s.noise:canSee?p:home;
     e.alert=canSee;
-    if(e.stolen&&dist(e,home)<24*unit){e.stolen=0;e.phase='recover';e.left=6;continue;}
+    if(e.stolen&&dist(e,home)<24*unit){e.stash=(e.stash||0)+e.stolen;e.stolen=0;e.phase='recover';e.left=6;
+      s.radio={text:'Park: 고철을 부두 둥지에 내려놨어. 상륙해서 회수할 수 있어.',left:5};continue;}
     if(canSee&&!lure&&dist(e,p)<spec.reach+(s.person?0:s.boat.width/2)){
       e.phase='warn';e.left=spec.windup;e.angle=Math.atan2(p.y-e.y,p.x-e.x);continue;
     }
@@ -222,6 +250,7 @@ export function validateEncounter(s,finite){
   if(c.action&&(!['melee','ranged'].includes(c.action.kind)||!finite(c.action.angle,-Math.PI,Math.PI)||!finite(c.action.left,0,.43)||typeof c.action.done!=='boolean'))return false;
   if(!Array.isArray(c.enemies)||c.enemies.length>(s.generator>=3?13:9)||new Set(c.enemies.map(e=>e.id)).size!==c.enemies.length)return false;
   if(c.enemies.some(e=>('asleep'in e)&&(typeof e.asleep!=='boolean'||!finite(e.awareness,0,.3))))return false;
+  if(c.enemies.some(e=>!Number.isInteger(e.stash)||!finite(e.stash,0,16)||(e.kind!=='gull'&&e.stash!==0)))return false;
   if(c.enemies.some(e=>!FAUNA[e.kind]||typeof e.id!=='string'||!['idle','warn','strike','recover'].includes(e.phase)||!finite(e.hp,0,FAUNA[e.kind].hp)||!finite(e.x,0,3400)||!finite(e.y,0,1800)||!finite(e.homeX,0,3400)||!finite(e.homeY,0,1800)||!finite(e.angle,-Math.PI,Math.PI)||!finite(e.left,-.02,6)||!finite(e.hit,0,.23)||!finite(e.stride,0,1e9)||!finite(e.dead,0,.66)||!Number.isInteger(e.stolen)||!finite(e.stolen,0,12)||typeof e.moving!=='boolean'||typeof e.alert!=='boolean'||(e.kind!=='gull'&&!walkableAt(s.map,e,0))))return false;
   if(!Array.isArray(c.shots)||c.shots.length>4||c.shots.some(p=>!finite(p.x,-400,3800)||!finite(p.y,-400,2200)||!finite(p.vx,-390,390)||!finite(p.vy,-390,390)||!finite(p.left,0,.85)))return false;
   return Array.isArray(c.effects)&&c.effects.length<=40&&c.effects.every(f=>finite(f.x,-400,3800)&&finite(f.y,-400,2200)&&finite(f.left,0,.31)&&['empty','shell','hit','hurt','defeat'].includes(f.kind));

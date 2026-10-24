@@ -26,17 +26,25 @@ export function drawNavigationMap(canvas,map){
     for(let y=0;y<map.rows;y++)for(let x=0;x<map.cols;x++)if(map.tiles[y*map.cols+x])c.fillRect(x*tw,y*th,tw+.5,th+.5);
   }else for(const p of map.islands||[])c.fillRect(p.x,p.y,p.w,p.h);
   if(map.survey){
-    c.fillStyle='#07151c';
-    for(let y=0;y<Math.ceil(map.height/map.surveyCell);y++)for(let x=0;x<map.surveyCols;x++)
-      if(map.survey[y*map.surveyCols+x]!==1)c.fillRect(x*map.surveyCell,y*map.surveyCell,map.surveyCell+.5,map.surveyCell+.5);
+    for(let y=0;y<Math.ceil(map.height/map.surveyCell);y++)for(let x=0;x<map.surveyCols;x++){
+      const cell=y*map.surveyCols+x;
+      if(map.visible?.[cell]===1)continue;
+      if(map.survey[cell]===1&&!map.visible)continue;
+      c.fillStyle=map.survey[cell]===1?'#07151ca8':'#07151c';
+      c.fillRect(x*map.surveyCell,y*map.surveyCell,map.surveyCell+.5,map.surveyCell+.5);
+    }
   }
   if(map.viewport?.length){
     c.beginPath();map.viewport.forEach((p,i)=>i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y));c.closePath();
     c.fillStyle='#d8e9e310';c.fill();c.strokeStyle='#e4eee15c';c.lineWidth=1/s;c.stroke();
   }
   const dot=(p,r,color)=>{c.fillStyle=color;c.beginPath();c.arc(p.x,p.y,r/s,0,Math.PI*2);c.fill();};
-  for(const b of map.berths||[])dot(b,3,b.claimed?'#829b95':'#e6c27b');
+  for(const b of map.berths||[]){
+    const memory=map.visible&&map.visible[Math.floor(b.y/map.surveyCell)*map.surveyCols+Math.floor(b.x/map.surveyCell)]!==1;
+    dot(b,3,memory?'#79847e':b.claimed?'#829b95':'#e6c27b');
+  }
   for(const e of map.enemies||[])dot(e,2.5,e.asleep?'#b69078':'#ef8772');
+  for(const p of map.stashes||[]){c.fillStyle='#e4d0a0';c.fillRect(p.x-2.5/s,p.y-2.5/s,5/s,5/s);}
   if(map.target){
     c.strokeStyle='#f5cd70';c.lineWidth=1.5/s;c.beginPath();c.arc(map.target.x,map.target.y,7/s,0,Math.PI*2);c.stroke();
   }

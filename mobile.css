@@ -490,6 +490,23 @@ html[data-mobile-ui=true]:has(#rogueQuayAssets[data-mobile-row=below]:not([hidde
 #mobileActions [data-context-slot='1'] span,#mobileActions [data-context-slot='2'] span{font-size:9px}
 #mobileControls #mobileActions>[data-context-slot='0']{width:60px;height:60px;grid-area:primary}
 #mobileControls #mobileActions>#mobileMore{width:44px;height:44px;min-height:44px}
+/* Situational transit sits above Work without shifting the fixed thumb grid. */
+#mobileTransit{position:absolute;right:0;bottom:calc(100% + 8px);display:flex;justify-content:flex-end;gap:8px;pointer-events:none}
+#mobileTransit[hidden]{display:none}
+#mobileControls #mobileTransit>button{position:relative;display:flex;flex-direction:row;align-items:center;justify-content:center;gap:5px;min-width:96px;width:auto;height:44px;min-height:44px;padding:6px 8px;border:1px solid #b9d8d477;border-radius:22px;background:#0b2834df;color:#edf1e5;pointer-events:auto;white-space:nowrap}
+#mobileControls #mobileTransit>button[hidden]{display:none}
+#mobileTransit button>svg{width:20px;height:20px;flex:none}
+#mobileTransit button>span{max-width:none;font-size:11px;line-height:14px;white-space:nowrap}
+#mobileTransit kbd{font:700 10px/16px Pretendard,sans-serif;color:#eacb85}
+#mobileTransitNote{position:absolute;right:0;bottom:calc(100% + 3px);white-space:nowrap;font:500 10px/14px Pretendard,sans-serif;color:#e7d4ac;text-shadow:0 1px 3px #00121f}
+#mobileTransitNote[hidden]{display:none}
+#mobileControls #mobileTransit>button[data-state=resting]{background:linear-gradient(90deg,#73532b var(--camp-progress),#0b2834df var(--camp-progress))}
+html[data-mobile-move-side=right] #mobileTransitNote{right:auto;left:0}
+html[data-mobile-move-side=right] #mobileTransit{right:auto;left:0;justify-content:flex-start}
+#mobileControls.expanded #mobileTransit{visibility:hidden}
+#mobileClock{position:absolute;left:3px;top:2px;padding:0 3px;background:#07151ccc;color:#ede5c3;font:600 10px/14px Pretendard,sans-serif;white-space:nowrap;pointer-events:none}
+#mobileControls button{-webkit-tap-highlight-color:transparent;transition:background .15s,border-color .15s}
+#mobileControls button:active{transform:none}
 /* Vital information stays strong without a panel over the sea. */
 #mobileVitals{width:clamp(142px,24vw,210px);gap:4px}
 .flight-vital{gap:7px;color:#b2dccd}.flight-vital>svg{width:20px;height:20px}

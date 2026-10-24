@@ -17,6 +17,12 @@ export function dockStatus({boat,berth,sailing=true,clear=true,spinningMatters=t
 
 export function dockHint(status,language='ko',exit=false){
   const en=language==='en';
+  if(status.freeHeading){
+    if(status.reason==='ready')return en?(exit?'E · Leave harbor':'E · Moor'):(exit?'E · 다음 해역':'E · 계류');
+    if(status.reason==='speed')return en?'Slow down · Space':'감속 · Space';
+    if(status.reason==='clearance')return en?'Approach from open water':'물길 쪽에서 접근';
+    return en?'Approach the quay · any direction':'부두 가까이 접근 · 방향 자유';
+  }
   if(status.reason==='ready')return en?(exit?'E · Dock and leave':'E · Moor'):(exit?'E · 탈출 접안':'E · 계류');
   if(status.reason==='approach'||status.reason==='inactive')return en?(exit?'Exit berth':'→ Align alongside'):(exit?'탈출 부두':'→ 평행 접안');
   return (en?{
@@ -43,6 +49,8 @@ export function dockingAlignment({boat,berth,status,poseClear,turnPose=null,spin
   };
   let next;
   if(status.ready)next={kind:'moor',keys:['E']};
+  else if(status.freeHeading)next=!checks.clearance?{kind:'clear-water',keys:[]}:
+    !checks.speed?{kind:'brake',keys:['Space']}:{kind:'near-quay',keys:[]};
   else if(!fuel)next={kind:'resource',keys:[]};
   else if(ability)next={kind:'ability',keys:[]};
   else if(!spinningMatters)next={kind:'legacy',keys:[]};
@@ -80,6 +88,8 @@ export function dockingAlignment({boat,berth,status,poseClear,turnPose=null,spin
 export function dockAlignmentHint(model,language='ko'){
   const en=language==='en',next=model.next,keys=next.keys.join(' + ');
   switch(next.kind){
+    case 'clear-water':return en?'Approach from the water side of the quay':'부두의 물길 쪽으로 접근';
+    case 'near-quay':return en?'Move closer · any heading works':'조금 더 가까이 · 어느 방향이든 계류 가능';
     case 'moor':return dockHint(model.status,language,model.exit);
     case 'brake':return en?'Release direction · hold Space to slow':'방향키 놓고 Space 유지 · 감속';
     case 'settle':return en?'Release direction · hold Space to steady':'방향키 놓고 Space 유지 · 회전 안정';

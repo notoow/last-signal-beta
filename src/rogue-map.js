@@ -5,7 +5,7 @@ import {generateHarbor as harborV2} from './rogue-map-v2.js';
 export {DEPTHS,random,inside} from './rogue-map-v1.js';
 import {random,inside} from './rogue-map-v1.js';
 import {WORLD_UNITS_PER_METRE as METRE,crewRadius} from './shore-scale.js';
-export const GENERATOR_VERSION=4;
+export const GENERATOR_VERSION=5;
 export const TILE=40;
 export const LAND={water:0,quay:1,brick:2,deck:3,rock:4};
 export const shoreBuildings=r=>r.buildings||[{kind:'hut',x:r.x+r.w-130,y:r.y+20,w:112,h:125}];
@@ -47,8 +47,8 @@ export function walkableAt(map,p,radius=9){
       if(!tileAt(map,x,y))return false;
   return !map.props.some(b=>shoreSolid(p,b,radius))&&!map.islands.some(r=>shoreBuildings(r).some(b=>shoreSolid(p,b,radius)));
 }
-function candidate(seed,depth,attempt){
-  const rng=random(seed^Math.imul(depth+1,0x9e3779b9)^Math.imul(attempt,0x85ebca6b));
+function candidate(seed,depth,attempt,exploration=false){
+  const rng=random(seed^Math.imul(depth+1,0x9e3779b9)^Math.imul(attempt,0x85ebca6b)^(exploration?0x34e817a9:0));
   const content=random(seed^Math.imul(depth+17,0x27d4eb2d));
   const pick=(min,n)=>min+Math.floor(rng()*n)*TILE;
   const map={version:3,seed,depth,attempt,width:3400,height:1800,cols:85,rows:45,
@@ -57,11 +57,12 @@ function candidate(seed,depth,attempt){
     islands:[],berths:[],tiles:Array(85*45).fill(1),nodes:[],edges:[],props:[]};
   const node=(id,x,y,role='channel')=>{const n={id,x,y,role};map.nodes.push(n);return n;};
   const start=node('arrival',180,900,'arrival'),gate=node('sea-gate',2180,900,'gate');
-  const main=[0,1,2].map(i=>node('basin-'+i,pick(600+i*560,3),pick(1000,5),'service'));
-  const upper=[0,1,2].map(i=>node('outer-'+i,main[i].x,pick(400,2),'outer'));
+  const main=[0,1,2].map(i=>node('basin-'+i,pick(600+i*560,3),pick(exploration?960:1000,exploration?10:5),'service'));
+  const upper=[0,1,2].map(i=>node('outer-'+i,main[i].x,pick(exploration?280:400,exploration?6:2),'outer'));
   const edge=(a,b,width,role)=>map.edges.push({from:a.id,to:b.id,width,role,points:[{x:a.x,y:a.y},{x:b.x,y:a.y},{x:b.x,y:b.y}]});
   // Two routes around a working waterfront plus a crosscut and optional southern loop.
   edge(start,main[0],360,'working');
+  if(exploration)map.edges.at(-1).points=[start,{x:start.x,y:main[0].y},main[0]];
   edge(main[0],main[1],320,'working');edge(main[1],main[2],320,'working');edge(main[2],gate,360,'working');
   edge(start,upper[0],280,'outer');
   map.edges.at(-1).points=[{x:start.x,y:start.y},{x:start.x,y:upper[0].y},{x:upper[0].x,y:upper[0].y}];
@@ -71,10 +72,29 @@ function candidate(seed,depth,attempt){
   const crossB=node('cross-north',crossA.x,upper[cross].y);
   edge(main[cross],crossA,320,'working');edge(upper[cross],crossB,280,'outer');
   edge(crossA,crossB,240,'shortcut');
+  if(exploration){
+    // Vary actual connections, not the decorative tile seed. A second crosscut
+    // can form a ladder; otherwise a long dogleg makes a distinct outer loop.
+    const other=1-cross,x=main[other].x+320;
+    if(rng()<.55){
+      const a=node('second-south',x,main[other].y),b=node('second-north',x,upper[other].y);
+      edge(main[other],a,320,'working');edge(upper[other],b,280,'outer');edge(a,b,280,'shortcut');
+    }else{
+      const e=map.edges.find(e=>e.from==='outer-1'&&e.to==='outer-2');
+      const y=pick(160,3);e.points=[upper[1],{x:upper[1].x,y},{x:upper[2].x,y},upper[2]];
+    }
+    // Alternating elbows change which shore blocks direct passage to a berth.
+    for(const e of map.edges.filter(e=>e.role==='working'&&e.from.startsWith('basin-')&&e.to.startsWith('basin-'))){
+      if(rng()<.5){const a=map.nodes.find(n=>n.id===e.from),b=map.nodes.find(n=>n.id===e.to),x=Math.floor((a.x+b.x)/80)*40;
+        e.points=[a,{x,y:a.y},{x,y:b.y},b];}
+    }
+  }
   map.topology=rng()<.5?'southern-loop':'service-inlet';
   const lower=node('south-water',main[1].x,pick(1480,3),'inlet');
   edge(main[1],lower,320,'inlet');
   if(map.topology==='southern-loop')edge(lower,main[2],280,'outer');
+  if(exploration)map.topology=[map.topology,map.nodes.some(n=>n.id==='second-south')?'ladder':'dogleg',...main.map(n=>n.y),...upper.map(n=>n.y)].join('-');
+  if(exploration)for(const e of map.edges)if(e.role==='working')e.width=e.from==='arrival'?560:400;
   function carveCircle(cx,cy,r){
     for(let y=Math.max(2,Math.floor((cy-r)/TILE));y<Math.min(map.rows-2,Math.ceil((cy+r)/TILE));y++)
       for(let x=Math.max(2,Math.floor((cx-r)/TILE));x<Math.min(map.cols-2,Math.ceil((cx+r)/TILE));x++)
@@ -84,14 +104,14 @@ function candidate(seed,depth,attempt){
     const a=e.points[j-1],b=e.points[j],len=Math.hypot(b.x-a.x,b.y-a.y),steps=Math.max(1,Math.ceil(len/20));
     for(let k=0;k<=steps;k++)carveCircle(a.x+(b.x-a.x)*k/steps,a.y+(b.y-a.y)*k/steps,e.width/2);
   }
-  for(const n of main)carveCircle(n.x,n.y,300);
+  for(const n of main)carveCircle(n.x,n.y,exploration?340:300);
   // Keep room to dodge and pull away from the machine. Land frames the arena.
   for(let y=5;y<40;y++)for(let x=56;x<84;x++)map.tiles[y*85+x]=0;
   carveCircle(2180,900,300);carveCircle(2110,500,170);carveCircle(2070,350,160);
   const fill=(r,value)=>{for(let y=Math.floor(r.y/TILE);y<(r.y+r.h)/TILE;y++)for(let x=Math.floor(r.x/TILE);x<(r.x+r.w)/TILE;x++)map.tiles[y*85+x]=value;};
   const rewards=['motor','pump','winch','tank','plating','turbine'];
   main.forEach((n,i)=>{
-    const w=pick(280,2),h=pick(240,3),x=Math.floor((n.x-w/2)/TILE)*TILE,y=n.y-160-h;
+    const w=pick(280,2),h=pick(240,exploration?4:3),x=Math.floor((n.x-w/2)/TILE)*TILE,y=n.y-160-h;
     const r={id:'rogue-yard-'+i,x,y,w,h,role:['equipment','fuel','repair'][i],equipment:rewards[Math.floor(content()*rewards.length)]};
     r.buildings=i===0?[{kind:'warehouse',x:x+24,y:y+16,w:144,h:84},
       {kind:'bench',x:x+w-88,y:y+156,w:64,h:44}]:
@@ -101,6 +121,14 @@ function candidate(seed,depth,attempt){
     map.berths.push({id:r.id,island:i,x:x+w/2,y:y+h+44,angle:0,
       landing:{x:x+w/2,y:y+h-25},loot:{x:x+w*.28,y:y+Math.max(i===0?126:0,h*.45)}});
   });
+  if(exploration){
+    // Each quay has a real turning/departure apron for a tug AND its tow.
+    // Do not rely on a center-point flood fill to certify a long convoy.
+    for(const b of map.berths){
+      const basin=main[b.island],edge=map.islands[b.island].y+map.islands[b.island].h;
+      fill({x:Math.floor((b.x-300)/40)*40,y:edge,w:640,h:basin.y+200-edge},0);
+    }
+  }
   fill({x:3360,y:680,w:40,h:440},1);
   if(depth===2&&map.secret){
     const r={id:'test-observation',x:2000,y:80,w:160,h:80,role:'observation'};
@@ -163,12 +191,38 @@ export function validateMap(map){
     if(!reachable({x:b.x,y:b.y+100}))errors.push('berth access');
     for(const dx of[-100,0,100])if(!waterAt(map,{x:b.x+dx,y:b.y},24))errors.push('berth clearance');
   }
+  if(map.version>=5){
+    // A conservative turning envelope for the longest tug + line + supply
+    // boat. Validate the channel graph again after filling real shore solids.
+    const visited=new Set(),todo=[],addWide=(x,y)=>{
+      const k=y*nx+x;if(x<0||x>=nx||y<0||y>=ny||visited.has(k)||!waterAt(map,{x:(x+.5)*TILE,y:(y+.5)*TILE},132))return;
+      visited.add(k);todo.push({x,y});
+    };
+    addWide(Math.floor((map.spawn.x+70)/TILE),Math.floor(map.spawn.y/TILE));
+    for(let i=0;i<todo.length;i++)for(const [dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]])addWide(todo[i].x+dx,todo[i].y+dy);
+    const goals=[...map.berths.map(b=>({x:b.x-90,y:map.nodes.find(n=>n.id==='basin-'+b.island).y})),map.boss,{x:map.exit.x-160,y:map.exit.y-90}];
+    if(goals.some(p=>!visited.has(Math.floor(p.y/TILE)*nx+Math.floor(p.x/TILE))))errors.push('convoy turning route');
+  }
   return {ok:!errors.length,errors,reachableCells:seen.size,clearanceRadius:radius};
 }
 export function generateHarbor(seed,depth=0,version=GENERATOR_VERSION){
+  if(!Number.isInteger(seed)||seed<0||seed>0xffffffff||!Number.isInteger(depth)||depth<0||depth>2)throw Error('Invalid harbor seed/depth/version');
   if(version===1)return legacyHarbor(seed,depth);
   if(version===2)return harborV2(seed,depth,2);
   if(version===4)return humanHarbor(seed,depth);
+  if(version===5){
+    for(let attempt=0;attempt<32;attempt++){
+      const map=candidate(seed,depth,attempt,true);
+      if(!validateMap(map).ok)continue;
+      try{return humanHarbor(seed,depth,map,5);}catch{/* retry a complete connected layout */}
+    }
+    // Deterministic safe fallback, still using the new graph family.
+    for(let attempt=0;attempt<32;attempt++){
+      const map=candidate(0,depth,attempt,true);if(!validateMap(map).ok)continue;
+      try{const safe=humanHarbor(seed,depth,map,5);safe.seed=seed;safe.fallback=true;return safe;}catch{}
+    }
+    throw Error('Exploration harbor failed validation');
+  }
   if(version!==3||!Number.isInteger(seed)||seed<0||seed>0xffffffff||!Number.isInteger(depth)||depth<0||depth>2)throw Error('Invalid harbor seed/depth/version');
   for(let attempt=0;attempt<8;attempt++){const map=candidate(seed,depth,attempt);if(validateMap(map).ok)return map;}
   for(let attempt=0;attempt<8;attempt++){
@@ -180,8 +234,8 @@ export function generateHarbor(seed,depth=0,version=GENERATOR_VERSION){
 
 // New voyages use the integrated shore profile. Saved generators1/2/3 keep
 // their terrain. Reuse sea topology; replacement solids are actual geometry.
-function humanHarbor(seed,depth){
-  const map=generateHarbor(seed,depth,3);map.version=4;
+function humanHarbor(seed,depth,source=null,version=4){
+  const map=source||generateHarbor(seed,depth,3);map.version=version;
   for(const b of map.berths){
     const r=map.islands[b.island],edge=r.y+r.h;
     // Step onto clear quay beside the bow, away from the tall wheelhouse.

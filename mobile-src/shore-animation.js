@@ -2,7 +2,7 @@ import {shoreScale} from './shore-scale.js';
 import {project,HARBOR_PROJECTION,IDENTITY_PROJECTION} from './world-projection.js';
 import {FAUNA,fauna as faunaSpec} from './shore-encounters.js';
 import {visibleAt} from './rogue-vision.js';
-import {crewFacing,crewPose,CREW_CYCLE} from './shore-pose.js';
+import {crewWalkCycle,crewPose,CREW_CYCLE} from './shore-pose.js';
 export {crewPose} from './shore-pose.js';
 const load=file=>{const i=new Image();i.src='assets/art/'+file;return i;};
 const fauna=load('shore-fauna-v1.png');
@@ -14,12 +14,13 @@ fetch('assets/art/shore-worker-v1-metadata.json').then(r=>r.ok?r.json():null).th
 const crewRows={woo:0,park:1,han:2,jeong:3},faunaRows={rat:0,dog:1,crab:2,gull:3};
 // Feet stay at the physical actor origin. Artwork has measured, non-square rows.
 const crewAnchors={woo:[422,815,1187,350],park:[425,795,1176,350],han:[416,817,1215,375],jeong:[415,815,1208,368]};
-const facings=new WeakMap();
+const walkCycles=new WeakMap();
 function crewSprite(c,s,p,reduced,unit=1){
   const img=crew[s.captain],fight=s.combat;if(!img.complete||!img.naturalWidth)return;
-  const facing=crewFacing(p.angle,facings.get(s.person));
-  if(s.person&&!fight.action&&!fight.hit)facings.set(s.person,facing);
-  const {row,col,flip}=crewPose(p.angle,fight.moving,fight.stride,fight.hit,fight.action,s.work>0,facing);
+  const motion=crewWalkCycle({angle:p.angle,stride:fight.stride,moving:fight.moving,hit:fight.hit,action:fight.action,searching:s.work>0},walkCycles.get(s.person));
+  if(s.person)walkCycles.set(s.person,motion);
+  const {row,col,flip}=crewPose(p.angle,fight.moving,motion.phase,fight.hit,fight.action,s.work>0,motion.facing);
+  const stepLift=!reduced&&motion.walking?Math.sin(motion.phase/(CREW_CYCLE/2)*Math.PI)**2*1.5*unit:0;
   const anchors=crewAnchors[s.captain],ys=[0,440,820,1254],xs=[0,320,632,944,1254],x=xs[col],y=ys[row],w=xs[col+1]-x,h=ys[row+1]-y;
   const idle=!fight.moving&&!fight.action&&!fight.hit&&!s.work;
   const breath=idle&&!reduced?Math.sin(s.time*2.1+crewRows[s.captain]*1.7)*.012:0,scale=55*unit/anchors[3];
@@ -31,7 +32,7 @@ function crewSprite(c,s,p,reduced,unit=1){
     c.drawImage(idleSheet,128+pose*264,starts[r],272,ends[r]-starts[r],-136*k,(starts[r]-feet[r])*k,272*k,(ends[r]-starts[r])*k);
     c.restore();return;
   }
-  c.save();c.translate(p.x,p.y);c.scale(flip?-1:1,1+breath);
+  c.save();c.translate(p.x,p.y-stepLift);c.scale(flip?-1:1,1+breath);
   if(row===2&&col===1){
     // Neighboring atlas pixels enter this cell's upper-right corner. Preserve
     // the original pivot and lower-right tool; never recenter the cut pieces.
@@ -106,7 +107,7 @@ export function drawShoreEncounter(c,s,reduced){
     // preserving planted feet at rest and never blending double silhouettes.
     const stride=enemy||worker?p.stride:fight.stride,moving=enemy||worker?p.moving:fight.moving;
     const contact=enemy||worker?8:CREW_CYCLE/2;
-    const stepLift=!reduced&&moving?Math.sin(stride/contact*Math.PI)**2*(enemy?1:1.5):0;
+    const stepLift=!reduced&&moving&&(enemy||worker)?Math.sin(stride/contact*Math.PI)**2*(enemy?1:1.5):0;
     const drawP={...p,y:p.y-lift-stepLift,angle:!enemy&&!worker&&fight.action?fight.action.angle:p.angle};
     if(enemy){
       const breath=!reduced&&!p.moving&&p.phase==='idle'?Math.sin(s.time*2.8+p.homeX)*.018:0;
@@ -150,7 +151,7 @@ export function drawProjectedShoreActor(c,s,actor,frame,reduced=false){
   const bird=p.kind==='gull',height=(enemy?{rat:32,dog:49,crab:78,gull:53}[p.kind]:55)*k;
   const lift=(bird?16+(reduced?0:Math.sin(s.time*7+p.homeX)*2):0)*k;
   const contact=enemy||worker?8:CREW_CYCLE/2;
-  const stepLift=!reduced&&moving?Math.sin(stride/contact*Math.PI)**2*(enemy?1:1.5)*k:0;
+  const stepLift=!reduced&&moving&&(enemy||worker)?Math.sin(stride/contact*Math.PI)**2*(enemy?1:1.5)*k:0;
   const drawP={...p,x:foot.x,y:foot.y-lift-stepLift,angle:face,stride};
   c.fillStyle='#03151c80';c.beginPath();c.ellipse(foot.x,foot.y,height*.22,height*.055,.198,0,7);c.fill();
   if(enemy){

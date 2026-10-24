@@ -59,7 +59,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   $('rogueQuayRetry').setAttribute('aria-label',t('항구 이미지 다시 불러오기','Retry loading harbor images'));
   function refreshQuayAssets(view){
     const notice=$('rogueQuayAssets'),button=$('rogueQuayRetry'),assets=view?.quayAssets;
-    const eligible=state?.generator===4&&['moored','ashore'].includes(state.mode)&&!paused&&!mapOpen&&root.dataset.surface==='playing';
+    const eligible=state?.generator>=4&&['moored','ashore'].includes(state.mode)&&!paused&&!mapOpen&&root.dataset.surface==='playing';
     const status=eligible?(quayRetryPending?'loading':assets?.status):null;
     const visible=status==='loading'||status==='error',retry=visible&&status==='error';
     if(document.activeElement===button&&!retry&&!paused)$('rogueSea').focus({preventScroll:true});
@@ -94,7 +94,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   }
   async function retryHarborArt(){
     const view=lastRogueCamera($('rogueSea'));
-    if(quayRetryPending||paused||state?.generator!==4||!['moored','ashore'].includes(state.mode)||mapOpen||view?.quayAssets?.status!=='error')return;
+    if(quayRetryPending||paused||!(state?.generator>=4)||!['moored','ashore'].includes(state.mode)||mapOpen||view?.quayAssets?.status!=='error')return;
     quayRetryPending=true;refreshQuayAssets(view);
     try{
       const {retryQuayArt}=await import('./quay-view.js');await retryQuayArt();
@@ -348,8 +348,8 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     if(['Space','Enter','NumpadEnter','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Tab'].includes(e.code))e.preventDefault();
     keys.add(e.code);
     if(!e.repeat){
-      const action={KeyE:'interact',KeyQ:'horn',KeyB:'special',KeyX:'cutnet',KeyG:'captain',KeyT:'tow',KeyH:'cargoAnchor',KeyV:'ranged',...(state.person?{Space:'melee'}:{})}[e.code];
-      if(action){const before=rigActionSequence(state);const used=interact(state,action,direction());if(used&&(action==='ranged'||action==='melee'))onSound('anchor');const cue=rigActionCue(state,before);if(cue)onSound(cue);save();}
+      const action={KeyE:'interact',KeyQ:'horn',KeyL:'rest',KeyF:'recoverScrap',KeyB:'special',KeyX:'cutnet',KeyG:'captain',KeyT:'tow',KeyH:'cargoAnchor',KeyV:'ranged',...(state.person?{Space:'melee'}:{})}[e.code];
+      if(action){const before=rigActionSequence(state);const used=interact(state,action,direction());if(used&&action==='recoverScrap')keys.delete(e.code);if(used&&(action==='ranged'||action==='melee'))onSound('anchor');const cue=rigActionCue(state,before);if(cue)onSound(cue);save();}
       if(e.code==='KeyM'){e.preventDefault();if(state.harborIntel)harborChart();else{mapOpen=!mapOpen;releaseControls();}}
       if(!mapOpen&&['Equal','NumpadAdd','Minus','NumpadSubtract'].includes(e.code))changeZoom(camera.zoom*(['Equal','NumpadAdd'].includes(e.code)?1.1:1/1.1));
     }

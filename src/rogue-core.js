@@ -1,7 +1,7 @@
 import {generateHarbor,GENERATOR_VERSION,DEPTHS,inside,waterAt,shoreBuildings,walkableAt} from './rogue-map.js';
 import {newSkillState,activateCaptainSkill,advanceSkill,validateSkill} from './captain-skills.js';
 import {CAPTAIN_VESSELS,CAPTAINS} from './captain-vessels.js';
-import {newEncounter,tickEncounter,shoreAttack,validateEncounter,toolBerth,FLOOR_TOOLS,SHORE_SITES,hasTool} from './shore-encounters.js';
+import {newEncounter,tickEncounter,shoreAttack,validateEncounter,toolBerth,FLOOR_TOOLS,SHORE_SITES,hasTool,startleGulls,recoverGullScrap} from './shore-encounters.js';
 import {newSurvey,updateSurvey,validSurvey,visibleAt} from './rogue-vision.js';
 import {newRogueTow,towControl,tickRogueTow,deliverRogueTow,canDeliverRogueTow,validRogueTow} from './rogue-tow.js';
 import {WATER_PROFILE,waterMotion,stepShipMotion,releaseShipAssist} from './ship-motion.js';
@@ -18,8 +18,9 @@ import {newHarborIntel,refreshHarborIntel,harborPlan,harborDestination,harborRou
 import {newVoyageRecord,recordVoyage,recordHit,resourceSnapshot,resourceGains,validVoyageRecord} from './rogue-voyage-record.js';
 import {newShoreRescue,rescueStatus,rescueBerth,rescuePendingAt,orderRescue,tickRescue,boardRescue,leaveRescue,validRescue} from './shore-rescue.js';
 import {publishRigAction} from './rig-feedback.js';
+import {newDaylight,startCamp,tickDaylight,validDaylight} from './voyage-daylight.js';
 export {planHarbor};
-export const RUN_VERSION=17;
+export const RUN_VERSION=18;
 export const SUPPLY_MODEL='carried-v1';
 export {CAPTAINS};
 export const BUILDS={standard:'표준선',bilge:'침수 발전선',winch:'축력 윈치선'};
@@ -77,7 +78,7 @@ function floor(s){
 export function createRun(seed,captain='woo',build='standard',paint='harbor',generator=GENERATOR_VERSION){
   if(!Object.hasOwn(CAPTAINS,captain)||!Object.hasOwn(BUILDS,build)||!['harbor','ochre','red'].includes(paint))throw Error('Unknown loadout');
   const s={version:RUN_VERSION,physicsProfile:WATER_PROFILE,bossModel:DREDGER_MODEL,sluiceModel:SLUICE_MODEL,lighthouseModel:LIGHTHOUSE_MODEL,supplyModel:SUPPLY_MODEL,cacheModel:CACHE_MODEL,rigModel:RIG_MODEL,generator,seed,depth:0,captain,build,paint,
-    status:'playing',time:0,fuel:140,hp:CAPTAINS[captain].hp,boost:CAPTAINS[captain].boost,
+    status:'playing',time:0,daylight:newDaylight(),fuel:140,hp:CAPTAINS[captain].hp,boost:CAPTAINS[captain].boost,
     flood:0,valve:false,charge:0,crewHp:100,crewUpgrades:[],equipment:[],pendingGear:null,salvage:newSalvage(),harborIntel:newHarborIntel(),voyageRecord:newVoyageRecord(),log:[],radio:null,reason:'',debris:false,netChoices:[],skill:newSkillState(),tools:[],combat:undefined};
   floor(s);return s;
 }
@@ -88,21 +89,19 @@ export function hullPoints(b){
 function hullClear(s,b){return hullPoints(b).every(p=>waterAt(s.map,p,b.width/2));}
 export const berthReadiness=(s,b)=>{
   const result=dockStatus({boat:s.boat,berth:b,sailing:s.mode==='sailing',clear:hullClear(s,s.boat),spinningMatters:waterMotion(s)});
-  // Working jetties catch a slow vessel with a line. Final evacuation docking
-  // remains deliberate; no snap across walls or other hulls is permitted.
-  if(s.generator>=3&&s.map.berths.includes(b)&&result.near){
-    const heading=Math.min(result.heading,Math.PI-result.heading);
-    let clear=true;
-    const delta=angleDiff(b.angle,s.boat.angle),steps=Math.ceil(Math.max(result.distance/4,Math.abs(delta)/.04));
-    for(let i=0;i<=steps&&clear;i++){
-      const t=steps?i/steps:1;
-      clear=!vesselBlocked(s,{...s.boat,x:s.boat.x+(b.x-s.boat.x)*t,y:s.boat.y+(b.y-s.boat.y)*t,angle:s.boat.angle+delta*t});
-    }
-    const checks={clearance:clear,position:result.distance<64,speed:result.speed<30,heading:heading<.85,spin:Math.abs(s.boat.omega||0)<.6};
-    const reason=s.mode!=='sailing'?'inactive':!clear?'clearance':!checks.position?'position':!checks.speed?'speed':!checks.heading?'heading':!checks.spin?'spin':'ready';
-    return {...result,checks,reason,ready:reason==='ready',assisted:true,limits:{distance:64,heading:.85,speed:30,spin:.6,near:160}};
-  }
-  return result;
+  // Throw a mooring line from the present hull. Never rotate or translate the
+  // boat into a prescribed pose: a close bow, stern or broadside all qualify.
+  const capture=76+s.boat.length/2,near=capture+65;
+  let clear=!vesselBlocked(s,s.boat);
+  const steps=Math.max(1,Math.ceil(result.distance/4));
+  // The rope must cross open water. This excludes a quay on the other side
+  // of a wall without demanding clearance for an artificial hull snap.
+  for(let i=1;i<=steps&&clear;i++)clear=waterAt(s.map,{
+    x:s.boat.x+(b.x-s.boat.x)*i/steps,y:s.boat.y+(b.y-s.boat.y)*i/steps},0);
+  const checks={clearance:clear,position:result.distance<=capture,speed:result.speed<80,heading:true,spin:true};
+  const reason=s.mode!=='sailing'?'inactive':result.distance>=near?'approach':!clear?'clearance':!checks.position?'position':!checks.speed?'speed':'ready';
+  return {...result,near:result.distance<near,checks,reason,ready:reason==='ready',assisted:true,freeHeading:true,
+    limits:{distance:capture,heading:Math.PI,speed:80,spin:Infinity,near}};
 };
 export const berthReady=(s,b)=>berthReadiness(s,b).ready;
 function vesselContact(s,pose){
@@ -183,7 +182,7 @@ export function objective(s){
       return {text:docking.near?dockHint(docking):SHORE_SITES[planned.point.island]+' · 선택한 목적지',target:planned.point,planSite:planned.id};
     }
     const docking=berthReadiness(s,s.map.exit);
-    return {text:docking.near?dockHint(docking,'ko',true):usesLighthouse(s)?'명부 확인 완료 · 등대 부두에 접안해 최종 전송 · E':'탈출 부두에 세로로 천천히 접안 · E',target:s.map.exit};
+    return {text:docking.near?dockHint(docking,'ko',true):usesLighthouse(s)?'명부 확인 완료 · 등대 부두에 접안해 최종 전송 · E':'탈출 부두 가까이 접근 · 방향 자유',target:s.map.exit};
   }
   if(s.boss.active&&!harborRoutePriority(s)){
     if(usesLighthouse(s)){
@@ -219,7 +218,7 @@ export function objective(s){
   const special=s.combat&&!hasTool(s,FLOOR_TOOLS[s.depth].id)?toolBerth(s):null;
   const berth=special||s.map.berths.find(b=>!s.claimed.includes(b.id));
   if(special)return {text:SHORE_SITES[special.island]+' 수색 · '+FLOOR_TOOLS[s.depth].name+' 확보 / 기존 장비로 돌파도 가능',target:special};
-  return {text:berth?'부두에 평행하게 감속 · E 계류 / 장비 없이 보스 진입도 가능':'바깥 해역의 기계선을 정지시켜 탈출로 열기',target:berth||s.map.boss};
+  return {text:berth?'부두 가까이 감속 · 방향 자유 · E 계류 / 장비 없이 보스 진입도 가능':'바깥 해역의 기계선을 정지시켜 탈출로 열기',target:berth||s.map.boss};
 }
 function damage(s,n,reason,source,impactSpeed=null,contact=null){
   if(s.boat.inv>0||s.status!=='playing')return;
@@ -231,6 +230,8 @@ function damage(s,n,reason,source,impactSpeed=null,contact=null){
 }
 export function interact(s,action,input={}){
   if(s.status!=='playing'||s.pendingGear||s.pendingCache||s.salvage?.pending)return false;
+  if(action==='rest')return startCamp(s);
+  if(action==='recoverScrap')return recoverGullScrap(s);
   if(action==='tow'||action==='cargoAnchor'){
     const result=towControl(s,action);s.radio={text:result.reason,left:5};return result.ok;
   }
@@ -268,7 +269,9 @@ export function interact(s,action,input={}){
     }return false;
   }
   if(action==='horn'){
-    if(s.mode==='moored'){s.mode='sailing';s.mooring=null;return true;}
+    const startled=startleGulls(s);
+    if(s.mode==='moored'){if(s.daylight)s.daylight.rest=null;s.mode='sailing';s.mooring=null;return true;}
+    if(startled)return true;
     const origin=s.person||b;
     const reach=90*(s.person?shoreScale(s):1);
     s.noise={x:origin.x+Math.cos(origin.angle||0)*reach,y:origin.y+Math.sin(origin.angle||0)*reach,left:5};
@@ -286,6 +289,7 @@ export function interact(s,action,input={}){
     return orderRescue(s);
   }
   if(s.mode==='moored'){
+    if(s.daylight)s.daylight.rest=null;
     const berth=s.map.berths.find(x=>x.id===s.mooring);s.person={...berth.landing,angle:-Math.PI/2};s.mode='ashore';
     say(s,'shore-'+s.depth,s.combat?'Park: Space로 갈고리를 휘두르고, V나 클릭으로 고철을 던져. 게가 집게를 들면 뒤로 빠져. Q 깡통으로 짐승을 유인할 수도 있어.':'Park: 상자를 확인해. 발소리가 크면 들개가 따라올 거야. Q로 빈 깡통을 던져 시선을 돌릴 수 있어.','Park: 상자를 확인해. 짐승이 몰려오면 배로 돌아와.');
     if(s.tow?.connected&&!s.tow.anchor)s.radio={text:'Park: 보급정 닻을 안 내렸어. 우리 배만 계류돼 있어. 떠밀리기 전에 다시 타서 H로 닻을 내려.',left:7};
@@ -306,10 +310,10 @@ export function interact(s,action,input={}){
     const id=bossLinkCandidate(s);
     if(id>=0){clearSalvageCharge(s);s.boss.hook=id;s.boss.rest=usesLighthouse(s)?45:clamp(distance(b,partPosition(s,id)),45,95);return true;}
   }
-  const berth=s.map.berths.find(x=>berthReady(s,x));
+  const berth=s.map.berths.filter(x=>berthReady(s,x)).sort((a,c)=>distance(b,a)-distance(b,c))[0];
   if(berth){
     releaseShipAssist(s);clearSalvageCharge(s);s.mooring=berth.id;s.mode='moored';
-    Object.assign(b,{x:berth.x,y:berth.y,angle:berth.angle,omega:0,vx:0,vy:0});return true;
+    Object.assign(b,{omega:0,vx:0,vy:0});return true;
   }
   return false;
 }
@@ -599,6 +603,8 @@ function step(s,input,dt){
   tickRogueTow(s,dt);
   const searching=s.work,crewBefore=s.crewHp;
   tickEncounter(s,input,dt);
+  if(input.recover&&s.person&&recoverGullScrap(s)){s.work=0;input={...input,recover:false};}
+  tickDaylight(s,dt);
   if(searching>0&&!s.work){
     if(s.crewHp<crewBefore)interruptSearch(s,'hit',searching);
     else if(s.combat?.action)interruptSearch(s,'attack',searching);
@@ -702,7 +708,9 @@ export function restoreRun(raw){
   try{
     if(typeof raw!=='string'||raw.length>160000)return null;
     const s=JSON.parse(raw),finite=(v,min,max)=>Number.isFinite(v)&&v>=min&&v<=max;
-    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,RUN_VERSION].includes(s.version)||![1,2,3,4].includes(s.generator)||!Number.isInteger(s.seed)||!finite(s.seed,0,0xffffffff)||!Number.isInteger(s.depth)||!finite(s.depth,0,2))return null;
+    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,RUN_VERSION].includes(s.version)||![1,2,3,4,5].includes(s.generator)||!Number.isInteger(s.seed)||!finite(s.seed,0,0xffffffff)||!Number.isInteger(s.depth)||!finite(s.depth,0,2))return null;
+    if(s.version<18){s.daylight=newDaylight();if(s.combat?.enemies)for(const e of s.combat.enemies)e.stash=0;}
+    if(!validDaylight(s))return null;
     if(s.version<17)s.crewUpgrades=null;
     if(!validCrewUpgrades(s))return null;
     if(s.version<15)s.rescue=null;

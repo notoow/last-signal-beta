@@ -15,9 +15,16 @@ import {rescueStatus,rescueBerth} from './shore-rescue.js';
 import {visibleAt} from './rogue-vision.js';
 import {recentImpact,gateImpactText} from './rogue-impact.js';
 import {rigActionPresentation} from './rig-feedback-ui.js';
+import {daylight,campStatus} from './voyage-daylight.js';
+import {gullRecovery} from './shore-encounters.js';
 
 const escape=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const translations={
+  'Park: 선실 난로를 켤게. 불침번을 서며 날이 밝기를 기다리자. 연료 8이 필요해.':'Park: I will light the cabin stove. We can keep watch until dawn. It takes 8 fuel.',
+  'Park: 쉴 수 없어. 주변을 확인해.':'Park: We cannot rest. Check our surroundings.',
+  'Park: 날이 밝았어. 연료 8을 썼고 선원 체력 15를 회복했어. 다시 출항하자.':'Park: Dawn is here. We used 8 fuel and recovered 15 crew health. Ready to cast off.',
+  'Park: 갈매기가 고철을 물었어! 가까울 때 Q 경적, 아니면 투척! 놓쳐도 부두 둥지에서 되찾을 수 있어.':'Park: The gull took scrap! Sound the horn with Q while it is close, or throw scrap. You can recover it from its quay nest later.',
+  'Park: 고철을 부두 둥지에 내려놨어. 상륙해서 회수할 수 있어.':'Park: It left the scrap in its quay nest. Go ashore to recover it.',
   'E · 정비공과 함께 승선':'E Board with the mechanic',
   'E · 혼자 승선 · 정비공은 부두에 남음':'E Board alone · mechanic stays ashore',
   'E · 정비공 기다리기':'E Ask the mechanic to wait',
@@ -54,7 +61,7 @@ const translations={
   '부두 수색':'Search the quay','배로 돌아가기':'Return to your boat',
   'E · 하선 / Q · 계류 해제':'E Disembark · Q Unmoor',
   'E · 탈출 접안':'E · Dock and leave','E · 계류':'E · Moor',
-  '탈출 부두에 세로로 천천히 접안 · E':'Align with the exit berth · E',
+  '탈출 부두 가까이 접근 · 방향 자유':'Approach the exit quay · any direction',
   '고리에서 멀어지며 견인 · 줄이 붉어지면 E로 놓기':'Pull away from the hook · E to release a red line',
   '노출된 구동 고리에 접근 · E로 연결':'Approach an exposed drive hook · E to connect',
   '흡입류·크레인 예고 밖으로 이동':'Move clear of suction and the crane warning',
@@ -80,7 +87,7 @@ const translations={
   '세 계층 돌파 · 마지막 신호를 전달했다':'Three regions cleared · the last signal was delivered',
   '등대 봉쇄 포격으로 선체가 파손됐다':'The lighthouse blockade bombardment destroyed the tug.',
   '탐조등이 멈추면 빛 밖으로 회피':'Dodge outside the light when its aim locks',
-  '부두에 평행하게 감속 · E 계류 / 장비 없이 보스 진입도 가능':'Slow alongside a quay · E to moor; equipment is optional',
+  '부두 가까이 감속 · 방향 자유 · E 계류 / 장비 없이 보스 진입도 가능':'Slow near a quay · any direction · E to moor; equipment is optional',
   '바깥 해역의 기계선을 정지시켜 탈출로 열기':'Disable the machine to open the exit',
   '감속 · Space':'Slow down · Space','방향 맞추기 · Space + 방향키':'Align bow · Space + direction',
   '회전 멈추기 · Space':'Stop turning · Space','안벽에서 벗어나기':'Clear the quay',
@@ -201,7 +208,9 @@ export function rogueHudText(value,language='ko'){
   if(language!=='en')return value;
   let text=String(value);
   for(const [from,to] of replacements)text=text.replaceAll(from,to);
-  return text.replace(/(\d+)초 후/g,'$1s cooldown').replace(/부스터 (\d+) 필요/g,'Needs $1 boost');
+  return text.replace(/(\d+)초 후/g,'$1s cooldown').replace(/부스터 (\d+) 필요/g,'Needs $1 boost')
+    .replace(/Woo: 둥지에서 고철 (\d+)개 회수했어\./g,'Woo: Recovered $1 scrap from the nest.')
+    .replace(/Woo: 고철 (\d+)개 되찾았어!/g,'Woo: Got $1 scrap back!').replace(' 나머지는 둥지에 남아 있어.',' The rest is still in the nest.');
 }
 const skillNames={woo:'Emergency brace',park:'Side jet',han:'Decoy buoy',jeong:'Drive bind'};
 const skillDescriptions={
@@ -293,14 +302,14 @@ export function dockAlignmentPresentation(alignment,language='ko',s=null){
   const en=language==='en',a=alignment;
   const destination=s&&(harborDestination(s)?.point||(s.boss.cleared?s.map.exit:null));
   const optional=!!destination&&(destination.x!==a.berth.x||destination.y!==a.berth.y);
-  const active={brake:'speed',settle:'spin',turn:'heading',approach:'position',maneuver:'clearance'}[a.next.kind];
-  const checks=[['position',en?'Position':'위치'],['heading',en?'Bow':'방향'],['speed',en?'Speed':'속도'],['spin',en?'Turn':'회전']]
+  const active={brake:'speed',settle:'spin',turn:'heading',approach:'position','near-quay':'position',maneuver:'clearance','clear-water':'clearance'}[a.next.kind];
+  const checks=(a.status.freeHeading?[['position',en?'Position':'위치'],['speed',en?'Speed':'속도']]:[['position',en?'Position':'위치'],['heading',en?'Bow':'방향'],['speed',en?'Speed':'속도'],['spin',en?'Turn':'회전']])
     .map(([id,label])=>({id,label,ok:a.checks[id],active:active===id&&!a.checks[id],
       ratio:(id==='speed'||id==='spin')?Math.min(2,a.status[id]/a.limits[id]):null}));
   if(!a.checks.clearance)checks.unshift({id:'clearance',label:en?'Hull':'선체',ok:false,active:true,ratio:null});
-  return {title:optional?(en?'Optional stop':'주변 접안(선택)'):a.exit?(en?'Exit alignment':'탈출 접안'):!a.checks.position&&['turn','approach'].includes(a.next.kind)?(en?'Approach berth':'접안점 접근'):(en?'Berth alignment':'접안 정렬'),optional,
+  return {title:optional?(en?'Optional stop':'주변 접안(선택)'):a.exit?(en?'Exit berth':'탈출 접안'):a.status.freeHeading?(en?'Docking':'접안'):!a.checks.position&&['turn','approach'].includes(a.next.kind)?(en?'Approach berth':'접안점 접근'):(en?'Berth alignment':'접안 정렬'),optional,
     hint:dockAlignmentHint(a,language),kind:a.next.kind,ready:a.status.ready,checks,
-    tone:a.status.ready?'ready':['maneuver','resource','ability'].includes(a.next.kind)?'warning':'normal'};
+    tone:a.status.ready?'ready':['maneuver','clear-water','resource','ability'].includes(a.next.kind)?'warning':'normal'};
 }
 const percent=(value,max)=>Math.max(0,Math.min(100,value/max*100));
 function instrument(g){
@@ -321,7 +330,7 @@ export function rogueHudModel(s,language='ko'){
   const fighting=s.boss.active&&!s.boss.cleared;
   const combatPriority=fighting&&!harborRoutePriority(s);
   const model={language,mode:s.mode,mission:tr(guide.text),fullObjective:tr(guide.text),
-    region:`${s.depth+1}/3 · ${tr(DEPTHS[s.depth].name)} · ${CAPTAINS[s.captain].name}`,
+    region:`${s.depth+1}/3 · ${tr(DEPTHS[s.depth].name)} · ${CAPTAINS[s.captain].name}`,sky:s.daylight?daylight(s):null,
     metrics:[],conditions:[],action:'',context:[],work:null,boss:null,
     motion:waterMotion(s)?shipMotionStatus(s).mode:'legacy',
     skill:{...skill,name:en?skillNames[s.captain]:skill.name,reason:tr(skill.reason),
@@ -581,13 +590,24 @@ export function rogueHudModel(s,language='ko'){
     const affected=model.metrics.find(m=>m.id===model.impact.metric);
     if(affected)affected.impact=true;
   }
-  if(s.work>0)model.work={value:s.work,max:ashore?1.8:3,label:ashore?(en?'Searching':'수색 중'):(en?'Recovering':'회수 중')};
+  if(s.mode==='moored'){
+    const berth=s.map.berths.find(b=>b.id===s.mooring);
+    model.mission=(berth?tr(SHORE_SITES[berth.island])+' · ':'')+(en?'Moored':'계류 중');
+    model.fullObjective=model.mission;model.action=en?'E · Go ashore   Q · Cast off':'E · 하선   Q · 출항';
+    const camp=campStatus(s);
+    if(camp?.night){
+      const reason={ready:en?'Rest until dawn · 8 fuel · crew +15':'아침까지 휴식 · 연료 8 · 선원 체력 +15',resting:en?'Lighting stove · cast off to cancel':'난로 준비 중 · 출항하면 취소',spent:en?'Already rested here':'이 부두에서는 이미 쉬었습니다',danger:en?'Danger nearby':'위험이 가까워 쉴 수 없습니다',fuel:en?'Not enough fuel':'휴식 연료 부족',choice:en?'Finish current choice':'선택을 먼저 마치세요'}[camp.reason];
+      model.context.push({id:'camp',tone:'normal',text:`L · ${reason}`});
+    }
+  }
+  const scrap=gullRecovery(s);if(scrap){model.action=(en?'F · Recover scrap ':'F · 고철 회수 ')+scrap.amount+(scrap.available?'':en?' · Unavailable':' · 지금 사용 불가');model.work=null;}
+  if(s.work>0&&!scrap)model.work={value:s.work,max:ashore?1.8:3,label:ashore?(en?'Searching':'수색 중'):(en?'Recovering':'회수 중')};
   return model;
 }
 export function rogueHudMarkup(model){
   const dockChecks=model.docking?`<span class="rogue-dock-checks" data-dock-kind="${model.docking.kind}" data-dock-optional="${!!model.docking.optional}" aria-label="${escape(model.docking.title)}">${model.docking.checks.map(c=>`<span data-dock-check="${c.id}" data-ok="${c.ok}" data-active="${c.active}"><i aria-hidden="true">${c.ok?'✓':'○'}</i> ${escape(c.label)}<span class="rogue-sr-only"> · ${model.language==='en'?(c.ok?'ready':'not ready'):(c.ok?'충족':'미충족')}</span></span>`).join('')}</span>`:'';
   return {
-    mission:`<small>${escape(model.region)}</small><strong>${escape(model.mission)}</strong>${model.plan?`<div class="rogue-plan-summary">${escape(model.plan)}</div>`:''}${model.boss?`<div class="rogue-boss-state">${escape(model.boss)}</div>`:''}`,
+    mission:`<small>${escape(model.region)}${model.sky?` <span class="rogue-clock" data-period="${model.sky.period}" aria-label="${model.language==='en'?{day:'Day',dusk:'Dusk',night:'Night',dawn:'Dawn'}[model.sky.period]:{day:'낮',dusk:'저녁',night:'밤',dawn:'새벽'}[model.sky.period]} ${model.sky.clock}">${model.sky.night?'☾':'☀'} ${model.sky.clock}</span>`:''}</small><strong>${escape(model.mission)}</strong>${model.plan?`<div class="rogue-plan-summary">${escape(model.plan)}</div>`:''}${model.boss?`<div class="rogue-boss-state">${escape(model.boss)}</div>`:''}`,
     readings:model.metrics.map(m=>`<span data-rogue-metric="${m.id}"${m.impact?' data-impact="true"':''}${m.gauge?' class="rogue-instrument"':''}><span>${escape(m.label)}</span><b>${escape(m.value)}</b>${m.max!==undefined?`<span class="rogue-maximum">/${m.max}</span>`:''}${instrument(m.gauge)}</span>`).join(''),
     conditions:(model.impact?`<span class="rogue-impact" data-impact-id="${model.impact.id}" data-impact-target="${model.impact.target}" data-impact-source="${model.impact.source}"><span>${escape(model.impact.cause)}</span><strong>${escape(model.impact.loss)}</strong></span>`:'<span class="rogue-impact" aria-hidden="true"></span>')+model.conditions.map(c=>`<span data-rogue-condition="${c.id}" data-tone="${c.tone}"${c.gauge?' class="rogue-instrument"':''}>${c.emphasis?`<strong>${escape(c.text)}</strong>`:escape(c.text)}${instrument(c.gauge)}</span>`).join(''),
     controls:`${model.docking?.optional?'':dockChecks}<span data-rogue-action="primary" data-tone="${model.actionTone||'normal'}"${model.rigAction?` data-rig-action-id="${model.rigAction.id}"`: ""}>${escape(model.rigAction?.text||model.action)}</span>${model.context.map(c=>`<span data-rogue-context="${c.id}" data-tone="${c.tone}">${escape(c.text)}</span>${c.id==='docking'?dockChecks:''}`).join('')}${model.work?`<label class="rogue-work">${escape(model.work.label)}<progress max="${model.work.max}" value="${model.work.value}" aria-label="${escape(model.work.label)}"></progress></label>`:''}`,

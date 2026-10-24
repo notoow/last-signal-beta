@@ -34,6 +34,7 @@ import {usesLighthouse} from './lighthouse-counterplay.js';
 import {drawLighthouse} from './lighthouse-view.js';
 import {harborPlan} from './harbor-plan.js';
 import {rescueStatus} from './shore-rescue.js';
+import {daylight,campStatus} from './voyage-daylight.js';
 const load=file=>{const img=new Image();img.src='assets/art/'+file;return img;};
 const bosses=load('rogue-bosses-v1.png');
 const shoreProps=load('rogue-shore-props-v1.png');
@@ -52,6 +53,44 @@ function canvasLabel(c,text,x,y,color='#f1e6c4',size=15){
   c.strokeText(text,x,y);c.fillStyle=color;c.fillText(text,x,y);return true;
 }
 function ring(c,p,r,color){c.strokeStyle=color;c.lineWidth=2;c.beginPath();c.arc(p.x,p.y,r,0,Math.PI*2);c.stroke();}
+// Bounded screen tint preserves silhouettes and warning readability. The
+// planning chart keeps its instrument colors; the stove glows only while the
+// authoritative camp timer is running, at the moored boat's cabin.
+function voyageLight(c,s,frame,reduced,mapOpen){
+  if(!s.daylight||mapOpen)return;
+  const sky=daylight(s),alpha=(1-sky.light)*.26,dpr=Math.min(devicePixelRatio||1,2);
+  frame.daylight={...sky,tintAlpha:alpha,stove:null};
+  c.save();c.setTransform(dpr,0,0,dpr,0,0);
+  if(alpha>0){c.fillStyle=`rgba(5,14,35,${alpha})`;c.fillRect(0,0,frame.width,frame.height);}
+  if(campStatus(s)?.reason==='resting'){
+    const bounds=frame.quay?.boat?.bounds,p=bounds?{x:bounds.x+bounds.w*.62,y:bounds.y+bounds.h*.4}:projectWorld(frame,s.boat);
+    const radius=22*(reduced?1:1+Math.sin(s.time*4)*.03),glow=c.createRadialGradient(p.x,p.y,1,p.x,p.y,radius);
+    glow.addColorStop(0,'#ffe0a4a0');glow.addColorStop(.25,'#ffa7486b');glow.addColorStop(1,'#e6853100');
+    c.fillStyle=glow;c.beginPath();c.arc(p.x,p.y,radius,0,Math.PI*2);c.fill();
+    c.fillStyle='#ffd394';c.fillRect(p.x-2,p.y-3,4,6);frame.daylight.stove={...p,radius};
+  }
+  c.restore();
+}
+function gullScrapMarkers(c,s,frame,language){
+  frame.scrapMarkers=[];const dpr=Math.min(devicePixelRatio||1,2);
+  c.save();c.setTransform(dpr,0,0,dpr,0,0);
+  for(const e of s.combat?.enemies||[]){
+    if(e.kind!=='gull')continue;
+    const home={x:e.homeX,y:e.homeY};
+    if(e.stash>0&&visibleAt(s,home)){
+      const p=projectWorld(frame,home);if(p.x>=0&&p.y>=0&&p.x<=frame.width&&p.y<=frame.height){
+        prop(c,'chest',p.x,p.y+4,24,18);canvasLabel(c,(language==='en'?'Scrap ':'고철 ')+e.stash,p.x,p.y-20,'#ead2a0',11);
+        frame.scrapMarkers.push({id:e.id,kind:'stash',amount:e.stash,...p});
+      }
+    }
+    if(e.hp>0&&e.stolen>0&&visibleAt(s,e)){
+      const p=projectWorld(frame,e,frame.projection?M:0);if(p.x>=0&&p.y>=24&&p.x<=frame.width&&p.y<=frame.height){
+        canvasLabel(c,(language==='en'?'Scrap ':'고철 ')+e.stolen,p.x,p.y-24,'#f1c18a',11);frame.scrapMarkers.push({id:e.id,kind:'carried',amount:e.stolen,...p});
+      }
+    }
+  }
+  c.restore();
+}
 function relayEdgeLabel(c,text,mark,frame){
   c.save();c.font='600 12px Pretendard, sans-serif';
   const half=c.measureText(text).width/2+5;c.restore();
@@ -113,8 +152,10 @@ function dockGeometry(c,a,scale){
   c.setLineDash([]);c.beginPath();c.moveTo(t.x-4/scale,t.y);c.lineTo(t.x+4/scale,t.y);c.moveTo(t.x,t.y-4/scale);c.lineTo(t.x,t.y+4/scale);c.stroke();
   // The single arrow outside the circle is the required bow direction. The
   // circle itself remains exactly the canonical centre-distance boundary.
-  c.save();c.translate(t.x,t.y);c.rotate(t.angle);c.lineWidth=2/scale;
-  c.beginPath();c.moveTo(r+5/scale,0);c.lineTo(r+27/scale,0);c.lineTo(r+19/scale,-5/scale);c.moveTo(r+27/scale,0);c.lineTo(r+19/scale,5/scale);c.stroke();c.restore();
+  if(!a.status.freeHeading){
+    c.save();c.translate(t.x,t.y);c.rotate(t.angle);c.lineWidth=2/scale;
+    c.beginPath();c.moveTo(r+5/scale,0);c.lineTo(r+27/scale,0);c.lineTo(r+19/scale,-5/scale);c.moveTo(r+27/scale,0);c.lineTo(r+19/scale,5/scale);c.stroke();c.restore();
+  }
   if(!a.checks.position){c.strokeStyle='#e8f2f099';c.setLineDash([3/scale,5/scale]);c.beginPath();c.moveTo(p.x,p.y);c.lineTo(t.x,t.y);c.stroke();c.setLineDash([]);}
   // Actual velocity, never the direction requested by a steering key.
   const speed=Math.hypot(p.vx,p.vy);
@@ -173,7 +214,7 @@ function dockPanel(c,a,frame,presentation,s,language,exitScene=null){
   c.strokeStyle=presentation.ready?'#a4d7b3':'#95d1df';c.lineWidth=2;c.beginPath();c.moveTo(panel.x,panel.y);c.lineTo(panel.x,panel.y+panel.h);c.stroke();
   c.textAlign='left';c.textBaseline='top';c.font='600 12px Pretendard, sans-serif';c.fillStyle='#95d1df';
   c.fillText(presentation.title,panel.x+12,panel.y+9);
-  const label=language==='en'?'● Boat centre   → Berth bow':'● 배 중심   → 계류 방향';c.font='400 11px Pretendard, sans-serif';c.fillStyle='#aab9c1';
+  const label=a.status.freeHeading?(language==='en'?'● Boat centre   ○ Docking area':'● 배 중심   ○ 접안 구역'):(language==='en'?'● Boat centre   → Berth bow':'● 배 중심   → 계류 방향');c.font='400 11px Pretendard, sans-serif';c.fillStyle='#aab9c1';
   c.textAlign='right';c.fillText(label,panel.x+panel.w-12,panel.y+9);c.textAlign='left';
   c.font='500 14px Pretendard, sans-serif';
   const textBounds=[];
@@ -257,6 +298,7 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   if(frame.projectionId==='quay-v1'){
     exitFrames.delete(canvas);canvas.dataset.dockPanel='false';
     frame.quay=drawQuay(c,s,frame,{reduced,language,task:objective(s),search:shoreSearchStatus(s)});
+    voyageLight(c,s,frame,reduced,mapOpen);gullScrapMarkers(c,s,frame,language);
     const impact=impactPresentation(recentImpact(s),language);
     if(impact)impactFrames.set(canvas,{impact,tag:impactTag(c,impact,frame,s,null)});else impactFrames.delete(canvas);
     return frame;
@@ -400,6 +442,8 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
     if(ready(sprite)){const w=37*f[2]/f[3];c.drawImage(sprite,...f,s.person.x-w/2,s.person.y-33,w,37);}
     label(c,s.captain[0].toUpperCase()+s.captain.slice(1),s.person.x,s.person.y-38,'#f1e6c4',12);
   }
+  voyageLight(c,s,frame,reduced,mapOpen);
+  if(!mapOpen)gullScrapMarkers(c,s,frame,language);
   drawSurvey(c,s);
   if(mapOpen&&s.survey&&!chartPins){
     const plan=harborPlan(s),siteNames=language==='en'?['Shipbreaking yard','Fuel quay','Fish-market jetty']:SHORE_SITES;
