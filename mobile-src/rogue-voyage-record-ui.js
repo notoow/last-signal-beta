@@ -11,14 +11,13 @@ const sites={ko:['폐선 수리장','연료 하역장','어시장 나루'],en:['
 const tools={ko:{ratchet:'역회전 멈춤쇠',baffle:'접이식 방류판',shutter:'차광 신호기'},en:{ratchet:'Anti-reverse ratchet',baffle:'Flow baffle',shutter:'Light shutter'}};
 const sources={ko:{collision:'충돌',sluice:'수문 충돌',crane:'크레인',lighthouse:'등대 포격',machine:'기계선',dog:'들개',rat:'시궁쥐',crab:'대왕 게',gull:'갈매기'},en:{collision:'Collision',sluice:'Gate impact',crane:'Crane',lighthouse:'Lighthouse fire',machine:'Machine',dog:'Dog',rat:'Rat',crab:'Crab',gull:'Gull'}};
 export function voyagePreparationText(s,language='ko'){
-  const en=language==='en',sameLayout=s.generator===GENERATOR_VERSION;
-  return {sameLayout,
-    button:en?'Change setup & retry':'준비 바꿔 재도전',
-    retry:en?'Retry this setup':'같은 준비로 재도전',
-    retryDetail:en?'Retry keeps the voyage number; this setup keeps captain and build. Acquired gear and progress reset.':'재도전은 항해 번호 유지 · 같은 준비는 선장·빌드 유지 · 획득 장비·진행 초기화',
-    chartDetail:sameLayout?'':(en?'Updated chart rules change the layout.':'새 해도 생성 규칙으로 지도 배치는 달라집니다.'),
-    heading:sameLayout?(en?'Same chart · seed ':'같은 해도 · 시드 ')+s.seed:(en?`Same seed ${s.seed} · new chart`:`같은 시드 ${s.seed} · 새 해도 준비`),
-    detail:sameLayout?(en?'The layout stays the same. Equipment offers can change with your loadout.':'지도 배치는 유지됩니다. 준비에 따라 장비 선택지는 달라질 수 있습니다.'):(en?'Uses the previous voyage’s seed. New terrain generation rules apply, so the layout will change.':'이전 항해의 시드를 사용합니다. 새 지형 생성 규칙이 적용되어 배치는 달라집니다.')};
+ const en=language==='en',sameLayout=s.generator===GENERATOR_VERSION;
+ return {sameLayout,button:en?'Change setup & retry':'준비 바꿔 재도전',retry:en?'Retry this setup':'같은 준비로 재도전',
+  retryDetail:en?'Same voyage number, back to region 1. Recovered equipment is not carried over.':'같은 항해 번호로 첫 해역부터. 회수 장비는 가져가지 않습니다.',
+  sameSetupDetail:en?'Keep the same captain and vessel.':'선장과 선체를 그대로 두고 다시 출항합니다.',
+  chartDetail:sameLayout?'':(en?'The chart has been updated; waterways will differ.':'해도가 갱신되어 물길은 달라집니다.'),
+  heading:sameLayout?(en?'Same chart · Voyage ':'같은 해도 · 항해 번호 ')+s.seed:(en?'Updated chart · Voyage ':'갱신된 해도 · 항해 번호 ')+s.seed,
+  detail:sameLayout?(en?'Waterways stay the same. Equipment choices may vary with your vessel and installed gear.':'물길은 그대로입니다. 선체와 모은 장비에 따라 장비 선택지는 달라질 수 있습니다.'):(en?'Keep the voyage number. This updated chart has different waterways.':'항해 번호는 그대로입니다. 갱신된 해도의 물길로 다시 출항합니다.')};
 }
 export function voyageEquipmentText(equipment,language='ko'){
   return [...new Set(equipment)].map(g=>cacheGearName(g,language)+(equipment.filter(x=>x===g).length>1?' ×'+equipment.filter(x=>x===g).length:'')).join(' · ')||(language==='en'?'None':'없음');
@@ -67,4 +66,37 @@ export function voyageRecordMarkup(s,language='ko'){
     <details id="rogueRecordChoices"><summary>${en?'Voyage choices':'항해 선택 기록'} <small>${m.events.length}${en?' recorded':'건 기록'}</small></summary><p class="rogue-record-equipment">${en?'Equipment aboard: ':'보유 장비: '}${esc(m.equipmentText)}</p>${m.events.length?rows(m.events):`<p>${en?'No choices recorded.':'기록된 선택이 없습니다.'}</p>`}${m.events.length===48?`<p>${en?'Showing the latest 48 choices.':'최근 선택 48건을 표시합니다.'}</p>`:''}</details>
     <details id="rogueRecordHits"><summary>${en?'Recent damage':'최근 피해 기록'} <small>${m.hits.length} / ${m.hitCount}</small></summary>${damageSummary}<div class="rogue-record-totals">${m.damage.hull.map((amount,d)=>`<span>${d+1}/3 · ${en?'Hull':'선체'} ${esc(n(amount))} / ${en?'Crew':'선원'} ${esc(n(m.damage.crew[d]))}</span>`).join('')}</div>${['fuel','flood'].includes(m.terminal)?`<p class="rogue-record-note">${en?'These are earlier hits, not the cause of this voyage ending.':'아래는 이전 피격 기록이며, 이번 항해의 종료 원인은 아닙니다.'}</p>`:''}${m.hits.length?rows(m.hits):`<p>${en?'No damage recorded.':'기록된 피해가 없습니다.'}</p>`}${m.hitCount>m.hits.length?`<p>${en?'Only the latest 8 hits are shown. Totals include every recorded hit.':'최근 피격 8건만 표시합니다. 피해 합계에는 모든 기록이 포함됩니다.'}</p>`:''}</details>
   </div>`;
+}
+
+// One factual highlight from retained receipts; no causal inference or advice.
+const positive=e=>['fuel','hp','crew','ammo','drained'].some(k=>e[k]>0);
+const amount=n=>String(Number(n.toFixed(1)));
+function choiceDetail(e,en){
+ if(e.kind!=='rescue')return e.detail;
+ return [['hp',en?'Hull':'선체'],['crew',en?'Crew':'선원'],['ammo',en?'Scrap':'고철']].filter(([key])=>e[key]>0).map(([key,label])=>label+' +'+amount(e[key])).join(' · ');
+}
+function isChoice(e){
+ if(e.kind==='rescue')return e.outcome==='aboard'||e.discovered===true;
+ if(e.kind==='cache')return !e.pending&&(!!e.gear||!!e.crew||!!e.tool||positive(e));
+ if(e.kind==='workshop')return e.choice==='rig'||positive(e);
+ return ['gear','net','tow'].includes(e.kind);
+}
+export function resultInsight(s,language='ko'){
+ const en=language==='en',m=voyageRecordModel(s,language);
+ if(!m.available)return {type:'none',label:en?'Voyage record':'항해 기록',title:en?'No choice or damage record for this voyage.':'이 항해에는 선택·피해 기록이 없습니다.',detail:'',record:null,source:null};
+ // Fuel/flood are terminal state facts. Never promote any older hit as their
+ // cause, even when the stored last hit left 0 hull in a declared test branch.
+ if(s.status==='lost'&&['hull','crew'].includes(m.terminal)){
+  const hits=m.hits.map((h,index)=>({...h,index})).filter(h=>h.target===m.terminal&&h.amount>0).sort((a,b)=>b.amount-a.amount||b.time-a.time||b.index-a.index);
+  if(hits.length){const h=hits[0];return {type:'damage',label:en?'Largest recent '+(m.terminal==='hull'?'hull':'crew')+' hit':'최근 '+(m.terminal==='hull'?'선체':'선원')+' 피해 중 최대',title:h.title,
+   detail:`${h.depth+1}/3 · ${h.at}`+(m.hitCount>m.hits.length?(en?` · latest ${m.hits.length} of ${m.hitCount} hits`:` · 최근 ${m.hits.length}/${m.hitCount}회`):''),record:'rogueRecordHits',source:{kind:'hit',index:h.index,time:h.time,depth:h.depth,amount:h.amount,target:h.target,source:h.source}};}
+ }
+ const choices=m.events.map((e,index)=>({...e,index})).filter(isChoice);
+ if(choices.length){const e=choices.at(-1),detail=choiceDetail(e,en);return {type:'choice',label:en?'A choice from this voyage':'이번 항해에서 한 선택',title:e.title,detail:`${e.depth+1}/3 · ${e.at}`+(detail?' · '+detail:''),record:'rogueRecordChoices',source:{kind:'event',index:e.index,time:e.time,eventKind:e.kind}};}
+ if(['fuel','flood'].includes(m.terminal))return {type:'terminal',label:en?'Voyage ended':'항해 중단',title:m.terminal==='fuel'?(en?'Fuel exhausted':'연료 소진'):(en?'Flooding reached 100%':'침수 100%'),detail:en?'No choices recorded.':'기록된 선택이 없습니다.',record:null,source:{kind:'terminal',terminal:m.terminal}};
+ return {type:'none',label:en?'Voyage record':'항해 기록',title:en?'No choice or damage to highlight.':'따로 짚을 선택·피해 기록이 없습니다.',detail:'',record:null,source:null};
+}
+export function insightMarkup(insight,language='ko'){
+ const body=`<span class="insight-label">${esc(insight.label)}</span><strong>${esc(insight.title)}</strong>${insight.detail?`<span class="insight-detail">${esc(insight.detail)}</span>`:''}`;
+ return insight.record?`<button class="result-insight" data-record="${esc(insight.record)}" aria-label="${esc(insight.label+' · '+insight.title+' · '+(language==='en'?'View record':'기록 보기'))}">${body}<span class="insight-open" aria-hidden="true">↗</span></button>`:`<div class="result-insight">${body}</div>`;
 }

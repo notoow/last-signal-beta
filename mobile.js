@@ -1178,6 +1178,7 @@ function resetStick() {
   stickOrigin = null;
 }
 function release() {
+  clearPinch();
   for (const owner of [...held.keys()]) hold(owner, []);
   const previous = stickPointer;
   stickPointer = null;
@@ -1521,6 +1522,68 @@ function move(e) {
   thumb.style.transform = `translate(${x / radius * 28}px,${y / radius * 28}px)`;
   steer(joystickVector(x, y));
 }
+var pinchWorld = /* @__PURE__ */ new Map();
+var pinchConsumed = /* @__PURE__ */ new Set();
+var mobilePinch = null;
+var pinchEvent = (phase, scale) => window.dispatchEvent(new CustomEvent("lastsignal:pinch", { detail: { game: "rogue", phase, scale } }));
+function clearPinch() {
+  if (mobilePinch) pinchEvent("end");
+  mobilePinch = null;
+  pinchWorld.clear();
+  pinchConsumed.clear();
+  worldTouches.clear();
+  gestureWasMulti = false;
+}
+document.addEventListener("pointerdown", (e) => {
+  if (e.pointerType !== "touch" || mode !== "rogue" || !playing || mobileFrame?.mapOpen || e.target.id !== "rogueSea") return;
+  pinchWorld.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pinchConsumed.size) {
+    pinchConsumed.add(e.pointerId);
+    e.target.setPointerCapture(e.pointerId);
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    return;
+  }
+  if (pinchWorld.size !== 2 || held.size) return;
+  const points = [...pinchWorld.values()], gap = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+  if (gap < 20) return;
+  const previous = stickPointer;
+  stickPointer = null;
+  if (previous !== null && stick.hasPointerCapture(previous)) stick.releasePointerCapture(previous);
+  resetStick();
+  worldTouches.clear();
+  gestureWasMulti = true;
+  mobilePinch = { gap, ids: [...pinchWorld.keys()] };
+  pinchEvent("start");
+  for (const id of mobilePinch.ids) {
+    pinchConsumed.add(id);
+    document.getElementById("rogueSea").setPointerCapture(id);
+  }
+  e.preventDefault();
+  e.stopImmediatePropagation();
+}, true);
+document.addEventListener("pointermove", (e) => {
+  if (!pinchWorld.has(e.pointerId)) return;
+  pinchWorld.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (!pinchConsumed.has(e.pointerId)) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  if (mobilePinch) {
+    const [a, b] = mobilePinch.ids.map((id) => pinchWorld.get(id));
+    if (a && b) pinchEvent("move", Math.hypot(a.x - b.x, a.y - b.y) / mobilePinch.gap);
+  }
+}, true);
+for (const type of ["pointerup", "pointercancel"]) document.addEventListener(type, (e) => {
+  pinchWorld.delete(e.pointerId);
+  if (!pinchConsumed.delete(e.pointerId)) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  blockedClicks.set(e.pointerId, { at: performance.now(), x: e.clientX, y: e.clientY });
+  if (mobilePinch) {
+    pinchEvent("end");
+    mobilePinch = null;
+  }
+}, true);
 document.addEventListener("pointerdown", (e) => {
   const onStick = e.target === stick || stick.contains(e.target), world = ["rogueSea", "space"].includes(e.target.id), side = moveSide === "left" ? e.clientX < innerWidth * 0.44 : e.clientX > innerWidth * 0.56;
   if (!playing || stickPointer !== null || e.button !== 0 || !onStick && !(world && side && e.clientY > Math.max(76, innerHeight * 0.28)) || mobileFrame?.mapOpen) return;

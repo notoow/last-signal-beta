@@ -2,7 +2,7 @@ import {steeringInput} from './steering-input.js';
 import {drawNavigationMap,navigationViewport} from './navigation-map.js';
 import {createRun,tickRun,interact,resolveGear,resolveSalvage,returnFromWorkshop,cacheSelectionToken,resolveCacheSelection,planHarbor,encodeRun,restoreRun,SAVE_KEY,RUN_VERSION,CAPTAINS,BUILDS,GEAR,maxHp,maxFuel} from './rogue-core.js';
 import {harborPlanMarkup} from './harbor-plan-ui.js';
-import {voyageRecordMarkup,voyagePreparationText} from './rogue-voyage-record-ui.js';
+import {voyageRecordMarkup,voyagePreparationText,resultInsight,insightMarkup} from './rogue-voyage-record-ui.js';
 import {salvageChoiceMarkup,salvageDetailsMarkup} from './rogue-salvage-ui.js';
 import {rewardPresentation,rewardInputGuard} from './rogue-reward.js';
 import {GENERATOR_VERSION} from './rogue-map.js';
@@ -52,7 +52,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   try{camera=cameraSettings(JSON.parse(localStorage.getItem(CAMERA_KEY)));}catch{}
   const saveCamera=()=>{try{localStorage.setItem(CAMERA_KEY,JSON.stringify(camera));}catch{}};
   const changeZoom=value=>{camera=cameraSettings({...camera,zoom:value});saveCamera();};
-  const cameraMarkup=()=>'<div class="rogue-camera-options"><label><input id="rogueAutoZoom" type="checkbox" '+(camera.autoZoom?'checked':'')+'> '+(en?'Automatic zoom · shore / connected tow':'자동 배율 · 상륙 확대 / 견인 거리 맞춤')+'</label><label for="rogueZoom">'+(en?'Zoom':'화면 배율')+' <output id="rogueZoomValue">'+Math.round(camera.zoom*100)+'%</output></label><input id="rogueZoom" type="range" min="60" max="180" step="5" value="'+Math.round(camera.zoom*100)+'"><small>'+(en?'Wheel / +− / pinch<br>M chart shows your explored harbor at any zoom':'휠 / +− · 모바일 두 손가락<br>M 해도는 배율과 관계없이 전체 탐사 기록')+'</small></div>';
+  const cameraMarkup=()=>'<div class="rogue-camera-options"><label><input id="rogueAutoZoom" type="checkbox" '+(camera.autoZoom?'checked':'')+'> '+(en?'Automatic zoom · shore / connected tow':'자동 배율 · 상륙 확대 / 견인 거리 맞춤')+'</label><label for="rogueZoom">'+(en?'Zoom':'화면 배율')+' <output id="rogueZoomValue">'+Math.round(camera.zoom*100)+'%</output></label><input id="rogueZoom" type="range" min="60" max="300" step="5" value="'+Math.round(camera.zoom*100)+'"><small>'+(en?'Wheel / +− / pinch<br>M chart shows your explored harbor at any zoom':'휠 / +− · 모바일 두 손가락<br>M 해도는 배율과 관계없이 전체 탐사 기록')+'</small></div>';
   function bindCamera(){
     $('rogueAutoZoom')?.addEventListener('change',e=>{camera.autoZoom=e.target.checked;saveCamera();},options);
     $('rogueZoom')?.addEventListener('input',e=>{changeZoom(Number(e.target.value)/100);$('rogueZoomValue').textContent=Math.round(camera.zoom*100)+'%';},options);
@@ -295,6 +295,15 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     if(paused||mapOpen)return;e.preventDefault();changeZoom(camera.zoom*Math.exp(-e.deltaY*.001));
   },{...options,passive:false});
   const touches=new Map();let pinch=null;
+  let mobilePinchZoom=null;
+  window.addEventListener('lastsignal:pinch',e=>{
+    if(e.detail?.game!=='rogue')return;
+    if(e.detail.phase==='end'){if(mobilePinchZoom!==null)saveCamera();mobilePinchZoom=null;return;}
+    if(paused||mapOpen)return;
+    if(e.detail.phase==='start'){touches.clear();pinch=null;mobilePinchZoom=camera.zoom;return;}
+    if(mobilePinchZoom!==null&&Number.isFinite(e.detail.scale)&&e.detail.scale>0)
+      camera=cameraSettings({...camera,zoom:mobilePinchZoom*e.detail.scale});
+  },options);
   const touchGap=()=>{const a=[...touches.values()];return a.length===2?Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y):0;};
   $('rogueSea').addEventListener('pointerdown',e=>{
     if(e.pointerType!=='touch'||paused||mapOpen)return;
@@ -329,13 +338,13 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     // Rendering discovers visible terrain. Keep the completed save immutable
     // while its backdrop is drawn or the player cancels a new preparation.
     resultView=structuredClone(state);
-    const preparation=voyagePreparationText(state,language);
+    const preparation=voyagePreparationText(state,language),insight=resultInsight(state,language);
     modalSurface('result',resultMarkup({outcome:won?'success':'failure',title:won?ui.rogueComplete:ui.failed,
       kicker:CAPTAINS[state.captain].name+' · '+(en?'Voyage no. ':'항해 번호 ')+state.seed,summary:won?ui.rogueSummary:rogueFailureText(state.reason,language),
       facts:[{label:ui.regions,value:(state.depth+1)+' / 3'},{label:ui.hull,value:Math.ceil(state.hp)+' / '+maxHp(state)},{label:ui.equipment,value:state.equipment.length+' / 6'}],
-      reward:'<p class="rogue-retry-note" id="rogueRetryNote">'+esc(preparation.retryDetail)+(preparation.chartDetail?' '+esc(preparation.chartDetail):'')+'</p>'+voyageRecordMarkup(state,language)+'<p id="rogueSaveStatus" class="session-save" role="status" data-save-state="'+(saveError?'failed':'saved')+'">'+(saveError?ui.saveFailed:ui.saved)+'</p>',
+      reward:insightMarkup(insight,language)+'<span id="rogueRetrySetupNote" class="rogue-sr-only">'+esc(preparation.sameSetupDetail)+'</span><p class="rogue-retry-note" id="rogueRetryNote">'+esc(preparation.retryDetail)+(preparation.chartDetail?' '+esc(preparation.chartDetail):'')+'</p>'+voyageRecordMarkup(state,language)+'<p id="rogueSaveStatus" class="session-save" role="status" data-save-state="'+(saveError?'failed':'saved')+'">'+(saveError?ui.saveFailed:ui.saved)+'</p>',
       details:state.log.map(l=>'<p>'+esc(rogueHudText(l.text,language))+'</p>').join(''),
-      actions:'<button id="rogueReprepare" class="primary" aria-describedby="rogueRetryNote">'+esc(preparation.button)+'</button><button id="rogueRetry" aria-describedby="rogueRetryNote">'+esc(preparation.retry)+'</button><button id="rogueNew">'+t('새 해도 준비','New random chart')+'</button><button id="rogueHome" class="secondary">'+ui.harbor+'</button>',language}));
+      actions:'<button id="rogueReprepare" class="primary" aria-describedby="rogueRetryNote">'+esc(preparation.button)+'</button><button id="rogueRetry" aria-describedby="rogueRetryNote rogueRetrySetupNote">'+esc(preparation.retry)+'</button><button id="rogueNew">'+t('새 해도 준비','New random chart')+'</button><button id="rogueHome" class="secondary">'+ui.harbor+'</button>',language}));
     const result=root.querySelector('.session-result');result.classList.add('rogue-debrief-result');
     if(document.documentElement.dataset.mobileUi==='true'){
       // Keep the title and decisions outside the scrollable record on mobile.
@@ -344,6 +353,14 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
       body.prepend(result.querySelector('.session-lead'),result.querySelector('.session-facts'));
       result.querySelector('.session-actions').prepend(result.querySelector('#rogueSaveStatus'));
     }
+    // The terminal reason stays first; the highlight is a separate recorded fact.
+    result.querySelector('.session-lead').after(result.querySelector('.result-insight'));
+    result.querySelector('button[data-record]')?.addEventListener('click',e=>{
+      const record=result.querySelector('#'+e.currentTarget.dataset.record);
+      if(!record)return;record.open=true;
+      record.scrollIntoView({block:'start',behavior:'instant'});
+      record.querySelector('summary')?.focus({preventScroll:true});
+    },options);
     // The radio log remains separate from the factual choice and damage record.
     root.querySelector('.session-records>summary')?.replaceChildren(document.createTextNode(ui.radio));
     activateModal($('rogueModal'),'#rogueReprepare');

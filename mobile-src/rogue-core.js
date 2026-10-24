@@ -2,7 +2,7 @@ import {generateHarbor,GENERATOR_VERSION,DEPTHS,inside,waterAt,shoreBuildings,wa
 import {newSkillState,activateCaptainSkill,advanceSkill,validateSkill} from './captain-skills.js';
 import {CAPTAIN_VESSELS,CAPTAINS} from './captain-vessels.js';
 import {newEncounter,tickEncounter,shoreAttack,validateEncounter,toolBerth,FLOOR_TOOLS,SHORE_SITES,hasTool,startleGulls,recoverGullScrap} from './shore-encounters.js';
-import {newSurvey,updateSurvey,validSurvey,visibleAt} from './rogue-vision.js';
+import {newSurvey,updateSurvey,validSurvey,visibleAt,surveyedAt} from './rogue-vision.js';
 import {newRogueTow,towControl,tickRogueTow,deliverRogueTow,canDeliverRogueTow,validRogueTow} from './rogue-tow.js';
 import {WATER_PROFILE,waterMotion,stepShipMotion,releaseShipAssist} from './ship-motion.js';
 import {terrainTurnPose} from './ship-contact.js';
@@ -14,7 +14,7 @@ import {LIGHTHOUSE_MODEL,LIGHTHOUSE,usesLighthouse,newLighthouse,relayPosition,r
 import {CACHE_MODEL,cacheOffer,validCache} from './rogue-cache.js';
 import {CREW_UPGRADES,crewEffects,validCrewUpgrades} from './crew-upgrades.js';
 import {shoreScale,crewRadius,shoreRanges,crewSpeed} from './shore-scale.js';
-import {newHarborIntel,refreshHarborIntel,harborPlan,harborDestination,harborRoutePriority,planHarbor,validHarborIntel} from './harbor-plan.js';
+import {newHarborIntel,refreshHarborIntel,harborPlan,harborDestination,harborRoutePriority,planHarbor,validHarborIntel,knownBerth,knownBlockade,bossApproach} from './harbor-plan.js';
 import {newVoyageRecord,recordVoyage,recordHit,resourceSnapshot,resourceGains,validVoyageRecord} from './rogue-voyage-record.js';
 import {newShoreRescue,rescueStatus,rescueBerth,rescuePendingAt,orderRescue,tickRescue,boardRescue,leaveRescue,validRescue} from './shore-rescue.js';
 import {publishRigAction} from './rig-feedback.js';
@@ -170,7 +170,7 @@ export function objective(s){
       action=s.cacheModel===CACHE_MODEL?'F / R 수색 · 길게 누른 뒤 장비 또는 보급 선택':island.role==='equipment'?'F / R '+gear+' 회수 · 길게 누르기':
         'F '+(island.role==='fuel'?'연료 보충':'선체 수리')+' · R '+gear+' 회수 · 길게 누르기';
     }else if(distance(s.person,home.landing)<shoreRanges(s).boarding)action='E 재승선';
-    return s.claimed.includes(b.id)?{text:'배로 돌아가기',target:b.landing,action}:{text:'부두 수색',target:b.loot,action};
+    return s.claimed.includes(b.id)?{text:'배로 돌아가기',target:b.landing,action}:{text:'부두 수색',target:surveyedAt(s,b.loot)||visibleAt(s,b.loot)?b.loot:null,action};
   }
   if(s.mode==='moored')return {text:'E · 하선 / Q · 계류 해제',target:s.map.berths.find(b=>b.id===s.mooring)};
   if(s.boss.cleared){
@@ -182,6 +182,7 @@ export function objective(s){
       return {text:docking.near?dockHint(docking):SHORE_SITES[planned.point.island]+' · 선택한 목적지',target:planned.point,planSite:planned.id};
     }
     const docking=berthReadiness(s,s.map.exit);
+    if(!surveyedAt(s,s.map.exit)&&!visibleAt(s,s.map.exit))return {text:'봉쇄가 풀렸다 · 해안을 따라 출구 찾기',target:null,exploring:true};
     return {text:docking.near?dockHint(docking,'ko',true):usesLighthouse(s)?'명부 확인 완료 · 등대 부두에 접안해 최종 전송 · E':'탈출 부두 가까이 접근 · 방향 자유',target:s.map.exit};
   }
   if(s.boss.active&&!harborRoutePriority(s)){
@@ -213,12 +214,14 @@ export function objective(s){
     const docking=berthReadiness(s,planned.point);
     return {text:docking.near?dockHint(docking):SHORE_SITES[planned.point.island]+' · 선택한 목적지',target:planned.point,planSite:planned.id};
   }
-  const nearby=s.map.berths.find(b=>(!s.claimed.includes(b.id)||rescuePendingAt(s,b.id))&&distance(s.boat,b)<130);
+  const nearby=s.map.berths.find(b=>(!s.claimed.includes(b.id)||rescuePendingAt(s,b.id))&&distance(s.boat,b)<130&&visibleAt(s,b));
   if(nearby)return {text:dockHint(berthReadiness(s,nearby)),target:nearby};
   const special=s.combat&&!hasTool(s,FLOOR_TOOLS[s.depth].id)?toolBerth(s):null;
-  const berth=special||s.map.berths.find(b=>!s.claimed.includes(b.id));
-  if(special)return {text:SHORE_SITES[special.island]+' 수색 · '+FLOOR_TOOLS[s.depth].name+' 확보 / 기존 장비로 돌파도 가능',target:special};
-  return {text:berth?'부두 가까이 감속 · 방향 자유 · E 계류 / 장비 없이 보스 진입도 가능':'바깥 해역의 기계선을 정지시켜 탈출로 열기',target:berth||s.map.boss};
+  const berth=special&&knownBerth(s,special)?special:s.map.berths.find(b=>!s.claimed.includes(b.id)&&knownBerth(s,b));
+  if(special&&berth===special)return {text:SHORE_SITES[special.island]+' 수색 · '+FLOOR_TOOLS[s.depth].name+' 확보 / 기존 장비로 돌파도 가능',target:special};
+  if(berth)return {text:'부두 가까이 감속 · 방향 자유 · E 계류 / 장비 없이 보스 진입도 가능',target:berth};
+  if(knownBlockade(s))return {text:'바깥 해역의 기계선을 정지시켜 탈출로 열기',target:bossApproach(s)};
+  return {text:'해안을 따라 탐색 · 발견한 부두는 해도에 기록',target:null,exploring:true};
 }
 function damage(s,n,reason,source,impactSpeed=null,contact=null){
   if(s.boat.inv>0||s.status!=='playing')return;

@@ -1,12 +1,12 @@
 import {berthReadiness,shoreSearchStatus,bossLinkCandidate} from './rogue-core.js';
 import {rescueStatus} from './shore-rescue.js';
-import {visibleAt,visibleSurvey,SURVEY_COLS,SURVEY_CELL} from './rogue-vision.js';
+import {visibleAt,visibleSurvey,surveyedAt,SURVEY_COLS,SURVEY_CELL} from './rogue-vision.js';
 import {campStatus} from './voyage-daylight.js';
 import {shoreRanges} from './shore-scale.js';
 import {salvageStatus,winchBurstReady,winchStoreReady,winchLaunchReady} from './rogue-salvage.js';
 import {usesSluice} from './sluice-counterplay.js';
 import {usesLighthouse} from './lighthouse-counterplay.js';
-import {harborDestination,rigRecoveryBerth} from './harbor-plan.js';
+import {harborDestination,rigRecoveryBerth,knownBerth} from './harbor-plan.js';
 import {gullRecovery,gullHornStatus} from './shore-encounters.js';
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const action=(id,code,labelKo,labelEn,enabled=true,hold=false,progress=0)=>({id,code,labelKo,labelEn,enabled,hold,progress});
@@ -99,7 +99,7 @@ export function rogueContextActions(s){
 }
 export function rogueMinimap(s){
   if(!s)return null;
-  const known=p=>!s.survey||s.survey[Math.floor(p.y/SURVEY_CELL)*SURVEY_COLS+Math.floor(p.x/SURVEY_CELL)]===1;
+  const known=p=>s.harborIntel?knownBerth(s,p):surveyedAt(s,p);
   const player=s.person||s.boat,rescue=rescueStatus(s),destination=harborDestination(s);
   return {width:s.map.width,height:s.map.height,cols:s.map.cols,rows:s.map.rows,tiles:s.map.tiles?.slice()||[],
     islands:s.map.tiles?[]:s.map.islands.map(p=>({x:p.x,y:p.y,w:p.w,h:p.h})),mode:s.mode,

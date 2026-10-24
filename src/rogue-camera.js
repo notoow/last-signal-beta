@@ -3,7 +3,7 @@ export {project,unproject,screenVectorToWorld} from './world-projection.js';
 export const CAMERA_KEY='lastsignal.rogue.camera.v1';
 export const DEFAULT_CAMERA={autoZoom:false,zoom:1};
 export function cameraSettings(value){
-  return {autoZoom:value?.autoZoom===true,zoom:Number.isFinite(value?.zoom)?Math.max(.6,Math.min(1.8,value.zoom)):1};
+  return {autoZoom:value?.autoZoom===true,zoom:Number.isFinite(value?.zoom)?Math.max(.6,Math.min(3,value.zoom)):1};
 }
 export function cameraScale(width,height,ashore,options=DEFAULT_CAMERA){
   const p=cameraSettings(options),v=cameraViewport(width,height);

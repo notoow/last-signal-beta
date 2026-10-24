@@ -21,6 +21,8 @@ import {gullRecovery} from './shore-encounters.js';
 
 const escape=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const translations={
+  '봉쇄가 풀렸다 · 해안을 따라 출구 찾기':'Blockade open · follow the coast to find the exit',
+  '해안을 따라 탐색 · 발견한 부두는 해도에 기록':'Follow the coast · discovered quays stay on your chart',
   'Park: 선실 난로를 켤게. 불침번을 서며 날이 밝기를 기다리자. 연료 8이 필요해.':'Park: I will light the cabin stove. We can keep watch until dawn. It takes 8 fuel.',
   'Park: 쉴 수 없어. 주변을 확인해.':'Park: We cannot rest. Check our surroundings.',
   'Park: 날이 밝았어. 연료 8을 썼고 선원 체력 15를 회복했어. 다시 출항하자.':'Park: Dawn is here. We used 8 fuel and recovered 15 crew health. Ready to cast off.',
@@ -338,6 +340,9 @@ export function rogueHudModel(s,language='ko'){
       active:s.skill.left>0,remaining:s.skill.left,remainingCooldown:s.skill.cooldown,compact:!sailing,
       usable:skill.ready||sailing&&s.captain==='woo'&&s.skill.left>0}
   };
+  if(guide.exploring)model.mission=model.fullObjective=s.boss.cleared?
+    (en?'Blockade open · follow the coast to find the exit':'봉쇄가 풀렸다 · 해안을 따라 출구 찾기'):
+    (en?'Follow the coast · discovered quays stay on your chart':'해안을 따라 탐색 · 발견한 부두는 해도에 기록');
   const metric=(id,label,value,max,raw=value,marks=[])=>model.metrics.push({id,label,value,max,gauge:max===undefined?null:gauge(raw,max,label,marks)});
   const condition=(id,text,tone='normal',extra={})=>model.conditions.push({id,text,tone,...extra});
   if(ashore){

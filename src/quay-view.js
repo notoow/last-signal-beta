@@ -1,4 +1,4 @@
-import {project} from './world-projection.js';
+import {project,unproject} from './world-projection.js';
 import {edgeMarker} from './rogue-camera.js';
 import {WORLD_UNITS_PER_METRE as M,CREW_HEIGHT,shoreScale,shoreRanges} from './shore-scale.js';
 import {TILE,tileAt,shoreMask,shoreBuildings} from './rogue-map.js';
@@ -35,6 +35,7 @@ export function retryQuayArt(){
   return prepareQuayArt();
 }
 const materialCache=new WeakMap(),coverageCache=new WeakMap();
+const terrainCache=new WeakMap();
 const overlap=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 function polygon(c,points,fill){c.beginPath();points.forEach((p,i)=>i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y));c.closePath();if(fill){c.fillStyle=fill;c.fill();}}
@@ -68,7 +69,14 @@ function material(s,yard){
   const area={x:yard.x,y:yard.y,w:yard.w,h:yard.h};
   const lights=buildings.flatMap(buildingLights).map(l=>({...l,x:(l.x-area.x)/M,y:(l.y-area.y)/M}));
   const paint=bakeQuayMaterial(art.wet,{x:0,y:0,w:area.w/M,h:area.h/M},lights,Math.imul(yard.x,73856093)^Math.imul(yard.y,19349663));
-  const result={area,paint};cache.set(yard.id,result);return result;
+  // Source-over layers have no animation. Composite once instead of scaling
+  // five translucent yard-sized images through the land clip every frame.
+  const surface=document.createElement('canvas');surface.width=paint.surface.width;surface.height=paint.surface.height;
+  const context=surface.getContext('2d');
+  for(const [layer,alpha]of [['surface',.96],['sheen',.55],['environment',.7],['sky',.65],['warm',.85]]){
+    context.globalAlpha=alpha;context.drawImage(paint[layer],0,0);
+  }
+  const result={area,surface};cache.set(yard.id,result);return result;
 }
 function ground(c,s,f,tiles){
   plane(c,f,()=>{
@@ -78,10 +86,8 @@ function ground(c,s,f,tiles){
     c.fillStyle='#09233460';c.fillRect(f.bounds.x-120,f.bounds.y-120,f.bounds.w+240,f.bounds.h+240);
     for(const yard of s.map.islands){
       if(!overlap(yard,{x:f.bounds.x-150,y:f.bounds.y-150,w:f.bounds.w+300,h:f.bounds.h+300}))continue;
-      const {area,paint}=material(s,yard);
-      for(const [layer,alpha]of [['surface',.96],['sheen',.55],['environment',.7],['sky',.65],['warm',.85]]){
-        c.globalAlpha=alpha;c.drawImage(paint[layer],area.x,area.y,area.w,area.h);
-      }c.globalAlpha=1;
+      const {area,surface}=material(s,yard);
+      c.drawImage(surface,area.x,area.y,area.w,area.h);
       // One broad wet patch per service yard, fixed to its generated geometry.
       c.globalAlpha=.14;c.drawImage(art.patch,yard.x+yard.w*.42,yard.y+yard.h-10*M,7*M,8*M);c.globalAlpha=1;
     }
@@ -112,6 +118,33 @@ function coping(c,f,edges){
     const dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy);c.save();c.translate(a.x,a.y);c.rotate(Math.atan2(dy,dx));
     c.drawImage(art.wall,0,0,2048,300,0,-.53*M,len,.53*M);c.restore();
   }});
+}
+function terrain(c,s,f,tiles){const edges=walls(c,s,f,tiles);ground(c,s,f,tiles);coping(c,f,edges);return edges;}
+function cachedTerrain(c,s,f,tiles){
+  // Only static floor/walls are cached. Fog, actors, building occlusion and
+  // water remain live. A padded raster follows camera translation cheaply;
+  // pinch reuses it briefly, then refreshes at the settled exact resolution.
+  const dpr=c.getTransform().a,now=performance.now();
+  let entry=terrainCache.get(s.map);
+  if(entry&&entry.requestScale!==f.scale){entry.requestScale=f.scale;entry.changedAt=now;}
+  const ratio=entry?f.scale/entry.scale:1;
+  const x=entry?f.ox-entry.ox*ratio:0,y=entry?f.oy-entry.oy*ratio:0;
+  const covered=entry&&x<=0&&y<=0&&x+entry.width*ratio>=f.width&&y+entry.height*ratio>=f.height;
+  if(!entry||!covered||entry.dpr!==dpr||entry.retry!==retryAttempt||ratio<.67||ratio>1.5||
+      Math.abs(ratio-1)>.001&&now-entry.changedAt>140){
+    const margin=192,width=Math.ceil(f.width+margin*2),height=Math.ceil(f.height+margin*2);
+    const canvas=document.createElement('canvas');canvas.width=Math.ceil(width*dpr);canvas.height=Math.ceil(height*dpr);
+    const ctx=canvas.getContext('2d'),view={...f,width,height,ox:f.ox+margin,oy:f.oy+margin};
+    const corners=[{x:0,y:0},{x:width,y:0},{x:width,y:height},{x:0,y:height}].map(p=>unproject(view,p));
+    const xs=corners.map(p=>p.x),ys=corners.map(p=>p.y);
+    view.bounds={x:Math.min(...xs),y:Math.min(...ys),w:Math.max(...xs)-Math.min(...xs),h:Math.max(...ys)-Math.min(...ys)};
+    ctx.setTransform(dpr,0,0,dpr,0,0);terrain(ctx,s,view,visibleTiles(s,view));
+    entry={canvas,width,height,ox:view.ox,oy:view.oy,scale:f.scale,requestScale:f.scale,changedAt:now,dpr,retry:retryAttempt};terrainCache.set(s.map,entry);
+  }
+  const scale=f.scale/entry.scale;
+  c.drawImage(entry.canvas,0,0,entry.canvas.width,entry.canvas.height,f.ox-entry.ox*scale,f.oy-entry.oy*scale,entry.width*scale,entry.height*scale);
+  // Metadata counts are based on the visible world, not the padded cache.
+  return tiles.reduce((count,t)=>count+[1,2,4,8].filter(bit=>t.mask&bit).length,0);
 }
 function alphaCovers(im,bounds,foot,height){
   let mask=coverageCache.get(im);if(!mask){
@@ -231,14 +264,14 @@ function supplyCaption(c,tow,boat,f,language){
 function label(c,text,p){
   c.font='600 11px Pretendard, sans-serif';c.textAlign='center';c.lineWidth=3;c.strokeStyle='#07191f';c.strokeText(text,p.x,p.y);c.fillStyle='#eee3c4';c.fillText(text,p.x,p.y);
 }
-export function drawQuay(c,s,f,{reduced=false,language='ko',task=null,search=null}={}){
+export function drawQuay(c,s,f,{reduced=false,language='ko',task=null,search=null,cacheTerrain=true}={}){
   if(prepareQuayArt().status!=='ready')return {ready:false};
   const unit=f.pixelsPerMetre,tiles=visibleTiles(s,f);
   c.fillStyle='#092d38';c.fillRect(0,0,f.width,f.height);
   const texture=c.createPattern(art.water,'repeat'),motion=reduced?0:s.time;
   texture.setTransform(new DOMMatrix().translate(f.ox+Math.sin(motion*.14)*unit*.055,f.oy+Math.sin(motion*.11)*unit*.025).scale(18*unit/art.water.width));
   c.save();c.globalAlpha=.68;c.fillStyle=texture;c.fillRect(0,0,f.width,f.height);c.restore();
-  const edges=walls(c,s,f,tiles);ground(c,s,f,tiles);coping(c,f,edges);
+  const edgeCount=cacheTerrain?cachedTerrain(c,s,f,tiles):terrain(c,s,f,tiles).length;
   const props=scenery(c,s,f,tiles);
   // Survey dims remembered terrain, never a visible captain's actual painted
   // silhouette. Dynamic actors have their own LOS test; seen scenery retains
@@ -285,5 +318,5 @@ export function drawQuay(c,s,f,{reduced=false,language='ko',task=null,search=nul
       label(c,language==='en'?'Objective':'목표',{x:Math.max(30,Math.min(f.width-30,mark.x)),y:mark.y-10});
     }
   }
-  return {ready:true,boat,tow,vesselOrder:supplyBehind?['supply','captain']:['captain','supply'],actorBounds,scenery:props.filter(p=>p.box).map(p=>({box:p.box,bounds:p.bounds})),shoreEdges:edges.length};
+  return {ready:true,boat,tow,vesselOrder:supplyBehind?['supply','captain']:['captain','supply'],actorBounds,scenery:props.filter(p=>p.box).map(p=>({box:p.box,bounds:p.bounds})),shoreEdges:edgeCount};
 }

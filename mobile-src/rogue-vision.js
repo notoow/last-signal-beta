@@ -2,6 +2,12 @@ import {sightLine} from './shore-encounters.js';
 import {daylight} from './voyage-daylight.js';
 export const SURVEY_CELL=80,SURVEY_COLS=43,SURVEY_ROWS=23;
 const views=new WeakMap();
+export function surveyedAt(s,p){
+  if(!s.survey)return true;
+  const x=Math.floor(p.x/SURVEY_CELL),y=Math.floor(p.y/SURVEY_CELL);
+  return x>=0&&y>=0&&x<SURVEY_COLS&&y<SURVEY_ROWS&&s.survey[y*SURVEY_COLS+x]===1;
+}
+const reusable=(s,last,p)=>last&&last.map===s.map&&last.survey===s.survey&&s.time-last.time>=0&&s.time-last.time<.2&&last.mode===s.mode&&Math.abs(last.radius-sightRadius(s))<1&&Math.hypot(last.x-p.x,last.y-p.y)<12;
 export const sightRadius=s=>(s.person?250:s.boss.active?760:520)*(s.daylight?daylight(s).sight:1);
 export function visibleAt(s,p){
   if(!s.survey)return true;
@@ -14,7 +20,7 @@ export function newSurvey(){return Array(SURVEY_COLS*SURVEY_ROWS).fill(0);}
 export function visibleSurvey(s){
   if(!s.survey)return null;
   const p=s.person||s.boat,last=views.get(s);
-  if(last&&last.time===s.time&&last.x===p.x&&last.y===p.y&&last.radius===sightRadius(s))return s.survey.map((_,k)=>last.visible.has(k)?1:0);
+  if(reusable(s,last,p))return s.survey.map((_,k)=>last.visible.has(k)?1:0);
   const mask=newSurvey(),r=sightRadius(s);
   for(let y=Math.max(0,Math.floor((p.y-r)/80));y<Math.min(SURVEY_ROWS,Math.ceil((p.y+r)/80));y++)
     for(let x=Math.max(0,Math.floor((p.x-r)/80));x<Math.min(SURVEY_COLS,Math.ceil((p.x+r)/80));x++)
@@ -24,7 +30,7 @@ export function visibleSurvey(s){
 export function updateSurvey(s){
   if(!s.survey)return;
   const p=s.person||s.boat,last=views.get(s);
-  if(last&&s.time-last.time>=0&&s.time-last.time<.2&&last.mode===s.mode&&Math.abs(last.radius-sightRadius(s))<1&&Math.hypot(last.x-p.x,last.y-p.y)<12)return;
+  if(reusable(s,last,p))return;
   const visible=new Set(),r=sightRadius(s);
   for(let y=Math.max(0,Math.floor((p.y-r)/80));y<Math.min(SURVEY_ROWS,Math.ceil((p.y+r)/80));y++)
     for(let x=Math.max(0,Math.floor((p.x-r)/80));x<Math.min(SURVEY_COLS,Math.ceil((p.x+r)/80));x++){
@@ -32,12 +38,15 @@ export function updateSurvey(s){
       if(visibleAt(s,{x:x*80+40,y:y*80+40})){visible.add(k);s.survey[k]=1;}
     }
   const own=Math.floor(p.y/80)*SURVEY_COLS+Math.floor(p.x/80);visible.add(own);s.survey[own]=1;
-  views.set(s,{x:p.x,y:p.y,mode:s.mode,time:s.time,radius:r,visible,mask:null});
+  views.set(s,{map:s.map,survey:s.survey,x:p.x,y:p.y,mode:s.mode,time:s.time,radius:r,visible,mask:null});
 }
 export function drawSurvey(c,s){
   if(!s.survey)return;
-  updateSurvey(s);
-  const view=views.get(s),visible=view.visible;
+  // Only simulation movement commits exploration. Opening a chart must never
+  // scout a new cell, including a restored save before its first tick.
+  const old=views.get(s),origin=s.person||s.boat;
+  const view=reusable(s,old,origin)?old:{visible:new Set(visibleSurvey(s).flatMap((v,i)=>v?[i]:[])),mask:null};
+  const visible=view.visible;
   // Remember only static terrain. Moving actors are separately visibility-culled.
   if(!view.mask){
     view.mask=document.createElement('canvas');view.mask.width=SURVEY_COLS;view.mask.height=SURVEY_ROWS;

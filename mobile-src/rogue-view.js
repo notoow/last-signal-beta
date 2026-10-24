@@ -13,7 +13,7 @@ import {crewImage} from './departure-art.js';
 import {drawCaptainBoat,dockedCaptainBoatBounds} from './captain-fleet.js';
 import {drawShoreEncounter} from './shore-animation.js';
 import {FLOOR_TOOLS,SHORE_SITES,toolBerth,hasTool} from './shore-encounters.js';
-import {drawSurvey,visibleAt} from './rogue-vision.js';
+import {drawSurvey,visibleAt,surveyedAt} from './rogue-vision.js';
 import {playCamera,edgeMarker} from './rogue-camera.js';
 import {quayCamera} from './quay-camera.js';
 import {supplyBoatLayout} from './supply-fleet.js';
@@ -40,6 +40,7 @@ const bosses=load('rogue-bosses-v1.png');
 const shoreProps=load('rogue-shore-props-v1.png');
 const dredgerArt=Object.fromEntries(['bucket-raised','bucket-falling','bucket-impact','winch-intact','winch-damaged','winch-destroyed','impact-fx-1','impact-fx-2','impact-fx-3'].map(id=>[id,load('dredger-'+id+'-v1.png')]));
 const ready=i=>i.complete&&i.naturalWidth>0;
+const renderDpr=()=>Math.min(devicePixelRatio||1,document.documentElement.dataset.mobileUi==='true'?1.25:2);
 function prop(c,kind,x,y,w,h,flip=false){
   if(!ready(shoreProps))return;
   const f={dog:[165,50,500,365],chest:[885,90,465,318],station:[225,420,520,550],buoy:[940,460,315,520]}[kind];
@@ -48,7 +49,7 @@ function prop(c,kind,x,y,w,h,flip=false){
 }
 function canvasLabel(c,text,x,y,color='#f1e6c4',size=15){
   text=touchText(text);
-  const t=c.getTransform(),scale=Math.hypot(t.a,t.b)/Math.min(devicePixelRatio||1,2);
+  const t=c.getTransform(),scale=Math.hypot(t.a,t.b)/renderDpr();
   c.font=`600 ${size/scale}px Pretendard, sans-serif`;c.textAlign='center';c.lineWidth=4/scale;c.strokeStyle='#071c20';if(!mobileLabelFits(c,text,x,y,size))return;
   c.strokeText(text,x,y);c.fillStyle=color;c.fillText(text,x,y);return true;
 }
@@ -58,7 +59,7 @@ function ring(c,p,r,color){c.strokeStyle=color;c.lineWidth=2;c.beginPath();c.arc
 // authoritative camp timer is running, at the moored boat's cabin.
 function voyageLight(c,s,frame,reduced,mapOpen){
   if(!s.daylight||mapOpen)return;
-  const sky=daylight(s),alpha=(1-sky.light)*.26,dpr=Math.min(devicePixelRatio||1,2);
+  const sky=daylight(s),alpha=(1-sky.light)*.26,dpr=renderDpr();
   frame.daylight={...sky,tintAlpha:alpha,stove:null};
   c.save();c.setTransform(dpr,0,0,dpr,0,0);
   if(alpha>0){c.fillStyle=`rgba(5,14,35,${alpha})`;c.fillRect(0,0,frame.width,frame.height);}
@@ -72,7 +73,7 @@ function voyageLight(c,s,frame,reduced,mapOpen){
   c.restore();
 }
 function gullScrapMarkers(c,s,frame,language){
-  frame.scrapMarkers=[];const dpr=Math.min(devicePixelRatio||1,2);
+  frame.scrapMarkers=[];const dpr=renderDpr();
   c.save();c.setTransform(dpr,0,0,dpr,0,0);
   for(const e of s.combat?.enemies||[]){
     if(e.kind!=='gull')continue;
@@ -345,7 +346,9 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   frames.set(canvas,{map:s.map,time:s.time,frame});
   const {width,height,scale,ox,oy}=frame;
   const breaks=dredgerBreakMotion(s,{reduced,overview:mapOpen||chartPins,scale}).map(e=>clearDredgerMotion(e,frame)).filter(Boolean);
-  const dpr=Math.min(devicePixelRatio||1,2);
+  // Keep DOM text at device resolution; bound the moving canvas fill cost on
+  // phones. Manual zoom still enlarges sprites with their original source art.
+  const dpr=renderDpr();
   if(canvas.width!==Math.round(width*dpr)||canvas.height!==Math.round(height*dpr)){canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);}
   const c=canvas.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,width,height);
   if(frame.projectionId==='quay-v1'){
@@ -434,7 +437,7 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
       workSprite(c,'dock',part.x,part.y+7,48,37);
       dredgerDrive(c,hp,part,breaks.find(e=>e.index===i));
       if(boss.active||boss.cleared){
-        const copy=driveView.parts[i],t=c.getTransform(),labelScale=Math.hypot(t.a,t.b)/Math.min(devicePixelRatio||1,2);
+        const copy=driveView.parts[i],t=c.getTransform(),labelScale=Math.hypot(t.a,t.b)/renderDpr();
         // Two screen-space baselines retain an 18px gap at every manual zoom.
         const named=label(c,copy.name,part.x,part.y-36/labelScale,copy.color,13);
         // Edge markers use a padded safe rectangle. A name that is already
@@ -502,10 +505,10 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
     const plan=harborPlan(s),siteNames=language==='en'?['Shipbreaking yard','Fuel quay','Fish-market jetty']:SHORE_SITES;
     for(const b of s.map.berths){
       const site=plan?.sites.find(x=>x.id===b.id);
-      if(plan&&!site.known&&!site.radio)continue;
+      if(plan&&!site.known)continue;
       label(c,(site?.selected?'◆ ':site?.claimed?'✓ ':'')+siteNames[b.island],b.x,b.y+48,site?.selected?'#f0d98f':'#b6bda9',20);
     }
-    label(c,language==='en'?'Exit berth · radio coordinates':'탈출 부두 · 무전 좌표',s.map.exit.x-100,s.map.exit.y+75,'#c9c2a7',20);
+    if(surveyedAt(s,s.map.exit))label(c,language==='en'?'Exit berth':'탈출 부두',s.map.exit.x-100,s.map.exit.y+75,'#c9c2a7',20);
     ring(c,s.person||s.boat,20,'#f0d98f');
   }
   const alignedTarget=alignment&&target&&target.x===alignment.berth.x&&target.y===alignment.berth.y;

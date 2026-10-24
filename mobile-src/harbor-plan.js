@@ -1,5 +1,5 @@
 import {cacheOffer} from './rogue-cache.js';
-import {visibleAt} from './rogue-vision.js';
+import {visibleAt,surveyedAt} from './rogue-vision.js';
 import {toolBerth,FLOOR_TOOLS,hasTool,FAUNA} from './shore-encounters.js';
 import {rescuePendingAt,rescueBerth} from './shore-rescue.js';
 import {usesDredger,CRANE} from './dredger-counterplay.js';
@@ -7,6 +7,9 @@ import {usesSluice,SLUICE} from './sluice-counterplay.js';
 import {usesLighthouse,lighthouseStatus,LIGHTHOUSE} from './lighthouse-counterplay.js';
 
 export const newHarborIntel=()=>({sites:[],target:null});
+export const knownBerth=(s,b)=>!s.harborIntel||s.harborIntel.sites.some(site=>site.id===b.id);
+export const bossApproach=s=>s.map.nodes?.find(n=>n.id==='sea-gate')||{x:2180,y:900};
+export const knownBlockade=s=>s.boss.active||s.boss.cleared||surveyedAt(s,bossApproach(s));
 // The prototype is bundled with the first region's guaranteed tool. This is
 // the same public radio destination, not a new reveal of sealed cache contents.
 export function rigRecoveryBerth(s){
@@ -39,14 +42,14 @@ export function harborPlan(s){
   const intel=s.harborIntel,tool=toolBerth(s),missing=!hasTool(s,FLOOR_TOOLS[s.depth].id),rigBerth=rigRecoveryBerth(s);
   const enabled=s.status==='playing'&&!s.pendingCache&&!s.pendingGear&&!s.salvage?.pending;
   return {target:intel.target,sites:s.map.berths.map(berth=>{
-    const record=intel.sites.find(x=>x.id===berth.id),known=!!record,radio=missing&&berth.id===tool.id;
+    const record=intel.sites.find(x=>x.id===berth.id),known=!!record,radio=known&&missing&&berth.id===tool.id;
     const claimed=s.claimed.includes(berth.id),offer=known?cacheOffer(s,berth.id):null;
     const gear=offer?.gear[0]??null;
     const rescue=s.rescue?.discovered&&rescueBerth(s)?.id===berth.id?s.rescue.stage:null;
-    return {id:berth.id,island:berth.island,known,radio,claimed,rescue,selectable:enabled&&(!claimed||rescuePendingAt(s,berth.id))&&(known||radio||!!rescue),
-      gear,supply:offer?.supply??null,threats:record?[...record.threats]:[],rig:berth.id===rigBerth?.id?s.build:null,
+    return {id:berth.id,island:berth.island,known,radio,claimed,rescue,selectable:enabled&&(!claimed||rescuePendingAt(s,berth.id))&&(known||!!rescue),
+      gear,supply:offer?.supply??null,threats:record?[...record.threats]:[],rig:known&&berth.id===rigBerth?.id?s.build:null,
       stack:gear?s.equipment.filter(id=>id===gear).length:0,tool:radio?FLOOR_TOOLS[s.depth].id:null,selected:intel.target===berth.id};
-  }),boss:{id:'boss',selectable:enabled&&!s.boss.cleared,selected:intel.target==='boss'||s.boss.active&&!s.boss.cleared&&intel.target===null,toolMissing:missing}};
+  }),boss:{id:'boss',known:knownBlockade(s),selectable:enabled&&knownBlockade(s)&&!s.boss.cleared,selected:intel.target==='boss'&&knownBlockade(s)||s.boss.active&&!s.boss.cleared&&intel.target===null,toolMissing:missing}};
 }
 export function planHarbor(s,id){
   const plan=harborPlan(s);
@@ -61,9 +64,9 @@ export function planHarbor(s,id){
 export function harborDestination(s){
   const id=s.harborIntel?.target;
   if(!id)return null;
-  if(id==='boss')return s.boss.active||s.boss.cleared?null:{id,point:s.map.nodes?.find(n=>n.id==='sea-gate')||{x:2180,y:900}};
+  if(id==='boss')return s.boss.active||s.boss.cleared||!knownBlockade(s)?null:{id,point:bossApproach(s)};
   const berth=s.map.berths.find(b=>b.id===id);
-  return berth&&(!s.claimed.includes(id)||rescuePendingAt(s,id))?{id,point:berth}:null;
+  return berth&&(knownBerth(s,berth)||rescuePendingAt(s,id))&&(!s.claimed.includes(id)||rescuePendingAt(s,id))?{id,point:berth}:null;
 }
 // A selected detour can be marked during combat. The primary HUD switches
 // to it outside the immediate attack/jet guidance area. Currents and other
