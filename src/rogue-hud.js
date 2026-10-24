@@ -9,6 +9,7 @@ import {salvageHudCondition,salvageDeviceName} from './rogue-salvage-ui.js';
 import {rigEffects} from './rogue-salvage.js';
 import {harborPlanSummary,pendingRescueDestination} from './harbor-plan-ui.js';
 import {harborDestination,harborRoutePriority} from './harbor-plan.js';
+import {sluiceInstrument} from './sluice-instrument.js';
 import {usesSluice,sluiceStatus} from './sluice-counterplay.js';
 import {usesLighthouse,lighthouseStatus} from './lighthouse-counterplay.js';
 import {rescueStatus,rescueBerth} from './shore-rescue.js';
@@ -591,6 +592,7 @@ export function rogueHudModel(s,language='ko'){
     model.action=defense.text;model.actionTone=defense.tone;
   }else if(context.defense)model.context.push(context.defense);
   model.impact=impactPresentation(recentImpact(s),language);
+  model.sluice=sluiceInstrument(s);
   model.rigAction=rigActionPresentation(s,language);
   model.rigControl=rigControlPresentation(s,language);
   const special=rogueSpecialAction(s);

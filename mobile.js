@@ -748,6 +748,33 @@ function drawNavigationMap(canvas, map) {
   c.restore();
 }
 
+// mobile/sluice-instrument.js
+var esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+var tenth = (n) => Math.floor(Math.max(0, n) * 10) / 10;
+function instrumentCopy(m, lang = "ko") {
+  if (!m) return null;
+  const en = lang === "en", unit = en ? "s" : "\uCD08";
+  const seconds = m.seconds > 0 && m.seconds < 0.1 ? "<0.1" : tenth(m.seconds).toFixed(1);
+  const phases = en ? { open: "Plate open", tracking: "Tracking", locked: "Lane locked", backwash: "Backwash \xB7 reset", opened: "Gate opened", recover: "Resetting" } : { open: "\uC7A0\uAE08\uD310 \uC5F4\uB9BC", tracking: "\uC218\uB85C \uCD94\uC801", locked: "\uC218\uB85C \uACE0\uC815", backwash: "\uC5ED\uB958 \xB7 \uC7AC\uC815\uB82C", opened: "\uC218\uBB38 \uAC1C\uBC29", recover: "\uC7AC\uC815\uBE44" };
+  const centre = m.centred ? en ? "\u2713 Centre" : "\u2713 \uC911\uC559" : (m.centreDirection === "up" ? "\u2191 " : "\u2193 ") + (en ? "To centre" : "\uC911\uC559\uC73C\uB85C");
+  const heading = (m.aligned ? "\u2713 " : "\u21BB ") + (en ? "Bow \u2192" : "\uC120\uC218 \u2192");
+  const line = (en ? "Lane " : "\uC218\uB85C ") + m.lane + " \xB7 " + phases[m.phase] + " " + seconds + unit;
+  const hook = m.hooked ? (en ? "Tension " : "\uC7A5\uB825 ") + m.tensionPercent + "%" + (m.phase === "open" ? " \xB7 " + (m.canBurst ? en ? "Release & launch" : "\uC904 \uB193\uACE0 \uBC1C\uC9C4" : en ? "Release mooring" : "\uACC4\uB958 \uBD84\uB9AC") : "") : "";
+  const receipts = en ? { slow: "Impact too slow", pier: "Pier hit \xB7 aim at centre", angle: "Side hit \xB7 bow first", closed: "Plate closed \xB7 wait", opened: "Gate opened" } : { slow: "\uCDA9\uB3CC \uC18D\uB3C4 \uBD80\uC871", pier: "\uAD50\uAC01 \uCDA9\uB3CC \xB7 \uC911\uC559\uC73C\uB85C", angle: "\uCE21\uBA74 \uCDA9\uB3CC \xB7 \uC120\uC218\uBD80\uD130", closed: "\uC7A0\uAE08\uD310 \uB2EB\uD798 \xB7 \uB300\uAE30", opened: "\uC218\uBB38 \uAC1C\uBC29" };
+  let receipt = m.receipt ? receipts[m.receipt.kind] : "";
+  if (m.receipt?.kind === "slow" && m.receipt.impactSpeed !== null) receipt += " \xB7 " + (en ? "impact " : "\uC9C1\uC804 ") + tenth(m.receipt.impactSpeed).toFixed(1) + " < " + m.requiredSpeed;
+  if (m.receipt?.kind === "opened") receipt += " " + m.opened + "/" + m.total;
+  return { label: en ? "East speed \u2192" : "\uB3D9\uCABD \uC18D\uB3C4 \u2192", minimum: (en ? "min " : "\uCD5C\uC18C ") + m.requiredSpeed + "+", line, centre, heading, hook, receipt };
+}
+function speedMarkup(m, lang) {
+  const c = instrumentCopy(m, lang);
+  return `<span class="sluice-speed" data-speed-met="${m.speedMet}" aria-label="${esc(c.label + " " + m.speedDisplay + " \xB7 " + c.minimum)}"><small>${esc(c.label)}</small><span><b>${m.speedDisplay}</b><em>${esc(c.minimum)}</em></span></span>`;
+}
+function noticeMarkup(m, lang) {
+  const c = instrumentCopy(m, lang);
+  return `<div class="sluice-phase" data-phase="${m.phase}">${esc(c.line)}</div><div class="sluice-alignment"><i data-met="${m.centred}">${esc(c.centre)}</i><i data-met="${m.aligned}">${esc(c.heading)}</i></div>${c.hook ? `<div class="sluice-hook">${esc(c.hook)}</div>` : ""}${c.receipt ? `<div class="sluice-receipt" role="status">${esc(c.receipt)}</div>` : ""}`;
+}
+
 // mobile/hud.js
 var paths = {
   hull: "M4 9h16l-3 10H7L4 9Zm4 0V5h8v4M12 2v3",
@@ -949,9 +976,12 @@ function createMobileHud({ onMap = () => {
     set(nodes.mobileVitals, metrics.filter((m) => ["hull", "crew", "fuel"].includes(m.id)).map(vital).join(""));
     const layout = rogue && metrics.some((m) => m.id === "hull") && metrics.some((m) => m.id === "fuel") && !metrics.some((m) => m.id === "crew") ? "aboard" : "default";
     if (nodes.mobileVitals.dataset.layout !== layout) nodes.mobileVitals.dataset.layout = layout;
-    set(nodes.mobileResources, metrics.filter((m) => !["hull", "crew", "fuel"].includes(m.id)).map((m) => `<span class="flight-resource ${m.impact ? "danger" : ""}" aria-label="${escape2(m.label + " " + m.value)}" title="${escape2(m.label)}">${icon(m.id)}<b>${escape2(m.value)}</b></span>`).join(""));
+    const sluice = rogue && presentation?.active && !presentation.mapOpen ? presentation.sluice : null;
+    nodes.mobileNotice.toggleAttribute("data-sluice", !!sluice);
+    root.toggleAttribute("data-sluice-expanded", !!sluice && !!expanded);
+    set(nodes.mobileResources, metrics.filter((m) => !["hull", "crew", "fuel"].includes(m.id) && !(sluice?.hooked && m.id === "tension")).map((m) => sluice && m.id === "east-speed" ? speedMarkup(sluice, en ? "en" : "ko") : `<span class="flight-resource ${m.impact ? "danger" : ""}" aria-label="${escape2(m.label + " " + m.value)}" title="${escape2(m.label)}">${icon(m.id)}<b>${escape2(m.value)}</b></span>`).join(""));
     const notices = rogue ? [...document.querySelectorAll("#rogueConditions>[data-tone=warning],#rogueConditions>.rogue-impact[data-impact-id],#rogueMission .rogue-boss-state")] : [...document.querySelectorAll("#hud .compact-risks>*,#hud .compact-environment>[data-tone=warning]")];
-    set(nodes.mobileNotice, notices.map((el) => `<span>${escape2(text(el))}</span>`).join(""));
+    set(nodes.mobileNotice, (sluice ? noticeMarkup(sluice, en ? "en" : "ko") : "") + notices.filter((el) => !sluice || !el.matches(".rogue-boss-state,[data-rogue-condition=sluice-heading],[data-rogue-condition=sluice-impact]")).map((el) => `<span>${escape2(el.matches(".rogue-impact") ? [...el.children].map(text).filter(Boolean).join(" \xB7 ") : text(el))}</span>`).join(""));
     const work = document.querySelector(rogue ? "#rogueControls .rogue-work" : "#hud .compact-work"), progress = work?.querySelector("progress");
     const context = rogue ? [...document.querySelectorAll("#rogueControls [data-rogue-context]:not([data-rogue-context=camp])")].map(text) : [...document.querySelectorAll("#hud .compact-actions [data-hud-item=context],#hud .anchor-state")].map(text);
     if (rogue && rogue.dataset.mobileMode !== "sailing") context.unshift(text(document.querySelector("#rogueControls [data-rogue-action=primary]")));

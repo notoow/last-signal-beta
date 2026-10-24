@@ -82,7 +82,17 @@ export function drawSluiceGate(c,p,{opened=false,exposed=false,motion=null,frame
   if(motion)contactCue(c,p,motion,frame);
 }
 
-export function drawSluice(c,s,{label,reduced=false,language='ko',overview=false,frame=null}={}){
+export function drawSluice(c,s,{label,reduced=false,language='ko',overview=false,frame=null,hud=null}={}){
+  // Screen-space label avoidance only; never changes camera fit or collision.
+  const originalLabel=label;
+  label=(ctx,text,x,y,color,size=15)=>{
+    if(hud&&frame){
+      ctx.save();ctx.font='600 '+size+'px Pretendard, sans-serif';const w=ctx.measureText(text).width;ctx.restore();
+      const box={x:x*frame.scale+frame.ox-w/2-4,y:y*frame.scale+frame.oy-size-4,w:w+8,h:size+9};
+      if(hud.bounds.some(b=>box.x<b.x+b.w&&box.x+box.w>b.x&&box.y<b.y+b.h&&box.y+box.h>b.y))return false;
+    }
+    return originalLabel(ctx,text,x,y,color,size);
+  };
   const b=s.boss,a=sluiceStatus(s),en=language==='en';
   const impact=recentSluiceImpact(s);
   if(b.active&&!b.cleared&&['warn','attack'].includes(b.phase)){
@@ -115,7 +125,7 @@ export function drawSluice(c,s,{label,reduced=false,language='ko',overview=false
     const text=reverse?(en?'BACKWASH ←':'역류 ←'):warn?
       (a.locked?(en?'LANE LOCKED →':'수로 고정 →'):(en?'SELECTING LANE →':'방류 수로 선택 →')):
       (a.exposed?(en?'SURGE → hit the brass plate':'방류 → 황동판에 선수 충돌'):(en?'UNLOCKED →':'잠금 해제 →'));
-    label(c,text,2720,y-SLUICE.halfWidth-20,color,14);
+    if(!hud)label(c,text,2720,y-SLUICE.halfWidth-20,color,14);
   }
   for(let i=0;i<3;i++){
     const p=sluiceGate(i),opened=b.parts[i]<=0,exposed=a.exposed&&i===a.lane;

@@ -542,3 +542,73 @@ html[data-mobile-move-side=right] #mobileTransit{right:auto;left:0;justify-conte
 #mobileControls #mobileActions{pointer-events:none}
 #mobileControls #mobileActions>button,#mobileControls #mobileTransit>button,
 #mobileControls #mobileTools,#mobileControls #mobileTools>button{pointer-events:auto}
+
+/* Only the existing speed resource and notice contents are replaced. */
+.sluice-speed{display:flex;flex-direction:column;gap:1px;white-space:nowrap;min-width:92px}
+.sluice-speed>small{font-size:10px;line-height:11px;color:#c2d8dc;letter-spacing:.02em}
+.sluice-speed>span{display:flex;align-items:baseline;gap:6px;line-height:18px}
+.sluice-speed b{font-size:20px;font-weight:750;line-height:18px;font-variant-numeric:tabular-nums;color:#f2cd91}
+.sluice-speed em{font-style:normal;font-size:10px;line-height:12px;color:#e1e8e7}
+.sluice-speed[data-speed-met=true] b{color:#b8e5d7}
+#mobileNotice[data-sluice]{gap:3px;line-height:18px;color:#f0e6d0}
+#mobileNotice .sluice-phase{font-size:14px;white-space:nowrap;color:#f1ce8f}
+#mobileNotice .sluice-phase[data-phase=open]{color:#c5ebdc}
+#mobileNotice .sluice-phase[data-phase=backwash]{color:#ffb39a}
+#mobileNotice .sluice-alignment{display:flex;gap:15px;justify-content:center;white-space:nowrap;font-size:12px}
+#mobileNotice .sluice-alignment i{font-style:normal;color:#f3cc8e}
+#mobileNotice .sluice-alignment i[data-met=true]{color:#b8dcd5}
+#mobileNotice .sluice-hook,#mobileNotice .sluice-receipt{font-size:12px;color:#ffd3a7;line-height:17px}
+#mobileNotice .sluice-receipt{margin-top:2px}
+@media(max-width:600px){#mobileNotice .sluice-phase{font-size:13px}#mobileNotice .sluice-alignment{font-size:12px;gap:12px}}
+
+/* Keep live boss instruments visible beside the narrow More tray. */
+@media(max-width:600px){
+ #mobileFlightHud[data-sluice-expanded] #mobileNotice[data-sluice]{left:14px;top:94px;transform:none;max-width:calc(100vw - 328px);text-align:left}
+ #mobileFlightHud[data-sluice-expanded] .sluice-alignment{justify-content:flex-start}
+ #mobileFlightHud[data-sluice-expanded] .sluice-speed{position:fixed;left:14px;top:56px}
+}
+
+/* Opening tools must not resize the captain or vessel action target. */
+#mobileControls.expanded #mobileActions>.mobile-captain-skill{width:52px;height:52px;min-height:52px}
+#mobileControls.expanded #mobileActions>.mobile-special{width:48px}
+
+/* Dense live warnings remain readable above the stick while tools are open. */
+@media(max-width:600px){
+ #mobileFlightHud[data-sluice-expanded] #mobileNotice[data-sluice]{gap:1px;line-height:14px}
+ #mobileFlightHud[data-sluice-expanded] #mobileNotice .sluice-phase{font-size:12px;line-height:15px}
+ #mobileFlightHud[data-sluice-expanded] #mobileNotice .sluice-alignment,
+ #mobileFlightHud[data-sluice-expanded] #mobileNotice .sluice-hook,
+ #mobileFlightHud[data-sluice-expanded] #mobileNotice .sluice-receipt,
+ #mobileFlightHud[data-sluice-expanded] #mobileNotice>span{font-size:11px;line-height:14px;padding:0}
+ #mobileFlightHud[data-sluice-expanded] #mobileNotice .sluice-receipt{margin-top:0}
+}
+
+/* Bilge and impact warnings can coexist even with the tools tray closed. */
+@media(max-width:600px){
+ #mobileFlightHud #mobileNotice[data-sluice]{gap:1px;line-height:14px}
+ #mobileFlightHud #mobileNotice[data-sluice] .sluice-phase{font-size:13px;line-height:16px}
+ #mobileFlightHud #mobileNotice[data-sluice] .sluice-alignment,
+ #mobileFlightHud #mobileNotice[data-sluice] .sluice-hook,
+ #mobileFlightHud #mobileNotice[data-sluice] .sluice-receipt,
+ #mobileFlightHud #mobileNotice[data-sluice]>span{font-size:11px;line-height:14px;padding:0}
+ #mobileFlightHud #mobileNotice[data-sluice] .sluice-receipt{margin-top:0}
+}
+
+@media(min-width:601px) and (max-width:900px){
+ #mobileFlightHud[data-sluice-expanded] #mobileNotice[data-sluice]{left:14px;transform:none;max-width:calc(100vw - 328px);text-align:left}
+ #mobileFlightHud[data-sluice-expanded] .sluice-alignment{justify-content:flex-start}
+}
+
+/* Mirrored controls put the tools tray on the left: keep its far edge clear. */
+@media(max-width:900px){
+ html[data-mobile-move-side=right] #mobileFlightHud[data-sluice-expanded] #mobileNotice[data-sluice]{left:314px;right:14px;width:auto}
+}
+@media(max-width:600px){
+ html[data-mobile-move-side=right] #mobileFlightHud[data-sluice-expanded] .sluice-speed{left:314px}
+ html[data-mobile-move-side=right] #mobileFlightHud[data-sluice-expanded] #mobileNotice[data-sluice]{top:112px;gap:0;line-height:13px}
+ html[data-mobile-move-side=right] #mobileFlightHud[data-sluice-expanded] #mobileNotice[data-sluice] .sluice-phase,
+ html[data-mobile-move-side=right] #mobileFlightHud[data-sluice-expanded] #mobileNotice[data-sluice] .sluice-alignment,
+ html[data-mobile-move-side=right] #mobileFlightHud[data-sluice-expanded] #mobileNotice[data-sluice] .sluice-hook,
+ html[data-mobile-move-side=right] #mobileFlightHud[data-sluice-expanded] #mobileNotice[data-sluice] .sluice-receipt,
+ html[data-mobile-move-side=right] #mobileFlightHud[data-sluice-expanded] #mobileNotice[data-sluice]>span{line-height:13px}
+}

@@ -36,6 +36,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   const hudMarkup=new Map();
   const setHud=(id,html)=>{if(hudMarkup.get(id)!==html){$(id).innerHTML=html;hudMarkup.set(id,html);}};
   const probe=hudProbe($('rogueSea'),'#rogue .rogue-top-stack,#rogue .rogue-console,#rogueSkill,#roguePause,#rogueChart,#rogueQuayAssets,#rogue[data-shore-profile=metre] #rogueReadings,#rogue[data-shore-profile=metre] #rogueControls,#rogue[data-shore-profile=metre] #rogueConditions');
+  const sluiceLabelProbe=hudProbe($('rogueSea'),'.sluice-speed,#mobileNotice,#mobileObjective,#mobileResources,#mobileVitals,#mobileMinimap,#mobileActions button,#mobileTools,#mobileStick');
   $('rogueSea').tabIndex=-1;
   let hudRects=[];
   $('roguePause').textContent=en?'Esc · Pause':'Esc · 일시정지';
@@ -462,14 +463,15 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
           pin.style.top=point.y+'px';
         });
       }else{
-        const view=drawRogue($('rogueSea'),resultView||state,{reduced,mapOpen,camera,occupied:hudRects,language});
+        const sluiceHud=!paused&&!mapOpen&&hud.sluice&&document.documentElement.dataset.mobileUi==='true'?{bounds:sluiceLabelProbe.read(now)}:null;
+        const view=drawRogue($('rogueSea'),resultView||state,{reduced,mapOpen,camera,occupied:hudRects,language,sluiceHud});
         refreshQuayAssets(view);
       }
       if(now-lastMobileFrame>=100){
         lastMobileFrame=now;
         const minimap={...rogueMinimap(state),viewport:navigationViewport(lastRogueCamera($('rogueSea')))};
         if(document.documentElement.dataset.mobileUi==='true')
-          window.dispatchEvent(new CustomEvent('lastsignal:mobile-frame',{detail:{game:'rogue',mode:state.mode,mapOpen,active:!paused,context:rogueContextActions(state),rigAction:hud.rigAction,rigControl:hud.rigControl,captain:{id:state.captain,code:'KeyG',...hud.skill},minimap}}));
+          window.dispatchEvent(new CustomEvent('lastsignal:mobile-frame',{detail:{game:'rogue',mode:state.mode,mapOpen,active:!paused,sluice:!paused&&!mapOpen?hud.sluice:null,context:rogueContextActions(state),rigAction:hud.rigAction,rigControl:hud.rigControl,captain:{id:state.captain,code:'KeyG',...hud.skill},minimap}}));
         else if(!paused)drawNavigationMap($('rogueMinimap'),minimap);
       }
     }

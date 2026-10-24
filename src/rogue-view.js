@@ -323,7 +323,7 @@ export function rogueCamera(canvas,s,mapOpen=false,options={},previous=null,dt=0
 }
 const frames=new WeakMap();
 export const lastRogueCamera=canvas=>frames.get(canvas)?.frame;
-export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,camera:settings={},occupied=null,language='ko'}={}){
+export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,camera:settings={},occupied=null,language='ko',sluiceHud=null}={}){
   // The compact planning chart has accessible DOM pins; world-size action
   // captions would obscure entire quays at this scale.
   const label=chartPins?()=>{}:canvasLabel;
@@ -408,7 +408,7 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   const dredger=usesDredger(s);
   const sluice=usesSluice(s);
   const lighthouse=usesLighthouse(s);
-  if(sluice)drawSluice(c,s,{label,reduced,language,overview:mapOpen||chartPins,frame});
+  if(sluice)drawSluice(c,s,{label,reduced,language,overview:mapOpen||chartPins,frame,hud:sluiceHud});
   const connectionMarker=lighthouse?drawLighthouse(c,s,{label,reduced,language,task}):null;
   if(dredger&&boss.active&&!boss.cleared)craneWarning(c,s);
   if(!dredger&&!sluice&&!lighthouse&&boss.active&&!boss.cleared&&(boss.phase==='warn'||boss.phase==='attack')){
