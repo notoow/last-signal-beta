@@ -3,6 +3,7 @@
 import {CAPTAINS} from './captain-vessels.js';
 import {usesSluice} from './sluice-counterplay.js';
 import {usesLighthouse} from './lighthouse-counterplay.js';
+import {publishRigAction} from './rig-feedback.js';
 export const RIG_MODEL='stack-v1';
 // Read-only shared values for simulation and previews. Old saves retain their
 // original impulses and the dredger's old fixed charging rate.
@@ -39,10 +40,12 @@ export const winchStoreReady=s=>!!s.salvage?.rank&&s.build==='winch'&&s.charge>=
   s.boss.tension>.15&&s.salvage.cooldown<=0;
 export const winchLaunchReady=s=>!!(s.build==='winch'&&s.boss.hook<0&&canFire(s)&&
   s.salvage.charge>=35&&s.salvage.vector&&s.salvage.window>0);
-function impulse(s,vector,power){
+function impulse(s,vector,power,outcome){
+  const applied={x:vector.x*power,y:vector.y*power};
   s.boat.vx+=vector.x*power;s.boat.vy+=vector.y*power;
   s.fuel-=2;s.salvage.cooldown=6;s.salvage.uses++;
   clearSalvageCharge(s);
+  publishRigAction(s,{...outcome,fuel:2,vector:applied});
 }
 export function tickSalvage(s,input,dt){
   const m=s.salvage;if(!m)return;
@@ -59,14 +62,14 @@ export function tickSalvage(s,input,dt){
   if(canFire(s)&&m.charge>=35&&input.boost&&!input.brake&&!input.precision&&forward&&s.boost>=18){
     const power=(m.rank===2?120:80)+m.charge*(m.rank===2?.6:.4);
     s.boost-=18;
-    impulse(s,{x:Math.cos(s.boat.angle),y:Math.sin(s.boat.angle)},power);
+    impulse(s,{x:Math.cos(s.boat.angle),y:Math.sin(s.boat.angle)},power,{kind:'brake-launch',charge:m.charge});
   }
 }
 export function dischargeBilge(s){
   if(s.build!=='bilge'||s.valve||s.flood<20||!canFire(s))return false;
   const effect=rigEffects(s);
   s.flood-=effect.jetWater;
-  impulse(s,{x:Math.cos(s.boat.angle),y:Math.sin(s.boat.angle)},effect.jetPower);
+  impulse(s,{x:Math.cos(s.boat.angle),y:Math.sin(s.boat.angle)},effect.jetPower,{kind:'bilge-jet',water:effect.jetWater});
   return true;
 }
 export function catchWinch(s,anchor){
@@ -74,12 +77,13 @@ export function catchWinch(s,anchor){
   if(!winchStoreReady(s))return false;
   const dx=s.boat.x-anchor.x,dy=s.boat.y-anchor.y,d=Math.hypot(dx,dy);
   if(d<1)return false;
-  m.charge=s.charge;m.window=salvageWindow(s);m.vector={x:dx/d,y:dy/d};return true;
+  m.charge=s.charge;m.window=salvageWindow(s);m.vector={x:dx/d,y:dy/d};
+  publishRigAction(s,{kind:'winch-store',charge:m.charge,seconds:m.window,vector:m.vector});return true;
 }
 export function dischargeWinch(s){
   const m=s.salvage;
   if(!winchLaunchReady(s))return false;
-  impulse(s,m.vector,m.charge*(m.rank===2?1.8:1.2)*rigEffects(s).winchLaunchMultiplier);return true;
+  impulse(s,m.vector,m.charge*(m.rank===2?1.8:1.2)*rigEffects(s).winchLaunchMultiplier,{kind:'winch-launch',charge:m.charge});return true;
 }
 export function salvageStatus(s){
   const m=s.salvage;

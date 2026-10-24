@@ -803,6 +803,8 @@ function createMobileHud({ onMap = () => {
   root.innerHTML = '<div id="mobileObjective"></div><div id="mobileResources"></div><div id="mobileVitals"></div><div id="mobileNotice"></div><div id="mobileContext"></div><div id="mobileBuildStatus"></div>';
   document.body.append(root);
   const nodes = Object.fromEntries([...root.children].map((el) => [el.id, el]));
+  nodes.mobileBuildStatus.setAttribute("role", "status");
+  const measure = document.createElement("canvas").getContext("2d");
   const mini = document.createElement("button");
   mini.id = "mobileMinimap";
   mini.type = "button";
@@ -861,14 +863,7 @@ function createMobileHud({ onMap = () => {
     else rescueMarker.hidden = true;
     const en = document.documentElement.lang === "en", source = rogue ? document.getElementById("rogueMission") : document.querySelector("#hud .mission-objective");
     const special = presentation?.context?.special, actions2 = document.getElementById("mobileActions");
-    const explain = special && (!special.enabled || special.cooldown > 0) && !document.getElementById("mobileControls")?.classList.contains("expanded");
-    set(nodes.mobileBuildStatus, explain ? escape2(en ? special.detailEn : special.detailKo) : "");
-    if (explain && actions2) {
-      const r = actions2.getBoundingClientRect();
-      nodes.mobileBuildStatus.style.left = r.left + "px";
-      nodes.mobileBuildStatus.style.width = r.width + "px";
-      nodes.mobileBuildStatus.style.bottom = innerHeight - r.top + 5 + "px";
-    }
+    const expanded = document.getElementById("mobileControls")?.classList.contains("expanded");
     const goal = text(source?.querySelector("strong")) || text(source), region = text(source?.querySelector("small"));
     set(nodes.mobileObjective, icon("objective") + `<div>${region ? `<small>${escape2(region)}</small>` : ""}<strong>${escape2(goal)}</strong></div>`);
     const metrics = rogue ? [...document.querySelectorAll("[data-rogue-metric]")].map((el) => {
@@ -899,6 +894,36 @@ function createMobileHud({ onMap = () => {
     const checks = dock && getComputedStyle(dock).clipPath === "none" ? [...dock.children].map((el) => `<i class="${el.dataset.ok === "true" ? "ready" : ""}">${escape2(text(el))}</i>`).join("") : "";
     const label = rogue ? "" : text(work) || context.filter(Boolean).join(" \xB7 ");
     set(nodes.mobileContext, (checks ? `<div class="flight-dock">${checks}</div>` : "") + (label ? `<span>${escape2(label)}</span>` : "") + (!rogue && progress ? `<progress max="${progress.max}" value="${progress.value}" aria-label="${escape2(label)}"></progress>` : ""));
+    const status = nodes.mobileBuildStatus, sailing = rogue && rogue.dataset.mobileMode === "sailing";
+    status.hidden = !sailing;
+    if (sailing && actions2) {
+      const r = actions2.getBoundingClientRect();
+      status.style.left = r.left + "px";
+      status.style.width = r.width + "px";
+      status.style.bottom = innerHeight - r.top + 5 + "px";
+      const box = status.getBoundingClientRect();
+      const unsafe = [nodes.mobileNotice, nodes.mobileVitals, nodes.mobileResources, nodes.mobileObjective, nodes.mobileContext, mini, document.getElementById("rogueSkill"), document.getElementById("mobileTools")].some((el) => {
+        if (!el) return false;
+        const b = el.getBoundingClientRect();
+        return b.width && b.height && box.left < b.right && box.right > b.left && box.top < b.bottom && box.bottom > b.top;
+      });
+      const receipt = !expanded && !unsafe && presentation?.active !== false ? presentation?.rigAction : null;
+      let copy = receipt?.text || (!expanded && special && (!special.enabled || special.cooldown > 0) ? en ? special.detailEn : special.detailKo : "");
+      if (receipt) {
+        measure.font = getComputedStyle(status).font;
+        if (measure.measureText(copy).width > r.width) copy = receipt.shortText;
+        if (measure.measureText(copy).width > r.width) copy = "";
+      }
+      if (status.textContent !== copy) status.textContent = copy;
+      status.title = copy;
+      status.classList.toggle("rig-receipt", !!receipt && !!copy);
+      if (receipt && copy) status.dataset.rigActionId = receipt.id;
+      else delete status.dataset.rigActionId;
+    } else {
+      status.textContent = "";
+      delete status.dataset.rigActionId;
+      status.classList.remove("rig-receipt");
+    }
   };
 }
 

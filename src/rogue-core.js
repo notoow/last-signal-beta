@@ -17,6 +17,7 @@ import {shoreScale,crewRadius,shoreRanges,crewSpeed} from './shore-scale.js';
 import {newHarborIntel,refreshHarborIntel,harborPlan,harborDestination,harborRoutePriority,planHarbor,validHarborIntel} from './harbor-plan.js';
 import {newVoyageRecord,recordVoyage,recordHit,resourceSnapshot,resourceGains,validVoyageRecord} from './rogue-voyage-record.js';
 import {newShoreRescue,rescueStatus,rescueBerth,rescuePendingAt,orderRescue,tickRescue,boardRescue,leaveRescue,validRescue} from './shore-rescue.js';
+import {publishRigAction} from './rig-feedback.js';
 export {planHarbor};
 export const RUN_VERSION=17;
 export const SUPPLY_MODEL='carried-v1';
@@ -242,20 +243,28 @@ export function interact(s,action,input={}){
   const b=s.boat;
   if(action==='special'){
     if(s.mode!=='sailing')return false;
-    if(s.build==='bilge'){s.valve=!s.valve;if(!s.valve)dischargeBilge(s);return true;}
+    if(s.build==='bilge'){
+      s.valve=!s.valve;
+      if(s.valve)publishRigAction(s,{kind:'valve-open'});
+      else if(!dischargeBilge(s))publishRigAction(s,{kind:'valve-close'});
+      return true;
+    }
     if(dischargeWinch(s))return true;
     if(usesSluice(s)||usesLighthouse(s)){
       if(!winchBurstReady(s))return false;
       const p=partPosition(s,s.boss.hook),d=distance(b,p)||1,force=(120+s.charge*.5)*rigEffects(s).winchLaunchMultiplier;
+      const result={kind:'line-launch',index:s.boss.hook,charge:s.charge,fuel:3,vector:{x:(b.x-p.x)/d*force,y:(b.y-p.y)/d*force}};
       b.vx+=(b.x-p.x)/d*force;b.vy+=(b.y-p.y)/d*force;
-      s.boss.hook=-1;s.boss.tension=0;s.charge=0;s.fuel-=3;clearSalvageCharge(s);return true;
+      s.boss.hook=-1;s.boss.tension=0;s.charge=0;s.fuel-=3;clearSalvageCharge(s);publishRigAction(s,result);return true;
     }
     if(winchBurstReady(s)){
       const p=partPosition(s,s.boss.hook),d=distance(b,p)||1;
+      const index=s.boss.hook,before=s.boss.parts[index],charge=s.charge,fuel=s.fuel;
       const force=120*rigEffects(s).winchLaunchMultiplier;
       b.vx+=(b.x-p.x)/d*force;b.vy+=(b.y-p.y)/d*force;
       s.boss.parts[s.boss.hook]=Math.max(0,s.boss.parts[s.boss.hook]-s.charge*.22);
-      s.charge=0;s.fuel=Math.max(0,s.fuel-3);return true;
+      s.charge=0;s.fuel=Math.max(0,s.fuel-3);
+      publishRigAction(s,{kind:'winch-pull',index,amount:before-s.boss.parts[index],remaining:s.boss.parts[index],charge,fuel:fuel-s.fuel,partPoint:p});return true;
     }return false;
   }
   if(action==='horn'){

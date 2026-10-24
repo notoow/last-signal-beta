@@ -27,6 +27,7 @@ import {quaySprite} from './quay-details.js';
 import {usesDredger,CRANE,craneLockTime} from './dredger-counterplay.js';
 import {dredgerAttention} from './dredger-target.js';
 import {dredgerReadability} from './dredger-readability.js';
+import {rigActionPresentation} from './rig-feedback-ui.js';
 import {usesSluice,SLUICE} from './sluice-counterplay.js';
 import {drawSluice} from './sluice-view.js';
 import {usesLighthouse} from './lighthouse-counterplay.js';
@@ -48,7 +49,7 @@ function canvasLabel(c,text,x,y,color='#f1e6c4',size=15){
   text=touchText(text);
   const t=c.getTransform(),scale=Math.hypot(t.a,t.b)/Math.min(devicePixelRatio||1,2);
   c.font=`600 ${size/scale}px Pretendard, sans-serif`;c.textAlign='center';c.lineWidth=4/scale;c.strokeStyle='#071c20';if(!mobileLabelFits(c,text,x,y,size))return;
-  c.strokeText(text,x,y);c.fillStyle=color;c.fillText(text,x,y);
+  c.strokeText(text,x,y);c.fillStyle=color;c.fillText(text,x,y);return true;
 }
 function ring(c,p,r,color){c.strokeStyle=color;c.lineWidth=2;c.beginPath();c.arc(p.x,p.y,r,0,Math.PI*2);c.stroke();}
 function relayEdgeLabel(c,text,mark,frame){
@@ -238,6 +239,8 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   const label=chartPins?()=>{}:canvasLabel;
   const task=objective(s),driveView=dredgerReadability(s,language),driveTarget=driveView?.target;
   const target=driveTarget?.point||(driveView?.threat&&!task.planSite&&!task.planBoss?null:task.target);
+  const rigReceipt=mapOpen?null:rigActionPresentation(s,language);
+  let namedDriveTarget=false;
   const old=frames.get(canvas),previous=!reduced&&old?.map===s.map?old.frame:null;
   // Start only for a new-profile voyage, while still at sea. A slow/broken
   // illustration must never replace the controlled world with an empty screen.
@@ -338,8 +341,17 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
       if(boss.active||boss.cleared){
         const copy=driveView.parts[i],t=c.getTransform(),labelScale=Math.hypot(t.a,t.b)/Math.min(devicePixelRatio||1,2);
         // Two screen-space baselines retain an 18px gap at every manual zoom.
-        label(c,copy.name,part.x,part.y-36/labelScale,copy.color,13);
-        label(c,copy.status,part.x,part.y-18/labelScale,copy.color,11);
+        const named=label(c,copy.name,part.x,part.y-36/labelScale,copy.color,13);
+        // Edge markers use a padded safe rectangle. A name that is already
+        // readable beside it must not be drawn a second time over this state.
+        const nameWidth=c.measureText(copy.name).width*labelScale+6;
+        const nameBox={x:part.x*scale+ox-nameWidth/2,y:part.y*scale+oy-52,w:nameWidth,h:19};
+        if(named&&driveTarget?.index===i&&nameBox.x>=4&&nameBox.x+nameBox.w<=width-4&&nameBox.y>=4&&nameBox.y+nameBox.h<=height-4&&
+          !frame.occupied.some(r=>nameBox.x<r.x+r.w&&nameBox.x+nameBox.w>r.x&&nameBox.y<r.y+r.h&&nameBox.y+nameBox.h>r.y))namedDriveTarget=true;
+        const receipt=rigReceipt?.part?.index===i?rigReceipt.part.status:null;
+        c.font=`600 ${11/labelScale}px Pretendard, sans-serif`;
+        const status=receipt&&c.measureText(receipt).width*labelScale<=88?receipt:null;
+        label(c,status||copy.status,part.x,part.y-18/labelScale,status?'#a4e0df':copy.color,11);
       }
     }else ring(c,part,11,hp<=0?'#6a7771':boss.phase==='recover'?'#e8ce7d':'#856862');
     c.fillStyle=hp<=0?'#6a7771':'#e0c589';c.fillRect(part.x-14,part.y+18,28*hp/30,3);
@@ -413,7 +425,7 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   if(impact)impactFrames.set(canvas,{impact,tag:impactTag(c,impact,frame,s,panel)});else impactFrames.delete(canvas);
   if(!mapOpen){
     const points=[];
-    if(target)points.push({p:target,text:driveTarget?.name||connectionMarker?.text||(task.rescue?(language==='en'?'Escort / ladder':'정비공 / 사다리'):task.planSite?(language==='en'?'Planned quay':'선택한 부두'):task.planBoss?(language==='en'?'Outer approach':'바깥 해역 입구'):language==='en'?(s.person?'Search / return':'Target'):(s.person?'수색 / 귀환':'목표')),color:driveTarget?.color||connectionMarker?.color||'#f6dda2'});
+    if(target&&!namedDriveTarget)points.push({p:target,text:driveTarget?.name||connectionMarker?.text||(task.rescue?(language==='en'?'Escort / ladder':'정비공 / 사다리'):task.planSite?(language==='en'?'Planned quay':'선택한 부두'):task.planBoss?(language==='en'?'Outer approach':'바깥 해역 입구'):language==='en'?(s.person?'Search / return':'Target'):(s.person?'수색 / 귀환':'목표')),color:driveTarget?.color||connectionMarker?.color||'#f6dda2'});
     if(s.tow?.connected&&!s.person)points.push({p:s.tow,text:language==='en'?'Supply tow':'견인선',color:'#adc8c3'});
     if(!dredger&&!sluice&&!lighthouse&&s.boss.active&&!s.boss.cleared)points.push({p:s.map.boss,text:boss.phase==='warn'?'보스 · 공격 예고':'보스',color:boss.phase==='warn'?'#f4ad7d':'#e4ca9b'});
     for(const {p,text,color} of points){

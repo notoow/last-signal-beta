@@ -37,9 +37,15 @@ function crewSprite(c,s,p,reduced,unit=1){
     // the original pivot and lower-right tool; never recenter the cut pieces.
     // Reviewed source contract: local notch [300,0,12,110].
     c.beginPath();c.rect(-w*.5*scale,(y-anchors[row])*scale,300*scale,h*scale);
-    c.rect((300-w*.5)*scale,(y+110-anchors[row])*scale,(w-300)*scale,(h-110)*scale);c.clip();
+    c.rect((300-w*.5)*scale,(y+110-anchors[row])*scale,(w-300)*scale,(h-110)*scale);
+    if(s.captain==='park')c.rect((312-w*.5)*scale,(y+180-anchors[row])*scale,23*scale,70*scale);
+    c.clip();
   }
-  c.drawImage(img,x,y,w,h,-w*.5*scale,(y-anchors[row])*scale,w*scale,h*scale);c.restore();
+  c.drawImage(img,x,y,w,h,-w*.5*scale,(y-anchors[row])*scale,w*scale,h*scale);
+  // Park's complete hook extends beyond the old side cell. Draw only those
+  // original pixels, keeping the body sampling and its 156px foot pivot intact.
+  if(s.captain==='park'&&row===2&&col===1)c.drawImage(img,x+312,y+180,23,70,(312-w*.5)*scale,(y+180-anchors[row])*scale,23*scale,70*scale);
+  c.restore();
 }
 function workerSprite(c,s,p,reduced,unit=1){
   if(!workerArt||!workerSheet.complete||!workerSheet.naturalWidth)return;

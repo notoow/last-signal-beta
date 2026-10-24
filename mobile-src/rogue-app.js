@@ -17,6 +17,7 @@ import {hudProbe} from './hud-layout.js';
 import {waterMotion,releaseShipAssist} from './ship-motion.js';
 import {rogueHudModel,rogueHudMarkup,rogueDetailsMarkup,rogueHudText} from './rogue-hud.js';
 import {impactSequence,recentImpact} from './rogue-impact.js';
+import {rigActionSequence,rigActionCue,clearRigAction} from './rig-feedback.js';
 import {rogueContextActions,rogueMinimap} from './rogue-context.js';
 const esc=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function hasRogueSave(){try{return !!restoreRun(localStorage.getItem(SAVE_KEY));}catch{return false;}}
@@ -40,7 +41,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   let state=null,paused=true,mapOpen=false,last=performance.now(),clock=0,frameId,closed=false,captain='woo',build='standard',saveError=false;
   let inputMode=null;
   const steering=steeringInput(keys,{target:window,game:'rogue',active:()=>!paused&&!mapOpen&&!closed,signal:controller.signal});
-  function releaseControls(){keys.clear();steering.clear();window.dispatchEvent(new CustomEvent('lastsignal:input-reset',{detail:{game:'rogue'}}));}
+  function releaseControls(){clearRigAction(state);keys.clear();steering.clear();window.dispatchEvent(new CustomEvent('lastsignal:input-reset',{detail:{game:'rogue'}}));}
   let preparationReturn=null,resultView=null;
   let lastMobileFrame=-Infinity;
   let quayRetryPending=false,quayAssetSignature='',quayAssetLayout='';
@@ -348,7 +349,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     keys.add(e.code);
     if(!e.repeat){
       const action={KeyE:'interact',KeyQ:'horn',KeyB:'special',KeyX:'cutnet',KeyG:'captain',KeyT:'tow',KeyH:'cargoAnchor',KeyV:'ranged',...(state.person?{Space:'melee'}:{})}[e.code];
-      if(action){const uses=state.salvage?.uses??0;const used=interact(state,action,direction());if(used&&(action==='ranged'||action==='melee'))onSound('anchor');if((state.salvage?.uses??0)>uses)onSound('lift');save();}
+      if(action){const before=rigActionSequence(state);const used=interact(state,action,direction());if(used&&(action==='ranged'||action==='melee'))onSound('anchor');const cue=rigActionCue(state,before);if(cue)onSound(cue);save();}
       if(e.code==='KeyM'){e.preventDefault();if(state.harborIntel)harborChart();else{mapOpen=!mapOpen;releaseControls();}}
       if(!mapOpen&&['Equal','NumpadAdd','Minus','NumpadSubtract'].includes(e.code))changeZoom(camera.zoom*(['Equal','NumpadAdd'].includes(e.code)?1.1:1/1.1));
     }
@@ -372,7 +373,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
         const gateBefore=state.boss.sluice?.hitAt??-1;
         const signalBefore=state.boss.lighthouse?.sentAt??-1;
         const shellBefore=state.boss.lighthouse?.impactAt??-1;
-        const salvageUses=state.salvage?.uses??0;
+        const rigBefore=rigActionSequence(state);
         const hitBefore=impactSequence(state);
         tickRun(state,{...direction(),boost:keys.has('ShiftLeft')||keys.has('ShiftRight'),precision:keys.has('KeyC'),brake:keys.has('Space'),melee:keys.has('Space'),ranged:keys.has('KeyV'),recover:keys.has('KeyF'),equipment:keys.has('KeyR')},dt);
         const hit=impactSequence(state)>hitBefore?recentImpact(state):null;
@@ -386,7 +387,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
         }
         if((state.boss.lighthouse?.impactAt??-1)>shellBefore&&!hit)onSound('anchor');
         if((state.boss.lighthouse?.sentAt??-1)>signalBefore)onSound('lift');
-        if((state.salvage?.uses??0)>salvageUses)onSound('lift');
+        const rigCue=rigActionCue(state,rigBefore);if(rigCue)onSound(rigCue);
         if(before&&state.combat){
           if(state.combat.shotId>before.shotId)onSound('anchor');
           if(state.combat.killId>before.killId)onSound('lift');
@@ -429,7 +430,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
         lastMobileFrame=now;
         const minimap={...rogueMinimap(state),viewport:navigationViewport(lastRogueCamera($('rogueSea')))};
         if(document.documentElement.dataset.mobileUi==='true')
-          window.dispatchEvent(new CustomEvent('lastsignal:mobile-frame',{detail:{game:'rogue',mode:state.mode,mapOpen,active:!paused,context:rogueContextActions(state),captain:{id:state.captain,code:'KeyG',...hud.skill},minimap}}));
+          window.dispatchEvent(new CustomEvent('lastsignal:mobile-frame',{detail:{game:'rogue',mode:state.mode,mapOpen,active:!paused,context:rogueContextActions(state),rigAction:hud.rigAction,captain:{id:state.captain,code:'KeyG',...hud.skill},minimap}}));
         else if(!paused)drawNavigationMap($('rogueMinimap'),minimap);
       }
     }
