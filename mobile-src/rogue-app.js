@@ -18,6 +18,7 @@ import {waterMotion,releaseShipAssist} from './ship-motion.js';
 import {rogueHudModel,rogueHudMarkup,rogueDetailsMarkup,rogueHudText} from './rogue-hud.js';
 import {impactSequence,recentImpact} from './rogue-impact.js';
 import {rigActionSequence,rigActionCue,clearRigAction} from './rig-feedback.js';
+import {sluiceImpactSequence,sluiceImpactCue} from './sluice-counterplay.js';
 import {rogueContextActions,rogueMinimap} from './rogue-context.js';
 const esc=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function hasRogueSave(){try{return !!restoreRun(localStorage.getItem(SAVE_KEY));}catch{return false;}}
@@ -393,7 +394,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
       if(!paused){
         const before=state.combat?{...state.combat}:null;
         const impactBefore=state.boss.crane?.impactAt??-1;
-        const gateBefore=state.boss.sluice?.hitAt??-1;
+        const gateBefore=sluiceImpactSequence(state);
         const signalBefore=state.boss.lighthouse?.sentAt??-1;
         const shellBefore=state.boss.lighthouse?.impactAt??-1;
         const rigBefore=rigActionSequence(state);
@@ -404,10 +405,8 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
         // hit history cannot produce a hurt sound; scrap theft is a metal cue.
         if(hit)onSound(hit.target==='scrap'?'anchor':'hurt');
         if((state.boss.crane?.impactAt??-1)>impactBefore&&!hit)onSound('anchor');
-        if((state.boss.sluice?.hitAt??-1)>gateBefore){
-          if(state.boss.sluice.lastImpact==='opened')onSound('lift');
-          else if(!hit)onSound('anchor');
-        }
+        const gateCue=sluiceImpactCue(state,gateBefore);
+        if(gateCue&&(gateCue==='circuit'||!hit))onSound(gateCue);
         if((state.boss.lighthouse?.impactAt??-1)>shellBefore&&!hit)onSound('anchor');
         if((state.boss.lighthouse?.sentAt??-1)>signalBefore)onSound('lift');
         const rigCue=rigActionCue(state,rigBefore);if(rigCue)onSound(rigCue);

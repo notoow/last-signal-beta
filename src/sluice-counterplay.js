@@ -10,6 +10,30 @@ export const usesSluice=s=>s.sluiceModel===SLUICE_MODEL&&s.depth===1&&!!s.boss.s
 export const newSluice=()=>({lane:1,locked:false,lastHit:-1,hitAt:-1,lastImpact:'none',impactSpeed:0});
 export const sluiceGate=i=>({x:SLUICE.gateX,y:SLUICE.laneYs[i]});
 export const sluiceCleat=i=>({x:2640,y:SLUICE.laneYs[i]});
+// Actual contacts only. A restored open gate never replays its breakthrough.
+const impacts=new WeakMap();
+export const sluiceImpactSequence=s=>impacts.get(s)?.id??0;
+function publishContact(s,lane,outcome,obstacles){
+  const b=s.boat,previous=impacts.get(s);
+  const contacts=obstacles.filter(r=>capsuleRect(b,r)).map(r=>({
+    x:Math.max(r.x,Math.min(r.x+r.w,b.x)),y:Math.max(r.y,Math.min(r.y+r.h,b.y))
+  }));
+  const contact=contacts.reduce((best,p)=>Math.hypot(p.x-b.x,p.y-b.y)<Math.hypot(best.x-b.x,best.y-b.y)?p:best);
+  const event=Object.freeze({id:(previous?.id??0)+1,time:s.time,depth:s.depth,lane,outcome,life:.9,
+    point:Object.freeze(sluiceGate(lane)),contactPoint:Object.freeze(contact),
+    speed:Math.hypot(b.vx,b.vy),normalSpeed:Math.max(0,b.vx)});
+  impacts.set(s,{id:event.id,boss:s.boss,event});
+}
+export function recentSluiceImpact(s){
+  const current=impacts.get(s),event=current?.event,age=event?s.time-event.time:Infinity;
+  return event&&current.boss===s.boss&&usesSluice(s)&&s.status==='playing'&&s.mode==='sailing'&&
+    event.depth===s.depth&&age>=0&&age<event.life?Object.freeze({...event,age}):null;
+}
+// Capture the sequence before tickRun, then dispatch at most once after it.
+export function sluiceImpactCue(s,previous){
+  const event=recentSluiceImpact(s);
+  return event&&event.id>previous?(event.outcome==='opened'?'circuit':'anchor'):null;
+}
 const target=s=>s.skill?.left>0&&s.skill.decoy?s.skill.decoy:s.boat;
 export function beginSluice(s){
   const a=s.boss.sluice;a.locked=false;trackSluice(s);
@@ -84,12 +108,14 @@ export function sluiceContact(s,old){
     if(open){
       s.boss.parts[i]=0;a.lastHit=i;a.hitAt=s.time;a.lastImpact='opened';a.impactSpeed=normalSpeed;
       s.boss.hook=-1;s.boss.tension=0;s.charge=0;
+      publishContact(s,i,'opened',obstacles);
       return {opened:true,lane:i,speed:normalSpeed,damage:8};
     }
     const speed=Math.hypot(b.vx,b.vy);
     if(speed>38&&b.inv<=0){
       a.lastHit=i;a.hitAt=s.time;a.impactSpeed=normalSpeed;
       a.lastImpact=pierHit||!centred?'pier':!sluiceExposed(s)||i!==a.lane?'closed':!aligned||!front?'angle':'slow';
+      publishContact(s,i,a.lastImpact,obstacles);
     }
     return {opened:false,lane:i,speed:normalSpeed,damage:speed>38?Math.max(12,(speed-25)*.15):0};
   }

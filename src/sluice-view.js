@@ -1,4 +1,4 @@
-import {SLUICE,sluiceGate,sluiceCleat,sluiceStatus} from './sluice-counterplay.js';
+import {SLUICE,sluiceGate,sluiceCleat,sluiceStatus,recentSluiceImpact} from './sluice-counterplay.js';
 const sprites=Object.fromEntries(['gate-closed','gate-exposed','gate-open','capstan','foam-1','foam-2'].map(id=>{
   const image=new Image();image.src='assets/art/sluice-'+id+'-v1.png';return [id,image];
 }));
@@ -8,8 +8,83 @@ function sprite(c,id,x,y,flip=false){
   c.save();c.translate(x,y);if(flip)c.scale(-1,1);
   c.drawImage(img,-img.naturalWidth*scale/2,-img.naturalHeight*scale/2,img.naturalWidth*scale,img.naturalHeight*scale);c.restore();
 }
-export function drawSluice(c,s,{label,reduced=false,language='ko'}={}){
+function fixedOpenGate(c,p){
+  const img=sprites['gate-exposed'],k=220/676;
+  if(!ready('gate-exposed'))return false;
+  c.save();c.translate(p.x,p.y);
+  for(const [sy,sh]of [[0,235],[457,235]])crop(c,img,[0,sy,272,sh],[-136*k,(sy-346)*k,272*k,sh*k]);
+  c.restore();return true;
+}
+const smooth=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);};
+// Pure presentation of an actual event; the authoritative gate is already open.
+export function sluiceImpactMotion(e,{opened=false,reduced=false,overview=false,scale=1}={}){
+  if(!e||overview||!Number.isFinite(e.age)||e.age<0||e.age>=Math.min(e.life||.72,.72))return null;
+  const success=e.outcome==='opened';
+  if(success&&!opened)return null;
+  const age=e.age,pixel=1/Math.max(.6,Number.isFinite(scale)?scale:1);
+  if(reduced)return age<.24?{id:e.id,outcome:e.outcome,age,static:true,success,pixel,contact:e.contactPoint||e.point,alpha:.55}:null;
+  if(!success)return age<.3?{id:e.id,outcome:e.outcome,age,success:false,pixel,contact:e.contactPoint||e.point,alpha:.7*(1-age/.3),radius:3+8*smooth(age/.3)}:null;
+  // The middle passage starts clearing immediately, then the two leaves settle
+  // inside the existing footprint. No timer/physics/controls wait for this.
+  const retract=40*smooth(age/.38)+2*Math.sin(Math.max(0,age-.38)/.16*Math.PI)*Math.max(0,1-Math.max(0,age-.38)/.16);
+  return {id:e.id,outcome:e.outcome,age,success:true,pixel,contact:e.contactPoint||e.point,
+    retract:age>=.54?40:retract,leafAlpha:1-smooth((age-.4)/.18),
+    waterAlpha:age<.34?.46*Math.sin(Math.PI*Math.min(1,age/.34)):0,waterTravel:48*smooth(age/.34)};
+}
+function fallbackGate(c,p,opened,exposed){
+  c.save();c.translate(p.x,p.y);c.fillStyle='#283a3b';c.strokeStyle='#b39a62';c.lineWidth=2;
+  for(const y of [-108,36]){c.fillRect(-34,y,68,72);c.strokeRect(-34,y,68,72);}
+  if(!opened){c.fillStyle=exposed?'#b98936':'#374748';c.fillRect(-22,-36,44,72);c.strokeRect(-22,-36,44,72);}
+  c.restore();
+}
+function ready(id){const img=sprites[id];return img?.complete&&img.naturalWidth>0;}
+function crop(c,img,src,dest){c.drawImage(img,...src,...dest);}
+function localCueClip(c,frame){
+  if(!frame?.scale)return;
+  const {scale,ox,oy,width,height}=frame,outer=[-ox/scale,-oy/scale,width/scale,height/scale];
+  c.beginPath();c.rect(...outer);c.clip();
+  for(const b of frame.occupied||[]){
+    c.beginPath();c.rect(...outer);c.rect((b.x-ox-4)/scale,(b.y-oy-4)/scale,(b.w+8)/scale,(b.h+8)/scale);c.clip('evenodd');
+  }
+}
+function contactCue(c,p,m,frame){
+  c.save();localCueClip(c,frame);
+  const q=m.contact&&Number.isFinite(m.contact.x)&&Number.isFinite(m.contact.y)?m.contact:{x:p.x-25,y:p.y};
+  const pixel=m.pixel;c.strokeStyle=m.success?'#d7e4cf':'#d3ad71';c.lineWidth=1.5*pixel;
+  c.globalAlpha=m.alpha??.55;
+  if(m.static){c.beginPath();c.moveTo(q.x-4*pixel,q.y-7*pixel);c.lineTo(q.x-7*pixel,q.y);c.lineTo(q.x-4*pixel,q.y+7*pixel);c.stroke();}
+  else if(!m.success){
+    const r=m.radius*pixel;
+    c.beginPath();for(const a of [-2.5,Math.PI,2.5]){c.moveTo(q.x+Math.cos(a)*r*.45,q.y+Math.sin(a)*r*.45);c.lineTo(q.x+Math.cos(a)*r,q.y+Math.sin(a)*r);}c.stroke();
+  }else if(m.waterAlpha>0){
+    c.globalAlpha=m.waterAlpha;c.strokeStyle='#c5dbd1';c.lineWidth=2*pixel;
+    for(const [i,y]of [-22,-9,12,24].entries()){
+      const x=p.x+8+m.waterTravel*(.65+i*.1);c.beginPath();c.moveTo(x-13,y+p.y);c.quadraticCurveTo(x,y+p.y+(i%2?3:-3),x+10,y+p.y);c.stroke();
+    }
+  }
+  c.restore();
+}
+export function drawSluiceGate(c,p,{opened=false,exposed=false,motion=null,frame=null}={}){
+  const id=opened?'gate-open':exposed?'gate-exposed':'gate-closed';
+  if(motion?.success&&!motion.static&&motion.leafAlpha>0&&ready('gate-exposed')){
+    // Preserve original fixed-frame pixels in every state. Only the middle
+    // 72-world-unit barrier is split and retracted behind the anchored frame.
+    const img=sprites['gate-exposed'],k=220/676;
+    c.save();localCueClip(c,frame);c.translate(p.x,p.y);c.beginPath();c.rect(-136*k,-111*k,272*k,222*k);c.clip();c.globalAlpha=motion.leafAlpha;
+    for(const [sy,sh,dy]of [[235,111,-motion.retract],[346,111,motion.retract]]){
+      crop(c,img,[0,sy,272,sh],[-136*k,(sy-346)*k+dy,272*k,sh*k]);
+    }
+    c.restore();
+  }
+  // The anchored housing occludes the retracting leaves, not vice versa.
+  if(opened&&fixedOpenGate(c,p)){/* final open state uses the same anchored frame */}
+  else if(ready(id))sprite(c,id,p.x,p.y);else fallbackGate(c,p,opened,exposed);
+  if(motion)contactCue(c,p,motion,frame);
+}
+
+export function drawSluice(c,s,{label,reduced=false,language='ko',overview=false,frame=null}={}){
   const b=s.boss,a=sluiceStatus(s),en=language==='en';
+  const impact=recentSluiceImpact(s);
   if(b.active&&!b.cleared&&['warn','attack'].includes(b.phase)){
     const y=SLUICE.laneYs[a.lane],warn=b.phase==='warn',reverse=a.backwash;
     const color=reverse?'#d78e6b':warn?'#d9c286':'#aedaca';
@@ -44,7 +119,8 @@ export function drawSluice(c,s,{label,reduced=false,language='ko'}={}){
   }
   for(let i=0;i<3;i++){
     const p=sluiceGate(i),opened=b.parts[i]<=0,exposed=a.exposed&&i===a.lane;
-    sprite(c,opened?'gate-open':exposed?'gate-exposed':'gate-closed',p.x,p.y);
+    const motion=impact?.lane===i?sluiceImpactMotion(impact,{opened,reduced,overview,scale:frame?.scale}):null;
+    drawSluiceGate(c,p,{opened,exposed,motion,frame});
     label(c,`${String(i+1).padStart(2,'0')} · ${opened?(en?'OPEN':'열림'):exposed?(en?'HIT':'충돌'):en?'LOCKED':'잠김'}`,
       p.x,p.y-124,opened?'#afd4b4':exposed?'#f3cf81':'#a2b4af',13);
     if(exposed){

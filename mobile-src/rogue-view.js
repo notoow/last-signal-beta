@@ -409,7 +409,7 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   const dredger=usesDredger(s);
   const sluice=usesSluice(s);
   const lighthouse=usesLighthouse(s);
-  if(sluice)drawSluice(c,s,{label,reduced,language});
+  if(sluice)drawSluice(c,s,{label,reduced,language,overview:mapOpen||chartPins,frame});
   const connectionMarker=lighthouse?drawLighthouse(c,s,{label,reduced,language,task}):null;
   if(dredger&&boss.active&&!boss.cleared)craneWarning(c,s);
   if(!dredger&&!sluice&&!lighthouse&&boss.active&&!boss.cleared&&(boss.phase==='warn'||boss.phase==='attack')){
