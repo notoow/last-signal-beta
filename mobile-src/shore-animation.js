@@ -3,6 +3,7 @@ import {project,HARBOR_PROJECTION,IDENTITY_PROJECTION} from './world-projection.
 import {FAUNA,fauna as faunaSpec} from './shore-encounters.js';
 import {visibleAt} from './rogue-vision.js';
 import {crewWalkCycle,crewPose,CREW_CYCLE} from './shore-pose.js';
+import {drawCrewRig} from './shore-rig.js';
 export {crewPose} from './shore-pose.js';
 const load=file=>{const i=new Image();i.src='assets/art/'+file;return i;};
 const fauna=load('shore-fauna-v1.png');
@@ -20,6 +21,7 @@ function crewSprite(c,s,p,reduced,unit=1){
   const motion=crewWalkCycle({angle:p.angle,stride:fight.stride,moving:fight.moving,hit:fight.hit,action:fight.action,searching:s.work>0},walkCycles.get(s.person));
   if(s.person)walkCycles.set(s.person,motion);
   const {row,col,flip}=crewPose(p.angle,fight.moving,motion.phase,fight.hit,fight.action,s.work>0,motion.facing);
+  if(drawCrewRig(c,s,p,reduced,unit,row,flip))return;
   const stepLift=!reduced&&motion.walking?Math.sin(motion.phase/(CREW_CYCLE/2)*Math.PI)**2*1.5*unit:0;
   const anchors=crewAnchors[s.captain],ys=[0,440,820,1254],xs=[0,320,632,944,1254],x=xs[col],y=ys[row],w=xs[col+1]-x,h=ys[row+1]-y;
   const idle=!fight.moving&&!fight.action&&!fight.hit&&!s.work;
