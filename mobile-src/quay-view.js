@@ -47,9 +47,18 @@ function visibleTiles(s,f){
       if(tileAt(s.map,x,y))tiles.push({x:x*TILE,y:y*TILE,mask:shoreMask(s.map,x,y),tx:x,ty:y});
   return tiles;
 }
+// visibleTiles creates a fresh array each frame. Share its projected clip among
+// buildings within that frame; the weak key cannot retain old camera frames.
+const landClips=new WeakMap();
 function clipLand(c,f,tiles){
-  c.beginPath();for(const r of tiles){const p=[r,{x:r.x+TILE,y:r.y},{x:r.x+TILE,y:r.y+TILE},{x:r.x,y:r.y+TILE}].map(q=>project(f,q));
-    p.forEach((q,i)=>i?c.lineTo(q.x,q.y):c.moveTo(q.x,q.y));c.closePath();}c.clip();
+  let path=landClips.get(tiles);
+  if(!path){
+    path=new Path2D();
+    for(const r of tiles){const p=[r,{x:r.x+TILE,y:r.y},{x:r.x+TILE,y:r.y+TILE},{x:r.x,y:r.y+TILE}].map(q=>project(f,q));
+      p.forEach((q,i)=>i?path.lineTo(q.x,q.y):path.moveTo(q.x,q.y));path.closePath();}
+    landClips.set(tiles,path);
+  }
+  c.clip(path);
 }
 function buildingLights(b){
   // Lamp floor points measured on the original 1536px upright art. Its front
@@ -163,6 +172,18 @@ function behind(f,p,box){
     front=Math.max(front,Math.abs(a.x-b.x)<1e-6?Math.max(a.y,b.y):a.y+(b.y-a.y)*(foot.x-a.x)/(b.x-a.x));}
   return foot.y<front;
 }
+const architectureReflections=new WeakMap();
+function architectureReflection(image){
+  let canvas=architectureReflections.get(image);
+  if(canvas)return canvas;
+  canvas=document.createElement('canvas');canvas.width=1540;canvas.height=1024;
+  const c=canvas.getContext('2d');
+  for(let row=0;row<32;row++){
+    const sy=row*32;c.globalAlpha=.035+.04*(1+Math.sin(row*2.7))/2;
+    c.drawImage(image,0,sy,1536,22,2+Math.sin(row*1.7)*2,sy,1536,22);
+  }
+  architectureReflections.set(image,canvas);return canvas;
+}
 function scenery(c,s,f,tiles){
   const objects=[],unit=f.pixelsPerMetre;
   const boxes=[...s.map.islands.flatMap(shoreBuildings),...s.map.props];
@@ -184,10 +205,7 @@ function scenery(c,s,f,tiles){
     // Reflected architecture shares its real foundation, not a detached decal.
     c.save();const k=.24,slope=f.projection.yx;
     c.transform(scale,slope*(1+k)*scale,0,-k*scale,p.x-704*scale,p.y+(k*858-slope*(1+k)*704)*scale);
-    for(let row=0;row<32;row++){
-      const sy=row*32;c.globalAlpha=.035+.04*(1+Math.sin(row*2.7))/2;
-      c.drawImage(im,0,sy,1536,22,Math.sin(row*1.7)*2,sy,1536,22);
-    }c.restore();
+    c.drawImage(architectureReflection(im),-2,0);c.restore();
     for(const light of buildingLights(b)){
       const q=project(f,{x:light.x,y:light.y+.35*M}),r=light.reflection,w=r.width*unit,h=r.height*unit;
       c.globalAlpha=r.alpha;c.drawImage(art.gold,q.x-w*.5,q.y-h*.08,w,h);
