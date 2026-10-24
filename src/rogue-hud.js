@@ -14,7 +14,8 @@ import {usesLighthouse,lighthouseStatus} from './lighthouse-counterplay.js';
 import {rescueStatus,rescueBerth} from './shore-rescue.js';
 import {visibleAt} from './rogue-vision.js';
 import {recentImpact,gateImpactText} from './rogue-impact.js';
-import {rigActionPresentation} from './rig-feedback-ui.js';
+import {rigActionPresentation,rigControlPresentation} from './rig-feedback-ui.js';
+import {rogueSpecialAction} from './rogue-context.js';
 import {daylight,campStatus} from './voyage-daylight.js';
 import {gullRecovery} from './shore-encounters.js';
 
@@ -586,6 +587,10 @@ export function rogueHudModel(s,language='ko'){
   }else if(context.defense)model.context.push(context.defense);
   model.impact=impactPresentation(recentImpact(s),language);
   model.rigAction=rigActionPresentation(s,language);
+  model.rigControl=rigControlPresentation(s,language);
+  const special=rogueSpecialAction(s);
+  model.rigHint=special?{code:'KeyB',icon:s.build==='bilge'?'water':'winch',text:en?special.labelEn:special.labelKo}:
+    sailing&&s.status==='playing'&&!s.pendingGear&&!s.pendingCache&&!s.salvage?.pending&&s.build==='standard'?{code:'Shift',icon:'boost',text:en?'Boost':'부스터'}:null;
   if(model.impact){
     const affected=model.metrics.find(m=>m.id===model.impact.metric);
     if(affected)affected.impact=true;
@@ -605,12 +610,15 @@ export function rogueHudModel(s,language='ko'){
   return model;
 }
 export function rogueHudMarkup(model){
+  const hint=model.rigHint,receipt=model.rigControl;
+  const rigIcon={water:'M12 2S5 10 5 15a7 7 0 0 0 14 0c0-5-7-13-7-13Z',winch:'M5 4h14v16H5zM8 7h8M8 11h8M8 15h8M2 12h3m14 0h3',boost:'m14 2-9 12h6l-1 8 9-12h-6l1-8Z'};
+  const rigHint=hint?`<span class="rogue-rig-control" data-rig-control="${hint.code}"${receipt?` data-rig-control-id="${receipt.id}"`:''}><kbd>${hint.code==='KeyB'?'B':'Shift'}</kbd><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${rigIcon[hint.icon]}"/></svg><span>${escape(receipt?.shortText||hint.text)}</span></span>`:'';
   const dockChecks=model.docking?`<span class="rogue-dock-checks" data-dock-kind="${model.docking.kind}" data-dock-optional="${!!model.docking.optional}" aria-label="${escape(model.docking.title)}">${model.docking.checks.map(c=>`<span data-dock-check="${c.id}" data-ok="${c.ok}" data-active="${c.active}"><i aria-hidden="true">${c.ok?'✓':'○'}</i> ${escape(c.label)}<span class="rogue-sr-only"> · ${model.language==='en'?(c.ok?'ready':'not ready'):(c.ok?'충족':'미충족')}</span></span>`).join('')}</span>`:'';
   return {
     mission:`<small>${escape(model.region)}${model.sky?` <span class="rogue-clock" data-period="${model.sky.period}" aria-label="${model.language==='en'?{day:'Day',dusk:'Dusk',night:'Night',dawn:'Dawn'}[model.sky.period]:{day:'낮',dusk:'저녁',night:'밤',dawn:'새벽'}[model.sky.period]} ${model.sky.clock}">${model.sky.night?'☾':'☀'} ${model.sky.clock}</span>`:''}</small><strong>${escape(model.mission)}</strong>${model.plan?`<div class="rogue-plan-summary">${escape(model.plan)}</div>`:''}${model.boss?`<div class="rogue-boss-state">${escape(model.boss)}</div>`:''}`,
     readings:model.metrics.map(m=>`<span data-rogue-metric="${m.id}"${m.impact?' data-impact="true"':''}${m.gauge?' class="rogue-instrument"':''}><span>${escape(m.label)}</span><b>${escape(m.value)}</b>${m.max!==undefined?`<span class="rogue-maximum">/${m.max}</span>`:''}${instrument(m.gauge)}</span>`).join(''),
     conditions:(model.impact?`<span class="rogue-impact" data-impact-id="${model.impact.id}" data-impact-target="${model.impact.target}" data-impact-source="${model.impact.source}"><span>${escape(model.impact.cause)}</span><strong>${escape(model.impact.loss)}</strong></span>`:'<span class="rogue-impact" aria-hidden="true"></span>')+model.conditions.map(c=>`<span data-rogue-condition="${c.id}" data-tone="${c.tone}"${c.gauge?' class="rogue-instrument"':''}>${c.emphasis?`<strong>${escape(c.text)}</strong>`:escape(c.text)}${instrument(c.gauge)}</span>`).join(''),
-    controls:`${model.docking?.optional?'':dockChecks}<span data-rogue-action="primary" data-tone="${model.actionTone||'normal'}"${model.rigAction?` data-rig-action-id="${model.rigAction.id}"`: ""}>${escape(model.rigAction?.text||model.action)}</span>${model.context.map(c=>`<span data-rogue-context="${c.id}" data-tone="${c.tone}">${escape(c.text)}</span>${c.id==='docking'?dockChecks:''}`).join('')}${model.work?`<label class="rogue-work">${escape(model.work.label)}<progress max="${model.work.max}" value="${model.work.value}" aria-label="${escape(model.work.label)}"></progress></label>`:''}`,
+    controls:`${model.docking?.optional?'':dockChecks}<span data-rogue-action="primary" data-tone="${model.actionTone||'normal'}"${model.rigAction?` data-rig-action-id="${model.rigAction.id}"`: ""}>${escape(model.rigAction?.text||model.action)}</span>${model.context.map(c=>`<span data-rogue-context="${c.id}" data-tone="${c.tone}">${escape(c.text)}</span>${c.id==='docking'?dockChecks:''}`).join('')}${model.work?`<label class="rogue-work">${escape(model.work.label)}<progress max="${model.work.max}" value="${model.work.value}" aria-label="${escape(model.work.label)}"></progress></label>`:''}${rigHint}`,
     skill:`<kbd>G</kbd><span><b>${escape(model.skill.name)}</b><small>${escape(model.skill.reason)}${model.skill.active?' · '+model.skill.remaining.toFixed(1)+(model.language==='en'?'s':'초'):''}</small>${model.skill.ready?`<small>${model.language==='en'?'Boost':'부스터'} ${model.skill.boost} · ${model.language==='en'?'fuel':'연료'} ${model.skill.fuel}</small>`:''}</span>${!model.skill.compact?`<progress aria-label="${model.language==='ko'?'기술 재사용 준비':'Skill cooldown'}" max="${model.skill.cooldown}" value="${model.skill.cooldown-model.skill.remainingCooldown}"></progress>`:''}`
   };
 }

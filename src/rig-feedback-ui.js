@@ -12,6 +12,9 @@ export function rigActionPresentation(s,language='ko'){
   const b=s.boss,sluice=usesSluice(s)?sluiceStatus(s):null,light=usesLighthouse(s)?lighthouseStatus(s):null;
   if(b.active&&!b.cleared&&(dredgerThreat(s)||b.phase==='attack'||
     sluice?.phase==='warn'&&sluice.locked||light?.phase==='warn'&&light.visible))return null;
+  return formatRigAction(e,language);
+}
+function formatRigAction(e,language){
   const en=language==='en',result={id:e.id,kind:e.kind,age:e.age,life:e.life,part:null};
   if(e.kind==='winch-pull'){
     const name=dredgerPartName(e.index,language);
@@ -30,4 +33,26 @@ export function rigActionPresentation(s,language='ko'){
     'valve-close':en?'Valve closed · no jet':'밸브 닫힘 · 분사 없음'
   }[e.kind];
   return copy?{...result,text:copy,shortText:e.kind==='bilge-jet'?(en?`Water jet · −${amount(e.water)}%`:`배수 분사 · −${amount(e.water)}%`):copy}:null;
+}
+
+// A short response at the control can coexist with the incoming-threat warning.
+// It describes the resolved machinery action, never a successful dodge. Its age
+// follows the original unsaved event, so repeated reads cannot queue or replay it.
+export function rigControlPresentation(s,language='ko'){
+  if(!s||s.pendingGear||s.pendingCache||s.salvage?.pending)return null;
+  const e=recentRigAction(s);if(!e)return null;
+  const life=Math.min(e.life,.8);if(e.age>=life)return null;
+  const en=language==='en';let text,icon='winch',code='KeyB';
+  switch(e.kind){
+    case 'bilge-jet':
+      text=en?`Drained −${amount(e.water)}%`:`배수 −${amount(e.water)}%`;icon='water';break;
+    case 'winch-pull':
+      if(!(e.amount>0))return null;
+      text=e.remaining===0?(en?'Drive pulled free':'구동부 파괴'):(en?'Pulled −':'당김 −')+amount(e.amount);break;
+    case 'winch-launch':text=en?'Stored launch':'축력 발진';break;
+    case 'line-launch':text=en?'Line launch':'줄 해제 발진';break;
+    case 'brake-launch':text=en?'Pressure launch':'축압 분사';icon='boost';code='Shift';break;
+    default:return null;
+  }
+  return {id:e.id,kind:e.kind,age:e.age,life,code,icon,text,shortText:text};
 }

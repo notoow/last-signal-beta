@@ -453,7 +453,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
         lastMobileFrame=now;
         const minimap={...rogueMinimap(state),viewport:navigationViewport(lastRogueCamera($('rogueSea')))};
         if(document.documentElement.dataset.mobileUi==='true')
-          window.dispatchEvent(new CustomEvent('lastsignal:mobile-frame',{detail:{game:'rogue',mode:state.mode,mapOpen,active:!paused,context:rogueContextActions(state),rigAction:hud.rigAction,captain:{id:state.captain,code:'KeyG',...hud.skill},minimap}}));
+          window.dispatchEvent(new CustomEvent('lastsignal:mobile-frame',{detail:{game:'rogue',mode:state.mode,mapOpen,active:!paused,context:rogueContextActions(state),rigAction:hud.rigAction,rigControl:hud.rigControl,captain:{id:state.captain,code:'KeyG',...hud.skill},minimap}}));
         else if(!paused)drawNavigationMap($('rogueMinimap'),minimap);
       }
     }

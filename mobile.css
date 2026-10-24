@@ -443,6 +443,10 @@ html[lang=en] #mobileActions .mobile-context-action[data-hold=true] span::after{
 #mobileActions .mobile-special[data-phase=jet],#mobileActions .mobile-special[data-phase=pull],#mobileActions .mobile-special[data-phase=burst],#mobileActions .mobile-special[data-phase=launch]{border-color:#f0d094;background:#c99a4328}
 #mobileBuildStatus{position:fixed;height:16px;text-align:center;font-size:12px;line-height:16px;color:#e1c18c;pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #mobileBuildStatus.rig-receipt{color:#a4e0df}
+#mobileBuildStatus.rig-control-receipt{display:flex;align-items:center;gap:5px;text-align:left;padding-left:var(--rig-receipt-inset,0px);box-sizing:border-box}
+#mobileBuildStatus.rig-control-receipt svg{width:14px;height:14px;flex:none}
+/* Static inset ink: no pulse, scaling, ring outside the hitbox or input layer. */
+#mobileControls #mobileActions>button[data-rig-control-id]{box-shadow:inset 0 0 0 2px #a4e0df;border-color:#a4e0df}
 /* More opens a separate scrolling tray; the held main controls never reflow. */
 #mobileTools{display:none;position:fixed;right:max(10px,env(safe-area-inset-right));bottom:max(136px,calc(env(safe-area-inset-bottom) + 128px));width:292px;padding:8px;grid-template-columns:repeat(4,64px);gap:6px;max-height:calc(var(--mobile-height,100dvh) - 144px);overflow:auto;overscroll-behavior:contain;background:#10212cf2;border:1px solid #667e8a;border-radius:12px;box-shadow:0 4px 18px #0008}
 html[data-mobile-move-side=right] #mobileTools{left:max(10px,env(safe-area-inset-left));right:auto}

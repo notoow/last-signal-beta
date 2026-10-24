@@ -827,6 +827,28 @@ function createMobileHud({ onMap = () => {
   root.append(mini);
   const rescueMarker = mini.querySelector("#mobileRescueMarker");
   let lastMap = null;
+  const localKinds = /* @__PURE__ */ new Set(["bilge-jet", "winch-pull", "winch-launch", "line-launch", "brake-launch"]);
+  const receivedFrames = /* @__PURE__ */ new WeakMap();
+  window.addEventListener("lastsignal:mobile-frame", (event) => {
+    if (event.detail?.game === "rogue") receivedFrames.set(event.detail, performance.now());
+  });
+  let controlToken = null, controlDeadline = 0, controlBlocked = false, controlTimer = 0, lastPresentation = null, frameAt = 0, statusMarkup = "";
+  function clearControl() {
+    clearTimeout(controlTimer);
+    for (const el of document.querySelectorAll("#mobileActions [data-rig-control-id]")) delete el.dataset.rigControlId;
+    const status = nodes.mobileBuildStatus;
+    if (status.dataset.rigControlId) {
+      status.replaceChildren();
+      statusMarkup = "";
+      status.title = "";
+      delete status.dataset.rigControlId;
+      status.classList.remove("rig-receipt", "rig-control-receipt");
+    }
+  }
+  window.addEventListener("lastsignal:input-reset", () => {
+    controlBlocked = true;
+    clearControl();
+  });
   const reward = document.createElement("div");
   reward.id = "mobileReward";
   reward.hidden = true;
@@ -865,8 +887,31 @@ function createMobileHud({ onMap = () => {
     drawNavigationMap(canvas, m);
   }
   return function refresh2(active, rogue, presentation = null) {
+    const now = performance.now(), expanded = document.getElementById("mobileControls")?.classList.contains("expanded");
+    if (presentation !== lastPresentation) {
+      lastPresentation = presentation;
+      frameAt = receivedFrames.get(presentation) ?? now;
+    }
+    const control = presentation?.rigControl;
+    if (control) {
+      const token = control.id + ":" + control.kind + ":" + control.code, deadline = frameAt + Math.max(0, Math.min(0.8, control.life) - control.age) * 1e3;
+      if (token !== controlToken) {
+        controlToken = token;
+        controlDeadline = deadline;
+        controlBlocked = false;
+      } else controlDeadline = Math.min(controlDeadline, deadline);
+      if (!active || expanded || presentation.active === false || presentation.mapOpen || rogue?.dataset.mobileMode !== "sailing") controlBlocked = true;
+    } else {
+      controlToken = null;
+      controlDeadline = 0;
+      controlBlocked = false;
+    }
+    clearTimeout(controlTimer);
     root.hidden = !active;
-    if (!active) return;
+    if (!active) {
+      clearControl();
+      return;
+    }
     reward.hidden = performance.now() > rewardUntil;
     root.classList.toggle("has-reward", !reward.hidden);
     mini.hidden = !presentation?.minimap;
@@ -876,7 +921,6 @@ function createMobileHud({ onMap = () => {
     else rescueMarker.hidden = true;
     const en = document.documentElement.lang === "en", source = rogue ? document.getElementById("rogueMission") : document.querySelector("#hud .mission-objective");
     const special = presentation?.context?.special, actions2 = document.getElementById("mobileActions");
-    const expanded = document.getElementById("mobileControls")?.classList.contains("expanded");
     const sky = source?.querySelector(".rogue-clock"), clock = mini.querySelector("#mobileClock");
     clock.hidden = !sky;
     clock.textContent = text(sky);
@@ -914,32 +958,54 @@ function createMobileHud({ onMap = () => {
     const status = nodes.mobileBuildStatus, sailing = rogue && rogue.dataset.mobileMode === "sailing";
     status.hidden = !sailing;
     if (sailing && actions2) {
+      const local = control && !controlBlocked && now < controlDeadline ? control : null;
+      const button = local ? actions2.querySelector(local.code === "Shift" ? ':scope>[data-code="ShiftLeft"]' : ':scope>.mobile-special[data-code="KeyB"]') : null;
+      for (const el of actions2.querySelectorAll("[data-rig-control-id]")) if (el !== button) delete el.dataset.rigControlId;
+      if (button) {
+        if (button.dataset.rigControlId !== String(local.id)) button.dataset.rigControlId = local.id;
+        controlTimer = setTimeout(clearControl, Math.max(0, controlDeadline - performance.now()));
+      }
       const r = actions2.getBoundingClientRect();
       status.style.left = r.left + "px";
       status.style.width = r.width + "px";
       status.style.bottom = innerHeight - r.top + 5 + "px";
+      const inset = button ? Math.max(0, button.getBoundingClientRect().left - r.left) : 0;
+      status.style.setProperty("--rig-receipt-inset", inset + "px");
       const box = status.getBoundingClientRect();
-      const unsafe = [nodes.mobileNotice, nodes.mobileVitals, nodes.mobileResources, nodes.mobileObjective, nodes.mobileContext, mini, document.getElementById("rogueSkill"), document.getElementById("mobileTools")].some((el) => {
-        if (!el) return false;
-        const b = el.getBoundingClientRect();
-        return b.width && b.height && box.left < b.right && box.right > b.left && box.top < b.bottom && box.bottom > b.top;
+      const unsafe = [nodes.mobileNotice, nodes.mobileVitals, nodes.mobileResources, nodes.mobileObjective, nodes.mobileContext, mini, document.getElementById("rogueSkill"), document.getElementById("mobileTools"), document.getElementById("mobileTransit"), document.getElementById("rogueQuayAssets"), ...actions2.querySelectorAll(".mobile-captain-skill,.mobile-captain-timer")].some((el) => {
+        if (!el || getComputedStyle(el).visibility === "hidden") return false;
+        const b = el.getBoundingClientRect(), pad2 = el.classList.contains("mobile-captain-skill") ? 4 : 0;
+        return b.width && b.height && box.left < b.right + pad2 && box.right > b.left - pad2 && box.top < b.bottom + pad2 && box.bottom > b.top - pad2;
       });
-      const receipt = !expanded && !unsafe && presentation?.active !== false ? presentation?.rigAction : null;
-      let copy = receipt?.text || (!expanded && special && (!special.enabled || special.cooldown > 0) ? en ? special.detailEn : special.detailKo : "");
+      const clearRow = !expanded && !unsafe && presentation?.active !== false;
+      const receipt = clearRow ? button ? local : !localKinds.has(presentation?.rigAction?.kind) ? presentation?.rigAction : null : null;
+      let copy = receipt?.text || (clearRow && special && (!special.enabled || special.cooldown > 0) ? en ? special.detailEn : special.detailKo : "");
+      const isLocal = !!receipt && receipt === local;
       if (receipt) {
         measure.font = getComputedStyle(status).font;
-        if (measure.measureText(copy).width > r.width) copy = receipt.shortText;
-        if (measure.measureText(copy).width > r.width) copy = "";
+        const width = r.width - (isLocal ? 20 + inset : 0);
+        if (measure.measureText(copy).width > width) copy = receipt.shortText;
+        if (measure.measureText(copy).width > width) copy = "";
       }
-      if (status.textContent !== copy) status.textContent = copy;
+      const html = isLocal && copy ? icon(local.icon) + `<span>${escape2(copy)}</span>` : escape2(copy);
+      if (statusMarkup !== html) {
+        status.innerHTML = html;
+        statusMarkup = html;
+      }
       status.title = copy;
       status.classList.toggle("rig-receipt", !!receipt && !!copy);
-      if (receipt && copy) status.dataset.rigActionId = receipt.id;
+      status.classList.toggle("rig-control-receipt", isLocal && !!copy);
+      if (isLocal && copy) {
+        if (status.dataset.rigControlId !== String(receipt.id)) status.dataset.rigControlId = receipt.id;
+      } else delete status.dataset.rigControlId;
+      if (receipt && copy && !isLocal) status.dataset.rigActionId = receipt.id;
       else delete status.dataset.rigActionId;
     } else {
+      clearControl();
       status.textContent = "";
+      statusMarkup = "";
       delete status.dataset.rigActionId;
-      status.classList.remove("rig-receipt");
+      status.classList.remove("rig-receipt", "rig-control-receipt");
     }
   };
 }
