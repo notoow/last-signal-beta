@@ -25,6 +25,8 @@ import {towBow,tugStern} from './rogue-tow.js';
 import {floatPose,drawWake} from './sea-surface.js';
 import {quaySprite} from './quay-details.js';
 import {usesDredger,CRANE,craneLockTime} from './dredger-counterplay.js';
+import {dredgerAttention} from './dredger-target.js';
+import {dredgerReadability} from './dredger-readability.js';
 import {usesSluice,SLUICE} from './sluice-counterplay.js';
 import {drawSluice} from './sluice-view.js';
 import {usesLighthouse} from './lighthouse-counterplay.js';
@@ -225,7 +227,7 @@ export function rogueCamera(canvas,s,mapOpen=false,options={},previous=null,dt=0
       ...(quayReady?{}:{projection:IDENTITY_PROJECTION,projectionId:'quay-map-fallback'})});
   }
   const target=s.person?objective(s).target:null;
-  const attention=target&&Math.hypot(target.x-s.person.x,target.y-s.person.y)<=260?target:null;
+  const attention=s.person?(target&&Math.hypot(target.x-s.person.x,target.y-s.person.y)<=260?target:null):dredgerAttention(s);
   return playCamera({width,height,world:s.map,focus:s.person||s.boat,partner:s.tow?.connected?s.tow:null,attention,ashore:!!s.person,options,overview:mapOpen,previous:previous?.projection?null:previous,dt,occupied});
 }
 const frames=new WeakMap();
@@ -234,7 +236,8 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   // The compact planning chart has accessible DOM pins; world-size action
   // captions would obscure entire quays at this scale.
   const label=chartPins?()=>{}:canvasLabel;
-  const task=objective(s),target=task.target;
+  const task=objective(s),driveView=dredgerReadability(s,language),driveTarget=driveView?.target;
+  const target=driveTarget?.point||(driveView?.threat&&!task.planSite&&!task.planBoss?null:task.target);
   const old=frames.get(canvas),previous=!reduced&&old?.map===s.map?old.frame:null;
   // Start only for a new-profile voyage, while still at sea. A slow/broken
   // illustration must never replace the controlled world with an empty screen.
@@ -332,10 +335,15 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
       workSprite(c,'gangway',(mount.x+part.x)/2,(mount.y+part.y)/2,Math.hypot(dx,dy)+28,25,Math.atan2(dy,dx));
       workSprite(c,'dock',part.x,part.y+7,48,37);
       dredgerSprite(c,hp<=0?'winch-destroyed':hp<30?'winch-damaged':'winch-intact',part.x,part.y);
-      if(boss.active&&!boss.cleared)label(c,language==='en'?(i===0?'Intake pump':'Crane drive'):(i===0?'흡입 펌프':'크레인 구동부'),part.x,part.y-38,hp<=0?'#9bada2':'#f1e6c4',13);
+      if(boss.active||boss.cleared){
+        const copy=driveView.parts[i],t=c.getTransform(),labelScale=Math.hypot(t.a,t.b)/Math.min(devicePixelRatio||1,2);
+        // Two screen-space baselines retain an 18px gap at every manual zoom.
+        label(c,copy.name,part.x,part.y-36/labelScale,copy.color,13);
+        label(c,copy.status,part.x,part.y-18/labelScale,copy.color,11);
+      }
     }else ring(c,part,11,hp<=0?'#6a7771':boss.phase==='recover'?'#e8ce7d':'#856862');
     c.fillStyle=hp<=0?'#6a7771':'#e0c589';c.fillRect(part.x-14,part.y+18,28*hp/30,3);
-    if(boss.phase==='recover'&&hp>0)label(c,'E',part.x,part.y-16,'#f6dda2',15);
+    if(!dredger&&boss.phase==='recover'&&hp>0)label(c,'E',part.x,part.y-16,'#f6dda2',15);
   });
   if(boss.hook>=0){
     const part=partPosition(s,boss.hook),locked=s.captain==='jeong'&&s.skill.left>0;
@@ -405,14 +413,14 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   if(impact)impactFrames.set(canvas,{impact,tag:impactTag(c,impact,frame,s,panel)});else impactFrames.delete(canvas);
   if(!mapOpen){
     const points=[];
-    if(target)points.push({p:target,text:connectionMarker?.text||(task.rescue?(language==='en'?'Escort / ladder':'정비공 / 사다리'):task.planSite?(language==='en'?'Planned quay':'선택한 부두'):task.planBoss?(language==='en'?'Outer approach':'바깥 해역 입구'):language==='en'?(s.person?'Search / return':'Target'):(s.person?'수색 / 귀환':'목표')),color:connectionMarker?.color||'#f6dda2'});
+    if(target)points.push({p:target,text:driveTarget?.name||connectionMarker?.text||(task.rescue?(language==='en'?'Escort / ladder':'정비공 / 사다리'):task.planSite?(language==='en'?'Planned quay':'선택한 부두'):task.planBoss?(language==='en'?'Outer approach':'바깥 해역 입구'):language==='en'?(s.person?'Search / return':'Target'):(s.person?'수색 / 귀환':'목표')),color:driveTarget?.color||connectionMarker?.color||'#f6dda2'});
     if(s.tow?.connected&&!s.person)points.push({p:s.tow,text:language==='en'?'Supply tow':'견인선',color:'#adc8c3'});
-    if(!sluice&&!lighthouse&&s.boss.active&&!s.boss.cleared)points.push({p:s.map.boss,text:boss.phase==='warn'?'보스 · 공격 예고':'보스',color:boss.phase==='warn'?'#f4ad7d':'#e4ca9b'});
+    if(!dredger&&!sluice&&!lighthouse&&s.boss.active&&!s.boss.cleared)points.push({p:s.map.boss,text:boss.phase==='warn'?'보스 · 공격 예고':'보스',color:boss.phase==='warn'?'#f4ad7d':'#e4ca9b'});
     for(const {p,text,color} of points){
       const mark=edgeMarker(frame,p);if(!mark)continue;
       c.save();c.translate(mark.x,mark.y);c.rotate(mark.angle);c.fillStyle=color;
       c.beginPath();c.moveTo(11,0);c.lineTo(-7,-6);c.lineTo(-7,6);c.closePath();c.fill();c.restore();
-      const caption=connectionMarker&&p===target?relayEdgeLabel(c,text,mark,frame):{x:Math.max(74,Math.min(width-74,mark.x)),y:mark.y-17};
+      const caption=(connectionMarker||driveTarget)&&p===target?relayEdgeLabel(c,text,mark,frame):{x:Math.max(74,Math.min(width-74,mark.x)),y:mark.y-17};
       label(c,text,caption.x,caption.y,color,12);
     }
   }

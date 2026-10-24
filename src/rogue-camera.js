@@ -61,7 +61,14 @@ export function playCamera({width,height,world,focus,partner=null,attention=null
   let scale=cameraScale(width,height,ashore,settings);
   const shoreBox=ashore&&attention?{left:Math.min(focus.x-24,attention.x-48),right:Math.max(focus.x+24,attention.x+48),
     top:Math.min(focus.y-65,attention.y-48),bottom:Math.max(focus.y+16,attention.y+40)}:null;
-  const preferred=shoreBox?{w:Math.max(320,(shoreBox.right-shoreBox.left)*scale+24),h:Math.max(220,(shoreBox.bottom-shoreBox.top)*scale+24)}:null;
+  const hull=bodyBounds(focus),worldBounds=attention?.bounds,pixels=attention?.screenBounds;
+  // World markers scale with the sea; their readable labels use fixed pixels.
+  const a=worldBounds?Object.fromEntries(['left','right','top','bottom'].map(edge=>[edge,Math.max(worldBounds[edge],(pixels?.[edge]||0)/scale)])):null;
+  const boatBox=!ashore&&!partner&&attention&&a?{
+    left:Math.min(focus.x-hull.x-12,attention.x-a.left),right:Math.max(focus.x+hull.x+12,attention.x+a.right),
+    top:Math.min(focus.y-hull.y-12,attention.y-a.top),bottom:Math.max(focus.y+hull.y+12,attention.y+a.bottom)}:null;
+  const interactionBox=shoreBox||boatBox;
+  const preferred=interactionBox?{w:Math.max(320,(interactionBox.right-interactionBox.left)*scale+24),h:Math.max(220,(interactionBox.bottom-interactionBox.top)*scale+24)}:null;
   const viewport=occupied?clearViewport(width,height,occupied,previous?.viewport,preferred):cameraViewport(width,height,kind);
   const mid={x:viewport.x+viewport.w/2,y:viewport.y+viewport.h/2};
   const lead={x:clamp((focus.vx||0)*.35,-60,60),y:clamp((focus.vy||0)*.35,-60,60)};
@@ -80,6 +87,16 @@ export function playCamera({width,height,world,focus,partner=null,attention=null
   if(shoreBox){
     if((shoreBox.right-shoreBox.left)*scale<=viewport.w-24&&(shoreBox.bottom-shoreBox.top)*scale<=viewport.h-24)
       target={x:(shoreBox.left+shoreBox.right)/2,y:(shoreBox.top+shoreBox.bottom)/2};
+  }
+  // A nearby drive or locked drop circle shares the view with the controlled
+  // hull at the player's exact scale. Pan only enough to reveal its envelope;
+  // do not recenter on the whole boss or zoom out when the pair cannot fit.
+  if(boatBox){
+    const hx=viewport.w/scale/2,hy=viewport.h/scale/2,m=12/scale;
+    if(boatBox.right-boatBox.left<=2*(hx-m)&&boatBox.bottom-boatBox.top<=2*(hy-m)){
+      target.x=clamp(target.x,boatBox.right-hx+m,boatBox.left+hx-m);
+      target.y=clamp(target.y,boatBox.bottom-hy+m,boatBox.top+hy-m);
+    }
   }
   if(overview){
     scale=Math.min((viewport.w-32)/world.width,(viewport.h-32)/world.height);
@@ -106,6 +123,9 @@ export function playCamera({width,height,world,focus,partner=null,attention=null
       target.x=clamp(target.x,shoreBox.right-half.x+margin,shoreBox.left+half.x-margin);
       target.y=clamp(target.y,shoreBox.bottom-half.y+margin,shoreBox.top+half.y-margin);
     }
+    // Unlike the first shore landing, changing drives must ease into the new
+    // framing. The named edge cue covers that brief transition; only the
+    // controlled hull gets an immediate safety clamp above.
     target.x=world.width<=half.x*2?world.width/2:clamp(target.x,half.x,world.width-half.x);
     target.y=world.height<=half.y*2?world.height/2:clamp(target.y,half.y,world.height-half.y);
   }
