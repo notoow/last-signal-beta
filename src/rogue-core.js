@@ -9,7 +9,7 @@ import {terrainTurnPose} from './ship-contact.js';
 import {dockStatus,dockHint,dockingAlignment} from './docking-readiness.js';
 import {DREDGER_MODEL,CRANE,usesDredger,newCrane,beginCrane,trackCrane,strikeCrane,craneHitsHull,hullHitsCircle,validCrane,craneWarningTime,recordDredgerBreak} from './dredger-counterplay.js';
 import {newSalvage,recoverSalvage,tickSalvage,clearSalvageCharge,catchWinch,dischargeWinch,dischargeBilge,validSalvage,SALVAGE_NAMES,RIG_MODEL,rigEffects,winchBurstReady} from './rogue-salvage.js';
-import {SLUICE_MODEL,SLUICE,usesSluice,newSluice,beginSluice,trackSluice,sluiceGate,sluiceCleat,applySluiceFlow,sluiceContact,sluiceStatus,validSluice} from './sluice-counterplay.js';
+import {SLUICE_MODEL,SLUICE,usesSluice,newSluice,beginSluice,trackSluice,sluiceGate,sluiceCleat,applySluiceFlow,sluiceBlocked,sluiceContact,sluiceStatus,validSluice} from './sluice-counterplay.js';
 import {LIGHTHOUSE_MODEL,LIGHTHOUSE,usesLighthouse,newLighthouse,relayPosition,relayApproach,lighthouseStatus,tickLighthouse,lighthouseBlocked,validLighthouse} from './lighthouse-counterplay.js';
 import {CACHE_MODEL,cacheOffer,validCache} from './rogue-cache.js';
 import {CREW_UPGRADES,crewEffects,validCrewUpgrades} from './crew-upgrades.js';
@@ -674,10 +674,18 @@ function step(s,input,dt){
   if(braced&&!waterMotion(s)){b.vx=0;b.vy=0;}
   if(dashing){b.vx=s.skill.vector.x*290;b.vy=s.skill.vector.y*290;}
   b.x+=b.vx*dt;b.y+=b.vy*dt;
+  // A rejected turn must not leave the hull embedded in a gate pier. Keep a
+  // clear translation at the previous heading, just as for ordinary seawalls.
+  if(sluiceBlocked(s,b)&&!sluiceBlocked(s,{...b,angle:old.angle})){
+    b.angle=old.angle;b.omega=0;
+  }
   const sluice=sluiceContact(s,old);
   if(sluice){
     const impact=speed(b);
-    Object.assign(b,{x:old.x,y:old.y,omega:0,vx:-Math.abs(b.vx)*(sluice.opened?.32:.18),vy:b.vy*.18});
+    // Preserve the old clear pose in full. An already-overlapping historical
+    // save may still rotate out; do not lock its invalid starting heading.
+    const angle=sluiceBlocked(s,old)?b.angle:old.angle;
+    Object.assign(b,{x:old.x,y:old.y,angle,omega:0,vx:-Math.abs(b.vx)*(sluice.opened?.32:.18),vy:b.vy*.18});
     if(sluice.damage){
       const contact=sluice.opened?'opened':s.boss.sluice.lastImpact;
       const reason={opened:'잠금판을 뚫었지만 선체 충격을 견디지 못했다',pier:'수문 기둥에 부딪혀 선체가 파손됐다',
