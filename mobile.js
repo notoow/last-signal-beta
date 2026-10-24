@@ -793,13 +793,17 @@ function specialButtonFace(button, action, en) {
   meter.setAttribute("aria-valuemin", "0");
   meter.setAttribute("aria-valuemax", String(m.max));
   meter.setAttribute("aria-valuenow", String(value));
+  const threshold = Number.isFinite(m.threshold), mark = meter.querySelector("em");
   meter.querySelector("i").style.width = value / m.max * 100 + "%";
-  meter.querySelector("em").style.left = m.threshold / m.max * 100 + "%";
+  mark.hidden = !threshold;
+  if (threshold) mark.style.left = m.threshold / m.max * 100 + "%";
+  else mark.style.removeProperty("left");
   const stored = Math.max(0, action.storedSeconds || 0), cooldown = Math.max(0, action.cooldown || 0);
-  button.querySelector(".mobile-build-time").textContent = stored > 0 ? "\u25F7 " + stored.toFixed(1) + (en ? "s" : "\uCD08") : cooldown > 0 ? "\u21BB " + cooldown.toFixed(1) + (en ? "s" : "\uCD08") : "\u2265 " + m.threshold;
+  button.querySelector(".mobile-build-time").textContent = stored > 0 ? "\u25F7 " + stored.toFixed(1) + (en ? "s" : "\uCD08") : cooldown > 0 ? "\u21BB " + cooldown.toFixed(1) + (en ? "s" : "\uCD08") : threshold ? "\u2265 " + m.threshold : en ? "No rig" : "\uBBF8\uC7A5\uCC29";
   const time = stored > 0 ? (en ? "Stored time " : "\uC800\uC7A5 \uC2DC\uAC04 ") + stored.toFixed(1) + (en ? " seconds" : "\uCD08") : cooldown > 0 ? (en ? "Cooldown " : "\uC7AC\uC0AC\uC6A9 ") + cooldown.toFixed(1) + (en ? " seconds" : "\uCD08") : "";
-  button.setAttribute("aria-label", [en ? action.labelEn : action.labelKo, (en ? m.labelEn : m.labelKo) + " " + Math.floor(value) + " / " + m.max, en ? action.detailEn : action.detailKo, time].filter(Boolean).join(" \xB7 "));
-  button.title = en ? action.detailEn : action.detailKo;
+  const detail = (en ? action.detailEn : action.detailKo).replace(/\bM (Chart|해도)/g, "$1");
+  button.setAttribute("aria-label", [en ? action.labelEn : action.labelKo, (en ? m.labelEn : m.labelKo) + " " + Math.floor(value) + " / " + m.max, detail, time].filter(Boolean).join(" \xB7 "));
+  button.title = detail;
   button.dataset.phase = action.phase;
 }
 var escape2 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);

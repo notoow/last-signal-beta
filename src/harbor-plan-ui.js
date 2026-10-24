@@ -1,6 +1,6 @@
 import {harborPlan} from './harbor-plan.js';
 import {maxFuel,maxHp} from './rogue-core.js';
-import {cacheGearName} from './rogue-cache-ui.js';
+import {cacheGearName,rigRecoveryCopy} from './rogue-cache-ui.js';
 import {DEPTHS} from './rogue-map.js';
 import {FLOOR_TOOLS,SHORE_SITES} from './shore-encounters.js';
 import {rescueBerth} from './shore-rescue.js';
@@ -34,7 +34,7 @@ export function harborPlanModel(s,language='ko'){
     sites:plan.sites.map(site=>{
       const known=site.known,visible=known||site.radio||!!site.rescue;
       const supply=known?supplyCopy(s,site.supply,en):'',actual=known?supplyCopy(s,site.supply,en,true):'';
-      return {...site,name:visible?siteName(site,en):(en?'Unexplored quay':'미탐사 부두'),
+      return {...site,rigCopy:rigRecoveryCopy(site.rig,language),name:visible?siteName(site,en):(en?'Unexplored quay':'미탐사 부두'),
         status:site.claimed?(en?'Searched':'수색 완료'):known?(en?'Discovered':'발견'):site.radio?(en?'Radio location':'무전 위치'):(en?'Unexplored':'미탐사'),
         gearText:known&&site.gear?cacheGearName(site.gear,language):'',supplyText:supply,actualSupplyText:actual,
         limited:supply!==actual,
@@ -52,6 +52,7 @@ export function harborPlanSummary(s,guide,language='ko'){
   if(guide.planBoss)return {title:en?'Head for the blockade entrance':'봉쇄 해역 입구로',detail:m.boss.toolMissing?(en?'Counter-tool not recovered · M Chart':'대응 도구 미회수 · M 해도'):(en?'Counter-tool aboard · M Chart':'대응 도구 보유 · M 해도')};
   const site=m.sites.find(x=>x.id===guide.planSite);if(!site)return null;
   if(site.rescue&&site.rescue!=='aboard')return {title:(en?'To ':'목적지 · ')+site.name,detail:(en?'Mechanic found · return to escort them · M Chart':'정비공 발견 · 돌아가서 동행 · M 해도')};
+  if(site.rigCopy)return {title:(en?'To ':'목적지 · ')+site.name,detail:site.rigCopy.name+' · '+site.rigCopy.action};
   return {title:(en?'To ':'목적지 · ')+site.name,detail:site.known?
     [site.gearText,site.supplyText?(en?'up to ':'최대 ')+site.supplyText:''].filter(Boolean).join(en?' or ':' 또는 '):
     (en?'Radio location · contents unconfirmed':'무전 위치 · 내용물 미확인')};
@@ -60,12 +61,14 @@ export function harborPlanSummary(s,guide,language='ko'){
 export function harborPlanMarkup(s,language='ko'){
   const m=harborPlanModel(s,language);if(!m)return '';
   const en=language==='en';
+  const rig=m.sites.find(site=>site.rigCopy)?.rigCopy;
   const point=(site,label)=>site.point&&site.selectable?`<button class="harbor-plan-pin" data-harbor-target="${esc(site.id)}" data-map-x="${site.point.x}" data-map-y="${site.point.y}" aria-label="${esc(site.name)}" aria-pressed="${site.selected}" tabindex="-1">${label}</button>`:'';
   return `<section class="harbor-plan" data-harbor-mode="${m.fighting?'combat':'planning'}">
     <header class="harbor-plan-header"><div><p>${s.depth+1} / 3 · ${esc(m.region)}</p><h2>${en?'Navigation chart':'항해도'}</h2></div><span class="harbor-plan-paused">${en?'VOYAGE PAUSED':'항해 일시정지'}</span><button id="harborPlanClose">M / Esc · ${en?'Resume':'계속'}</button></header>
     <div class="harbor-plan-body"><div class="harbor-plan-map"><canvas id="harborPlanSea" aria-label="${en?'Explored harbor and known destinations':'탐사한 항구와 알려진 목적지'}"></canvas>${m.sites.map(site=>point(site,String(site.island+1))).join('')}${point(m.boss,'↗')}<span class="harbor-plan-you" data-map-x="${(s.person||s.boat).x}" data-map-y="${(s.person||s.boat).y}">● <small>${en?'You':'현재 위치'}</small></span><div class="harbor-plan-legend">${m.fighting?(en?'Explored terrain · dark water is unexplored':'탐사한 지형 · 어두운 곳은 미탐사'):(en?'Numbers match destinations · dark water is unexplored':'번호로 목적지를 선택하세요 · 어두운 곳은 미탐사')}</div></div>
-    <details class="harbor-plan-directory"><summary>${en?'Destinations & supplies':'목적지 · 보급 정보'} <span aria-hidden="true">＋</span></summary><nav class="harbor-plan-sites" aria-label="${en?'Choose destination':'목적지 선택'}"><p class="harbor-plan-list-label">${en?'SELECT A DESTINATION':'목적지 선택'}</p>
+    <details class="harbor-plan-directory"><summary>${rig?esc(en?'Find: '+rig.name:rig.name+' · 회수 위치'):en?'Destinations & supplies':'목적지 · 보급 정보'} <span aria-hidden="true">＋</span></summary><nav class="harbor-plan-sites" aria-label="${en?'Choose destination':'목적지 선택'}"><p class="harbor-plan-list-label">${en?'SELECT A DESTINATION':'목적지 선택'}</p>
     ${m.sites.map(site=>`<button class="harbor-plan-site" data-harbor-target="${esc(site.id)}" aria-pressed="${site.selected}" ${site.selectable?'':'disabled'}><span class="harbor-plan-site-heading"><b><small>0${site.island+1}</small> ${esc(site.name)}</b><span>${site.selected?(en?'Selected':'선택됨'):site.status}</span></span>
+      ${site.rigCopy?`<span class="harbor-plan-rig" data-harbor-rig="${site.rig}"><strong>${esc(site.rigCopy.name)}</strong><small>${esc(site.rigCopy.action)}</small></span>`:''}
       ${site.claimed?`<span class="harbor-plan-muted">${en?'Supplies already recovered':'물품 회수 완료'}</span>`:site.known?`<span class="harbor-plan-gear">${esc(site.gearText)} <small>${en?'aboard':'보유'} ${site.stack}</small></span><span>${en?'or ':'또는 '}${esc(site.supplyText)}${site.limited?`<small class="harbor-plan-actual">${en?'Now: ':'현재: '}${esc(site.actualSupplyText)}</small>`:''}</span>`:`<span class="harbor-plan-muted">${site.radio?(en?'Contents unconfirmed':'내용물 미확인'):(en?'Approach to discover':'접근하면 정보를 기록합니다')}</span>`}
       ${site.toolText?`<span class="harbor-plan-tool">${en?'Radio: ':'무전: '}${esc(site.toolText)}</span>`:''}
       ${site.rescueText?`<span class="harbor-plan-rescue">${esc(site.rescueText)}</span>`:''}

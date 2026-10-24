@@ -129,6 +129,9 @@ html[data-mobile-ui=true] #rogue .rogue-rig-control{display:none}
 #rogue .harbor-plan-site-heading b{font-size:16px}
 #rogue .harbor-plan-site-heading b small{color:#9daeb9;font-size:12px;margin-right:3px}
 #rogue .harbor-plan-site-heading>span{font-size:12px;color:#a9b7bf;flex-shrink:0}
+#rogue .harbor-plan-rig{display:block;color:#efd39b}
+#rogue .harbor-plan-rig strong{font-size:14px;font-weight:650}
+#rogue .harbor-plan-rig small{display:block;color:#c0cfc9;font-size:12px;line-height:1.4}
 #rogue .harbor-plan-gear{color:#f3a343;font-weight:600}
 #rogue .harbor-plan-gear small{margin-left:8px;color:#a9b7bf;font-weight:400}
 #rogue .harbor-plan-muted,#rogue .harbor-plan-sightings,#rogue .harbor-plan-actual{color:#a9b7bf;font-size:12px}

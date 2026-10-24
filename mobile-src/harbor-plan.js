@@ -7,6 +7,13 @@ import {usesSluice,SLUICE} from './sluice-counterplay.js';
 import {usesLighthouse,lighthouseStatus,LIGHTHOUSE} from './lighthouse-counterplay.js';
 
 export const newHarborIntel=()=>({sites:[],target:null});
+// The prototype is bundled with the first region's guaranteed tool. This is
+// the same public radio destination, not a new reveal of sealed cache contents.
+export function rigRecoveryBerth(s){
+  if(!s?.combat||s.depth!==0||s.salvage?.rank!==0||s.salvage.recovered||hasTool(s,FLOOR_TOOLS[0].id))return null;
+  const berth=toolBerth(s);
+  return berth&&!s.claimed.includes(berth.id)?berth:null;
+}
 const scans=new WeakMap();
 // Static quay markings reveal the guaranteed first candidate, not the sealed
 // cache's second choice. Threat records mean "seen here", never "still alive".
@@ -29,7 +36,7 @@ export function refreshHarborIntel(s){
 }
 export function harborPlan(s){
   if(!s.harborIntel)return null;
-  const intel=s.harborIntel,tool=toolBerth(s),missing=!hasTool(s,FLOOR_TOOLS[s.depth].id);
+  const intel=s.harborIntel,tool=toolBerth(s),missing=!hasTool(s,FLOOR_TOOLS[s.depth].id),rigBerth=rigRecoveryBerth(s);
   const enabled=s.status==='playing'&&!s.pendingCache&&!s.pendingGear&&!s.salvage?.pending;
   return {target:intel.target,sites:s.map.berths.map(berth=>{
     const record=intel.sites.find(x=>x.id===berth.id),known=!!record,radio=missing&&berth.id===tool.id;
@@ -37,7 +44,7 @@ export function harborPlan(s){
     const gear=offer?.gear[0]??null;
     const rescue=s.rescue?.discovered&&rescueBerth(s)?.id===berth.id?s.rescue.stage:null;
     return {id:berth.id,island:berth.island,known,radio,claimed,rescue,selectable:enabled&&(!claimed||rescuePendingAt(s,berth.id))&&(known||radio||!!rescue),
-      gear,supply:offer?.supply??null,threats:record?[...record.threats]:[],
+      gear,supply:offer?.supply??null,threats:record?[...record.threats]:[],rig:berth.id===rigBerth?.id?s.build:null,
       stack:gear?s.equipment.filter(id=>id===gear).length:0,tool:radio?FLOOR_TOOLS[s.depth].id:null,selected:intel.target===berth.id};
   }),boss:{id:'boss',selectable:enabled&&!s.boss.cleared,selected:intel.target==='boss'||s.boss.active&&!s.boss.cleared&&intel.target===null,toolMissing:missing}};
 }

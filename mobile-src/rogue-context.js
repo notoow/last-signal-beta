@@ -6,7 +6,7 @@ import {shoreRanges} from './shore-scale.js';
 import {salvageStatus,winchBurstReady,winchStoreReady,winchLaunchReady} from './rogue-salvage.js';
 import {usesSluice} from './sluice-counterplay.js';
 import {usesLighthouse} from './lighthouse-counterplay.js';
-import {harborDestination} from './harbor-plan.js';
+import {harborDestination,rigRecoveryBerth} from './harbor-plan.js';
 import {gullRecovery} from './shore-encounters.js';
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const action=(id,code,labelKo,labelEn,enabled=true,hold=false,progress=0)=>({id,code,labelKo,labelEn,enabled,hold,progress});
@@ -22,17 +22,20 @@ export function rogueSpecialAction(s){
     cooldown:m?.cooldown||0
   });
   if(s.build==='bilge'){
-    const jet=s.valve&&rig.phase==='ready';
+    const installed=!!m?.rank,jet=s.valve&&rig.phase==='ready';
     const phase=jet?'jet':s.valve?'close':'open';
-    const detail=!s.valve?['물을 받으면 추진력 증가','Fill for stronger thrust']:
+    const detail=!installed?(rigRecoveryBerth(s)?['분사 장치 미장착 · M 해도','Jet rig missing · M Chart']:['기본 밸브만 사용 · 분사 장치 없음','Intake only · no jet rig']):
+      !s.valve?['물을 받으면 추진력 증가','Fill for stronger thrust']:
       jet?['앞으로 분사 · 연료 2','Forward jet · 2 fuel']:
       s.flood<20?['침수 20%에서 분사 가능','Jet needs 20% water']:
       rig.phase==='cooldown'?[`분사 재사용 ${m.cooldown.toFixed(1)}초`,`Jet cooldown ${m.cooldown.toFixed(1)}s`]:
       rig.phase==='fuel'?['분사 연료 2 초과 필요','Jet needs >2 fuel']:
       rig.phase==='skill'?['선장 기술 종료 후 분사','Jet after captain skill']:['밸브를 닫으면 침수 정지','Close to stop filling'];
-    return make(phase,jet?'배수 분사':s.valve?'밸브 닫기':'밸브 열기',jet?'Water jet':s.valve?'Close valve':'Open valve',true,s.flood,'침수','Flood',20,...detail);
+    return make(phase,jet?'배수 분사':s.valve?'밸브 닫기':'밸브 열기',jet?'Water jet':s.valve?'Close valve':'Open valve',true,s.flood,'침수','Flood',installed?20:null,...detail);
   }
   if(s.boss.hook<0){
+    if(!m?.rank)return make('hook','축력 당김','Winch pull',false,s.charge,'축력','Charge',35,
+      '고리 연결 후 당김 · 저장 장치 미장착','Hook to pull · storage rig missing');
     const ready=winchLaunchReady(s),stored=(m?.charge||0)>=35&&(m?.window||0)>0;
     const detail=ready?['저장한 줄 방향으로 발진 · 연료 2','Launch along stored line · 2 fuel']:
       stored&&rig.phase==='fuel'?['연료 2 초과 필요','Needs >2 fuel']:

@@ -2,12 +2,21 @@ import {GEAR,maxHp,maxFuel,cacheSupplyPreview} from './rogue-core.js';
 import {cacheOffer,gearEffect} from './rogue-cache.js';
 import {FLOOR_TOOLS,SHORE_SITES,toolBerth,hasTool} from './shore-encounters.js';
 import {salvageDeviceName} from './rogue-salvage-ui.js';
+import {rigRecoveryBerth} from './harbor-plan.js';
 import {CREW_UPGRADES,crewRank} from './crew-upgrades.js';
 
 const esc=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const number=value=>value>0&&value<.1?'<0.1':String(Number(value.toFixed(1)));
 const names={motor:'Drive motor',pump:'Bilge pump',winch:'Reinforced line',tank:'Fuel tank',plating:'Impact bulkhead',turbine:'Flood turbine'};
 export const cacheGearName=(id,language='ko')=>language==='en'?names[id]:GEAR[id];
+// Use this copy only with an authoritative recovery/receipt contract. These
+// short introductions describe the new control, not current firing readiness.
+export function rigRecoveryCopy(build,language='ko'){
+  const actions={standard:['제동으로 충전 → 부스터로 분사','Brake to charge → boost to launch'],
+    bilge:['침수 20% → 밸브 닫아 분사','20% water → close valve to jet'],
+    winch:['줄 분리로 축력 저장 → 발진','Release line to store → launch']};
+  return actions[build]?{id:build,name:salvageDeviceName({build},language),action:actions[build][language==='en'?1:0]}:null;
+}
 const effectCopy={
   ko:{
     motor:['장비 추진력 보너스','%','선체의 기본 추진력을 강화합니다.'],
@@ -60,19 +69,19 @@ export function cacheChoiceModel(s,language='ko'){
   const berth=s.map.berths.find(b=>b.id===s.pendingCache.berth);
   const preview=cacheSupplyPreview(s);
   const supply={fuel:preview.fuelGain,hp:preview.hpGain,flood:preview.floodRemoved};
-  const common=[];
+  const rig=rigRecoveryBerth(s)?.id===berth.id?rigRecoveryCopy(s.build,language):null;
+  const commonItems=rig?[{kind:'rig',id:rig.id,text:rig.name+(en?' · Prototype I':' · 시제품 I')}]:[];
   if(s.combat){
     const ammo=Math.min(4,12-s.combat.ammo);
-    common.push(en?`Scrap +${ammo}${ammo<4?' · capacity 12':''}`:`고철 +${ammo}${ammo<4?' · 최대 12':''}`);
+    commonItems.push({kind:'scrap',amount:ammo,text:en?`Scrap +${ammo}${ammo<4?' · capacity 12':''}`:`고철 +${ammo}${ammo<4?' · 최대 12':''}`});
     if(berth.id===toolBerth(s).id&&!hasTool(s,FLOOR_TOOLS[s.depth].id)){
-      common.push(en?['Anti-reverse ratchet','Flow baffle','Light shutter'][s.depth]:FLOOR_TOOLS[s.depth].name);
-      if(s.depth===0&&s.salvage&&!s.salvage.recovered)common.push(salvageDeviceName(s,language)+(en?' · Prototype I':' · 시제품 I'));
+      commonItems.push({kind:'tool',id:FLOOR_TOOLS[s.depth].id,text:en?['Anti-reverse ratchet','Flow baffle','Light shutter'][s.depth]:FLOOR_TOOLS[s.depth].name});
     }
   }
   const crew=offer.crew?{id:offer.crew,rank:crewRank(s,offer.crew),...CREW_UPGRADES[offer.crew]}:null;
-  return {full:s.equipment.length>=6,slots:s.equipment.length,crew,
+  return {full:s.equipment.length>=6,slots:s.equipment.length,crew,rig,commonItems,
     site:en?['Salvage yard','Fuel wharf','Fish-market landing'][berth.island]:SHORE_SITES[berth.island],
-    gear:offer.gear.map(id=>cacheGearModel(s,id,language)),supply,offered:offer.supply,siteRole:offer.siteRole,common};
+    gear:offer.gear.map(id=>cacheGearModel(s,id,language)),supply,offered:offer.supply,siteRole:offer.siteRole,common:commonItems.map(x=>x.text)};
 }
 
 export function cacheChoiceMarkup(s,language='ko'){
@@ -112,7 +121,7 @@ export function cacheChoiceMarkup(s,language='ko'){
         <button data-cache-choice="supplies">${en?'Take supplies':'보급품 받기'}<span aria-hidden="true">↗</span></button>
       </article>
     </div>
-    ${m.common.length?`<div class="rogue-cache-common"><strong>${en?'With any reward':'어느 보상이든 함께'}</strong><span>${m.common.map(esc).join(' · ')}</span></div>`:''}
+    ${m.common.length?`<div class="rogue-cache-common"><strong>${en?'With any reward':'어느 보상이든 함께'}</strong><span>${m.common.map(esc).join(' · ')}${m.rig?`<br><small data-cache-rig="${m.rig.id}">${esc(m.rig.action)}</small>`:''}</span></div>`:''}
     <footer class="rogue-salvage-footer"><button id="rogueCacheLeave">${en?'Leave for now':'지금은 두기'}</button><p>${en?'Esc · Pause / save and return to harbor':'Esc · 일시정지 / 저장 후 항구로'}</p></footer>
     <p id="rogueCacheSaveError" class="rogue-cache-save-error" role="status" hidden></p>
   </section>`;
