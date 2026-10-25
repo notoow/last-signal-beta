@@ -612,3 +612,7 @@ html[data-mobile-move-side=right] #mobileTransit{right:auto;left:0;justify-conte
  html[data-mobile-move-side=right] #mobileFlightHud[data-sluice-expanded] #mobileNotice[data-sluice] .sluice-receipt,
  html[data-mobile-move-side=right] #mobileFlightHud[data-sluice-expanded] #mobileNotice[data-sluice]>span{line-height:13px}
 }
+
+/* Local contrast, preserving minimap geometry and locked button semantics. */
+#mobileMinimap{border-color:#b6cbc699;background:#07151cf2}
+#mobileControls #mobileActions>.mobile-captain-skill[data-state=locked]{opacity:1;background:#081b26e6;border-color:#8fa5ac99;color:#aebfc4}

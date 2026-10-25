@@ -1,4 +1,4 @@
-import {shoreScale} from './shore-scale.js';
+import {shoreScale,humanVisualScale} from './shore-scale.js';
 import {project,HARBOR_PROJECTION,IDENTITY_PROJECTION} from './world-projection.js';
 import {FAUNA,fauna as faunaSpec} from './shore-encounters.js';
 import {visibleAt} from './rogue-vision.js';
@@ -144,12 +144,12 @@ export function shoreActors(s){
   return actors;
 }
 export function drawProjectedShoreActor(c,s,actor,frame,reduced=false,{shadow=true}={}){
-  const {p,enemy,worker}=actor,unit=shoreScale(s),k=unit*frame.scale;
+  const {p,enemy,worker}=actor,unit=shoreScale(s),visual=enemy?1:humanVisualScale(s),k=unit*frame.scale*visual;
   const foot=project(frame,p),fight=s.combat;
   const angle=(!enemy&&!worker&&fight.action?fight.action.angle:p.angle)||0;
   const m=frame.projection||HARBOR_PROJECTION,v={x:Math.cos(angle),y:Math.sin(angle)};
   const face=Math.atan2(m.yx*v.x+m.yy*v.y,m.xx*v.x+m.xy*v.y);
-  const stride=(enemy||worker?p.stride:fight.stride)/unit,moving=enemy||worker?p.moving:fight.moving;
+  const stride=(enemy||worker?p.stride:fight.stride)/unit/visual,moving=enemy||worker?p.moving:fight.moving;
   const bird=p.kind==='gull',height=(enemy?{rat:32,dog:49,crab:78,gull:53}[p.kind]:55)*k;
   const lift=(bird?16+(reduced?0:Math.sin(s.time*7+p.homeX)*2):0)*k;
   const contact=enemy||worker?8:CREW_CYCLE/2;
