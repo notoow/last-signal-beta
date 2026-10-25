@@ -143,7 +143,7 @@ export function shoreActors(s){
   if(s.depth===0&&['waiting','following'].includes(s.rescue?.stage)&&visibleAt(s,s.rescue))actors.push({p:s.rescue,worker:true});
   return actors;
 }
-export function drawProjectedShoreActor(c,s,actor,frame,reduced=false){
+export function drawProjectedShoreActor(c,s,actor,frame,reduced=false,{shadow=true}={}){
   const {p,enemy,worker}=actor,unit=shoreScale(s),k=unit*frame.scale;
   const foot=project(frame,p),fight=s.combat;
   const angle=(!enemy&&!worker&&fight.action?fight.action.angle:p.angle)||0;
@@ -155,7 +155,7 @@ export function drawProjectedShoreActor(c,s,actor,frame,reduced=false){
   const contact=enemy||worker?8:CREW_CYCLE/2;
   const stepLift=!reduced&&moving&&(enemy||worker)?Math.sin(stride/contact*Math.PI)**2*(enemy?1:1.5)*k:0;
   const drawP={...p,x:foot.x,y:foot.y-lift-stepLift,angle:face,stride};
-  c.fillStyle='#03151c80';c.beginPath();c.ellipse(foot.x,foot.y,height*.22,height*.055,.198,0,7);c.fill();
+  if(shadow){c.fillStyle='#03151c80';c.beginPath();c.ellipse(foot.x,foot.y,height*.22,height*.055,.198,0,7);c.fill();}
   if(enemy){
     const pose={...p,stride},alpha=p.hp===0?p.dead/.65:1;
     sprite(c,fauna,faunaRows[p.kind],animationFrame(pose),drawP,height,alpha,

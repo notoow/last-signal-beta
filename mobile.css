@@ -423,7 +423,7 @@ html[data-mobile-move-side=right] #mobileActions{margin-left:0;margin-right:auto
 #mobileActions .mobile-context-action{position:relative;width:60px;height:60px;border:2px solid #e4c282ab;background:#c99a4320;color:#ffe0a1;isolation:isolate}
 #mobileActions .mobile-context-action[data-ready=false]{opacity:.5}
 #mobileActions .mobile-context-action.working::after{content:'';position:absolute;inset:-5px;background:conic-gradient(#f0cb84 var(--work-progress),transparent 0);mask:radial-gradient(transparent 65%,#000 67%);border-radius:50%;pointer-events:none}
-#mobileActions .mobile-context-action[data-hold=true] span::after{content:' · 누르기';font-size:8px;display:block;color:#d6d8cb}
+#mobileActions .mobile-context-action[data-hold=true] span::after{content:'길게 누르기';font-size:8px;display:block;color:#d6d8cb}
 html[lang=en] #mobileActions .mobile-context-action[data-hold=true] span::after{content:'HOLD'}
 #mobileControls #mobileActions[data-mode=ashore]>[data-code=ShiftLeft]{visibility:hidden;pointer-events:none}
 #mobileTools>*{grid-area:auto}

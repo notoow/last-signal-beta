@@ -11,6 +11,7 @@ import {bakeQuayMaterial} from './quay-material.js';
 import {prepareSupplyFleet,drawSupplyBoat} from './supply-fleet.js';
 import {tugStern,towBow} from './rogue-tow.js';
 import {quaySprite} from './quay-details.js';
+import {drawCaptainOcclusion,drawCaptainVisible} from './shore-occlusion-outline.js';
 
 const load=(file,retry=0)=>{const im=new Image();im.src='assets/art/'+file+(retry?'?quayRetry='+retry:'');return im;};
 let art=null,loadStarted=0,retryAttempt=0;
@@ -196,9 +197,9 @@ function scenery(c,s,f,tiles){
     const scale=supply?2*unit/996:unit/98.5,rect=supply?[284,92,996,809]:[0,0,1536,1024],pivot=supply?[498,809]:[704,858];
     const bounds={x:p.x-pivot[0]*scale,y:p.y-pivot[1]*scale,w:rect[2]*scale,h:rect[3]*scale};
     if(!overlap(bounds,{x:0,y:0,w:f.width,h:f.height}))continue;
-    objects.push({type:'scenery',p,box:b,bounds,draw:()=>{
-      const obscured=s.person&&behind(f,s.person,b)&&alphaCovers(im,bounds,project(f,s.person),CREW_HEIGHT*f.scale);
-      c.save();c.globalAlpha=obscured?.3:1;c.drawImage(im,...rect,bounds.x,bounds.y,bounds.w,bounds.h);c.restore();
+    objects.push({type:'scenery',p,box:b,bounds,image:im,sourceRect:rect,draw:()=>{
+      // Source art and projected anchors stay unchanged; no building fade.
+      c.save();c.globalAlpha=1;c.drawImage(im,...rect,bounds.x,bounds.y,bounds.w,bounds.h);c.restore();
     }});
     if(supply)continue;
     c.save();clipLand(c,f,tiles);
@@ -290,7 +291,7 @@ export function drawQuay(c,s,f,{reduced=false,language='ko',task=null,search=nul
   texture.setTransform(new DOMMatrix().translate(f.ox+Math.sin(motion*.14)*unit*.055,f.oy+Math.sin(motion*.11)*unit*.025).scale(18*unit/art.water.width));
   c.save();c.globalAlpha=.68;c.fillStyle=texture;c.fillRect(0,0,f.width,f.height);c.restore();
   const edgeCount=cacheTerrain?cachedTerrain(c,s,f,tiles):terrain(c,s,f,tiles).length;
-  const props=scenery(c,s,f,tiles);
+  const props=scenery(c,s,f,tiles),searchLabels=[];
   // Survey dims remembered terrain, never a visible captain's actual painted
   // silhouette. Dynamic actors have their own LOS test; seen scenery retains
   // the same footprint ordering after this ground mask.
@@ -308,12 +309,12 @@ export function drawQuay(c,s,f,{reduced=false,language='ko',task=null,search=nul
     props.push({type:'cache',p,draw:()=>{c.save();c.globalAlpha=claimed?.45:1;c.drawImage(art.chest,885,90,465,318,p.x-465*k/2,p.y-318*k,465*k,318*k);c.restore();}});
     if(s.person&&distance(s.person,b.loot)<shoreRanges(s).search&&!claimed){
       c.strokeStyle='#f3c477';c.lineWidth=1.25;c.beginPath();c.ellipse(p.x,p.y,unit*.55,unit*.18,.198,0,7);c.stroke();
-      label(c,language==='en'?'Search':'수색',{x:p.x,y:p.y-1.2*unit});
+      searchLabels.push({text:language==='en'?'Search':'수색',point:{x:p.x,y:p.y-Math.max(1.2*unit,CREW_HEIGHT*f.scale+8)}});
     }
   }
   const actorBounds=[];
   const actors=shoreActors(s).map(a=>({type:'actor',p:project(f,a.p),actor:a,draw:()=>actorBounds.push({enemy:!!a.enemy,worker:!!a.worker,
-    ...(a.enemy?{kind:a.p.kind,phase:a.p.phase,hp:a.p.hp}:{}),...drawProjectedShoreActor(c,s,a,f,reduced)})}));
+    ...(a.enemy?{kind:a.p.kind,phase:a.p.phase,hp:a.p.hp}:{}),...(a.p===s.person&&!a.enemy&&!a.worker?drawCaptainVisible(c,s,f,a,props.filter(o=>o.image&&behind(f,a.p,o.box)),reduced):drawProjectedShoreActor(c,s,a,f,reduced))})}));
   // Sorting uses the ground contact, then corrects only actual footprint
   // occlusion around tall buildings. Empty alpha padding never hides the crew.
   const objects=[...props,...actors].sort((a,b)=>a.p.y-b.p.y);
@@ -322,6 +323,10 @@ export function drawQuay(c,s,f,{reduced=false,language='ko',task=null,search=nul
     if(shouldBehind&&ai>bi){objects.splice(ai,1);objects.splice(objects.indexOf(b),0,a);}
   }
   for(const o of objects)o.draw();
+  const captain=actors.find(a=>a.actor.p===s.person&&!a.actor.enemy&&!a.actor.worker);
+  const occluders=captain?objects.slice(objects.indexOf(captain)+1).filter(o=>o.image&&behind(f,s.person,o.box)):[];
+  const captainOcclusion=drawCaptainOcclusion(c,s,f,captain?.actor,occluders,reduced);
+  for(const item of searchLabels)label(c,item.text,item.point);
   for(const shot of s.combat.shots){
     const p=project(f,shot,8*shoreScale(s)),v=project({...f,ox:0,oy:0},{x:shot.vx,y:shot.vy});
     const a=Math.atan2(v.y,v.x);c.strokeStyle='#f4d398';c.lineWidth=2;c.beginPath();c.moveTo(p.x-Math.cos(a)*5,p.y-Math.sin(a)*5);c.lineTo(p.x,p.y);c.stroke();
@@ -336,5 +341,5 @@ export function drawQuay(c,s,f,{reduced=false,language='ko',task=null,search=nul
       label(c,language==='en'?'Objective':'목표',{x:Math.max(30,Math.min(f.width-30,mark.x)),y:mark.y-10});
     }
   }
-  return {ready:true,boat,tow,vesselOrder:supplyBehind?['supply','captain']:['captain','supply'],actorBounds,scenery:props.filter(p=>p.box).map(p=>({box:p.box,bounds:p.bounds})),shoreEdges:edgeCount};
+  return {ready:true,boat,tow,vesselOrder:supplyBehind?['supply','captain']:['captain','supply'],actorBounds,captainOcclusion,scenery:props.filter(p=>p.box).map(p=>({box:p.box,bounds:p.bounds})),shoreEdges:edgeCount};
 }
