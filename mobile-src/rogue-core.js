@@ -1,3 +1,4 @@
+import {harborLandmark,harborArenaX} from './rogue-landmarks.js';
 import {generateHarbor,GENERATOR_VERSION,DEPTHS,inside,waterAt,shoreBuildings,walkableAt} from './rogue-map.js';
 import {newSkillState,activateCaptainSkill,advanceSkill,validateSkill} from './captain-skills.js';
 import {CAPTAIN_VESSELS,CAPTAINS} from './captain-vessels.js';
@@ -124,8 +125,8 @@ export function berthAlignment(s){
     spinningMatters:waterMotion(s),fuel:s.fuel>0,ability:s.skill.left>0&&['woo','park'].includes(s.captain),exit:berth===s.map.exit});
 }
 export function partPosition(s,i){
-  if(usesSluice(s))return sluiceCleat(i);
-  if(usesLighthouse(s))return relayPosition(i);
+  if(usesSluice(s))return sluiceCleat(i,s);
+  if(usesLighthouse(s))return relayPosition(i,s);
   const count=s.boss.parts.length,a=Math.PI+(i-(count-1)/2)*.7;
   return {x:s.map.boss.x+Math.cos(a)*190,y:s.map.boss.y+Math.sin(a)*190};
 }
@@ -192,14 +193,14 @@ export function objective(s){
       if(!a.linked)return {text:'중계기에 접근 · E 케이블 접속',target:relayApproach(s,a.index)};
       return {text:!a.inRange?'케이블 범위 안으로 돌아가기':!a.clear?'방파제 뒤에서는 송신 불가 · 등대가 보이는 수면으로':
         !a.aligned?'선수를 등대 쪽으로 맞추기':a.speed>a.maxSpeed?'Space 감속 · 속도 18 이하로 송신':'명부 송신 중 · 자세와 저속 유지',
-        target:relayPosition(a.index)};
+        target:relayPosition(a.index,s)};
     }
     if(usesSluice(s)){
       const a=sluiceStatus(s);
       if(s.boss.hook>=0)return {text:s.build==='winch'?'물살로 축력 모으기 · E 분리 / 축력 35에서 B 발진':'계류 고리에 연결 · E로 놓고 방류 타기',target:partPosition(s,s.boss.hook)};
-      if(a.phase==='attack'&&(a.exposed||a.backwash))return {text:a.exposed?'물살을 타고 동쪽으로 가속 · 잠금판에 선수 충돌':'역류 · 닫힌 수문에서 물러나기',target:a.exposed?sluiceGate(a.lane):null};
-      if(a.phase==='warn')return {text:a.locked?'수로 고정 · 동쪽으로 선수 정렬':'방류할 수로 유도 · 고정되면 상류에서 가속 준비',target:sluiceGate(a.lane)};
-      return {text:'다음 방류 준비 · 상류로 돌아가 가속 거리 확보',target:{x:2520,y:SLUICE.laneYs[s.boss.parts.findIndex(h=>h>0)]}};
+      if(a.phase==='attack'&&(a.exposed||a.backwash))return {text:a.exposed?'물살을 타고 동쪽으로 가속 · 잠금판에 선수 충돌':'역류 · 닫힌 수문에서 물러나기',target:a.exposed?sluiceGate(a.lane,s):null};
+      if(a.phase==='warn')return {text:a.locked?'수로 고정 · 동쪽으로 선수 정렬':'방류할 수로 유도 · 고정되면 상류에서 가속 준비',target:sluiceGate(a.lane,s)};
+      return {text:'다음 방류 준비 · 상류로 돌아가 가속 거리 확보',target:{x:harborArenaX(s,2520),y:SLUICE.laneYs[s.boss.parts.findIndex(h=>h>0)]}};
     }
     if(s.boss.hook>=0)return {text:'고리에서 멀어지며 견인 · 줄이 붉어지면 E로 놓기',target:partPosition(s,s.boss.hook)};
     if(s.boss.phase==='recover')return {text:'노출된 구동 고리에 접근 · E로 연결',target:partPosition(s,usesDredger(s)?nearestDredgerDrive(s):s.boss.parts.findIndex(h=>h>0))};
@@ -281,7 +282,7 @@ export function interact(s,action,input={}){
     s.noise={x:origin.x+Math.cos(origin.angle||0)*reach,y:origin.y+Math.sin(origin.angle||0)*reach,left:5};
     return true;
   }
-  if(action==='cutnet'&&s.mode==='sailing'&&distance(b,{x:2110,y:500})<95&&!s.netResolved){
+  if(action==='cutnet'&&s.mode==='sailing'&&distance(b,harborLandmark(s.map,'net'))<95&&!s.netResolved){
     s.netResolved=true;s.netChoice='cut';s.netChoices.push('cut');s.debris=true;
     recordVoyage(s,'net',{choice:'cut'});
     say(s,'net-cut-'+s.depth,'Park: 줄은 끊었어. 풀린 그물이 바깥 수로로 떠내려가고 있어.');return true;
@@ -300,7 +301,7 @@ export function interact(s,action,input={}){
     return true;
   }
   if(s.boss.hook>=0){catchWinch(s,partPosition(s,s.boss.hook));s.boss.hook=-1;s.boss.tension=0;s.charge=0;return true;}
-  if(s.depth===2&&s.map.secret&&distance(b,{x:2080,y:190})<90&&!s.secretFound){
+  if(s.depth===2&&s.map.secret&&distance(b,harborLandmark(s.map,'testSite'))<90&&!s.secretFound){
     s.secretFound=true;say(s,'test-site','Woo: 「백야 해상 핵실험 관측소 — 영구 폐쇄」… 실험 날짜는 지워졌는데, 바다 시료 채취표는 아직 여기 있네.');return true;
   }
   if(s.boss.cleared&&berthReady(s,s.map.exit)){
@@ -506,13 +507,13 @@ export function bossAttack(s){
   if(usesSluice(s))return false; // Water applies force; the physical gate applies collision damage.
   if(usesDredger(s))return !b.crane.impact&&craneHitsHull(b.crane.target,s.boat);
   if(s.depth===0)return d<360&&Math.abs(a)<.46;
-  if(s.depth===1)return Math.abs(s.boat.y-(origin.y+Math.sin(b.aim)*220))<70&&s.boat.x>2220;
+  if(s.depth===1)return Math.abs(s.boat.y-(origin.y+Math.sin(b.aim)*220))<70&&s.boat.x>harborArenaX(s,2220);
   return d<620&&Math.abs(a)<.23;
 }
 function bossTick(s,dt){
   const b=s.boss,p=s.map.boss,boat=s.boat;
   if(b.cleared)return;
-  if(!b.active&&boat.x>2210){b.active=true;b.phase='warn';b.timer=2.8;b.aim=Math.atan2(boat.y-p.y,boat.x-p.x);
+  if(!b.active&&boat.x>harborArenaX(s,2210)){b.active=true;b.phase='warn';b.timer=2.8;b.aim=Math.atan2(boat.y-p.y,boat.x-p.x);
     recordVoyage(s,'boss',{stage:'entered',hp:s.hp,fuel:s.fuel,equipment:[...s.equipment],tool:hasTool(s,FLOOR_TOOLS[s.depth].id)});
     if(s.harborIntel)s.harborIntel.target=null;
     if(usesDredger(s))b.timer=craneWarningTime(s);
@@ -733,9 +734,9 @@ function step(s,input,dt){
     }
   }
   // Cutting is fast; loose nets impede the next layer's northern shortcut.
-  if(s.debris&&s.depth>0&&distance(b,{x:2070,y:350})<100){b.vx*=Math.exp(-2*dt);b.vy*=Math.exp(-2*dt);s.fuel=Math.max(0,s.fuel-.3*dt);}
-  if(!s.netResolved&&distance(b,{x:2110,y:500})<70){b.vx*=Math.exp(-2.3*dt);b.vy*=Math.exp(-2.3*dt);}
-  if(!s.netResolved&&distance(b,{x:2110,y:500})<95&&input.recover&&speed(b)<25){
+  if(s.debris&&s.depth>0&&distance(b,harborLandmark(s.map,'debris'))<100){b.vx*=Math.exp(-2*dt);b.vy*=Math.exp(-2*dt);s.fuel=Math.max(0,s.fuel-.3*dt);}
+  if(!s.netResolved&&distance(b,harborLandmark(s.map,'net'))<70){b.vx*=Math.exp(-2.3*dt);b.vy*=Math.exp(-2.3*dt);}
+  if(!s.netResolved&&distance(b,harborLandmark(s.map,'net'))<95&&input.recover&&speed(b)<25){
     s.work+=dt;if(s.work>=3){s.netResolved=true;s.netChoice='recovered';s.netChoices.push('recovered');s.debris=false;s.fuel=Math.max(0,s.fuel-2);s.work=0;recordVoyage(s,'net',{choice:'recovered'});say(s,'net-recover-'+s.depth,'Woo: 폐어망은 선미에 실었어. 다음 수로까지 떠내려갈 일은 없겠네.');}
   }else s.work=0;
 }
@@ -744,7 +745,7 @@ export function restoreRun(raw){
   try{
     if(typeof raw!=='string'||raw.length>160000)return null;
     const s=JSON.parse(raw),finite=(v,min,max)=>Number.isFinite(v)&&v>=min&&v<=max;
-    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,RUN_VERSION].includes(s.version)||![1,2,3,4,5,6,7].includes(s.generator)||!Number.isInteger(s.seed)||!finite(s.seed,0,0xffffffff)||!Number.isInteger(s.depth)||!finite(s.depth,0,2))return null;
+    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,RUN_VERSION].includes(s.version)||![1,2,3,4,5,6,7,8].includes(s.generator)||!Number.isInteger(s.seed)||!finite(s.seed,0,0xffffffff)||!Number.isInteger(s.depth)||!finite(s.depth,0,2))return null;
     if(s.version<18){s.daylight=newDaylight();if(s.combat?.enemies)for(const e of s.combat.enemies)e.stash=0;}
     if(!validDaylight(s))return null;
     if(s.version<17)s.crewUpgrades=null;

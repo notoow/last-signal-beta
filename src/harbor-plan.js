@@ -1,3 +1,4 @@
+import {harborArenaX} from './rogue-landmarks.js';
 import {cacheOffer} from './rogue-cache.js';
 import {visibleAt,surveyedAt} from './rogue-vision.js';
 import {toolBerth,FLOOR_TOOLS,hasTool,FAUNA} from './shore-encounters.js';
@@ -78,7 +79,7 @@ export function harborRoutePriority(s){
   if(s.mode!=='sailing')return false;
   const range=Math.hypot(s.boat.x-s.map.boss.x,s.boat.y-s.map.boss.y),half=s.boat.length/2;
   if(usesDredger(s))return range>CRANE.reach+CRANE.radius+half;
-  if(usesSluice(s))return s.boat.x+half<SLUICE.left;
+  if(usesSluice(s))return s.boat.x+half<harborArenaX(s,SLUICE.left);
   if(usesLighthouse(s)){
     const a=lighthouseStatus(s);
     return range>LIGHTHOUSE.range+half&&a.phase!=='attack'&&!a.visible;

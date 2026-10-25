@@ -1,3 +1,4 @@
+import {harborArenaX} from './rogue-landmarks.js';
 import {hullMass} from './ship-motion.js';
 
 export const SLUICE_MODEL='ram-v1';
@@ -8,8 +9,8 @@ export const SLUICE={
 };
 export const usesSluice=s=>s.sluiceModel===SLUICE_MODEL&&s.depth===1&&!!s.boss.sluice;
 export const newSluice=()=>({lane:1,locked:false,lastHit:-1,hitAt:-1,lastImpact:'none',impactSpeed:0});
-export const sluiceGate=i=>({x:SLUICE.gateX,y:SLUICE.laneYs[i]});
-export const sluiceCleat=i=>({x:2640,y:SLUICE.laneYs[i]});
+export const sluiceGate=(i,s)=>({x:harborArenaX(s,SLUICE.gateX),y:SLUICE.laneYs[i]});
+export const sluiceCleat=(i,s)=>({x:harborArenaX(s,2640),y:SLUICE.laneYs[i]});
 // Actual contacts only. A restored open gate never replays its breakthrough.
 const impacts=new WeakMap();
 export const sluiceImpactSequence=s=>impacts.get(s)?.id??0;
@@ -20,7 +21,7 @@ function publishContact(s,lane,outcome,obstacles){
   }));
   const contact=contacts.reduce((best,p)=>Math.hypot(p.x-b.x,p.y-b.y)<Math.hypot(best.x-b.x,best.y-b.y)?p:best);
   const event=Object.freeze({id:(previous?.id??0)+1,time:s.time,depth:s.depth,lane,outcome,life:.9,
-    point:Object.freeze(sluiceGate(lane)),contactPoint:Object.freeze(contact),
+    point:Object.freeze(sluiceGate(lane,s)),contactPoint:Object.freeze(contact),
     speed:Math.hypot(b.vx,b.vy),normalSpeed:Math.max(0,b.vx)});
   impacts.set(s,{id:event.id,boss:s.boss,event});
 }
@@ -45,7 +46,7 @@ export function trackSluice(s){
   const intact=s.boss.parts.map((hp,i)=>({hp,i})).filter(x=>x.hp>0);
   if(!intact.length)return;
   a.lane=intact.reduce((best,x)=>Math.abs(p.y-SLUICE.laneYs[x.i])<Math.abs(p.y-SLUICE.laneYs[best.i])?x:best).i;
-  s.boss.aim=Math.atan2(SLUICE.laneYs[a.lane]-s.map.boss.y,SLUICE.left-s.map.boss.x);
+  s.boss.aim=Math.atan2(SLUICE.laneYs[a.lane]-s.map.boss.y,harborArenaX(s,SLUICE.left)-s.map.boss.x);
   if(s.boss.timer<=SLUICE.lockTime)a.locked=true;
 }
 export const sluiceExposed=s=>usesSluice(s)&&!s.boss.cleared&&s.boss.phase==='attack'&&
@@ -54,7 +55,7 @@ export function hullInSluice(s,body=s.boat){
   const y=SLUICE.laneYs[s.boss.sluice.lane],half=(body.length-body.width)/2;
   const rx=Math.abs(Math.cos(body.angle))*half+body.width/2;
   const ry=Math.abs(Math.sin(body.angle))*half+body.width/2;
-  return body.x+rx>=SLUICE.left&&body.x-rx<=SLUICE.right&&
+  return body.x+rx>=harborArenaX(s,SLUICE.left)&&body.x-rx<=harborArenaX(s,SLUICE.right)&&
     Math.abs(body.y-y)<=SLUICE.halfWidth+ry;
 }
 export function applySluiceFlow(s,dt){
@@ -85,7 +86,7 @@ function capsuleRect(b,r){
   return lo<=hi;
 }
 function gateObstacles(s,i){
-  const p=sluiceGate(i);
+  const p=sluiceGate(i,s);
   const piers=[{x:p.x-41,y:p.y-110,w:82,h:74},{x:p.x-41,y:p.y+36,w:82,h:74}];
   return s.boss.parts[i]>0?[...piers,{x:p.x-26,y:p.y-36,w:52,h:72}]:piers;
 }
@@ -94,7 +95,7 @@ export function sluiceContact(s,old){
   if(!usesSluice(s))return null;
   const b=s.boat,a=s.boss.sluice;
   for(let i=0;i<3;i++){
-    const p=sluiceGate(i);
+    const p=sluiceGate(i,s);
     // Open gates retain their two solid stone piers; the centre really clears.
     const obstacles=gateObstacles(s,i);
     if(!obstacles.some(r=>capsuleRect(b,r)))continue;

@@ -1,3 +1,4 @@
+import {harborLandmark} from './rogue-landmarks.js';
 import {gameArt} from './game-art.js';
 import {DEPTHS,waterAt} from './rogue-map.js';
 import {drawHarborTerrain} from './harbor-terrain.js';
@@ -314,7 +315,7 @@ export function rogueCamera(canvas,s,mapOpen=false,options={},previous=null,dt=0
     const berth=s.map.berths.find(b=>b.id===s.mooring);
     return quayCamera({width,height,focus:s.person||berth.landing,options,previous,dt,occupied:occupied||[],
       focusBounds:quayReady&&!s.person?f=>dockedCaptainBoatBounds(projectWorld(f,s.boat,-.8*M),s.boat.length*f.scale,s.captain):null,
-      companionBounds:quayReady&&s.tow?.connected&&!s.tow.delivered&&s.tow.hp>0&&visibleAt(s,s.tow)?f=>supplyBoatLayout(s.tow,f).visibleBounds:null,
+      companionBounds:quayReady&&s.person?f=>dockedCaptainBoatBounds(projectWorld(f,s.boat,-.8*M),s.boat.length*f.scale,s.captain):quayReady&&s.tow?.connected&&!s.tow.delivered&&s.tow.hp>0&&visibleAt(s,s.tow)?f=>supplyBoatLayout(s.tow,f).visibleBounds:null,
       ...(quayReady?{}:{projection:IDENTITY_PROJECTION,projectionId:'quay-map-fallback'})});
   }
   const target=s.person?objective(s).target:null;
@@ -398,11 +399,12 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
     if(dog.alert)label(c,'!',dog.x,dog.y-15,'#eea17b',18);
   }
   if(s.noise?.left>0)ring(c,s.noise,15+(reduced?0:(s.time*12)%25),'#d3cbb37a');
-  if(!s.netResolved){net(c,2110,500);label(c,'폐어망 · F 회수 / X 절단',2110,430,'#d5caa1',13);}
-  if(s.debris&&s.depth>0){net(c,2070,350,85);label(c,'떠밀려온 폐어망',2070,240,'#d5caa1',13);}
+  const netPoint=harborLandmark(s.map,'net'),debrisPoint=harborLandmark(s.map,'debris'),sitePoint=harborLandmark(s.map,'testSite');
+  if(!s.netResolved){net(c,netPoint.x,netPoint.y);label(c,'폐어망 · F 회수 / X 절단',netPoint.x,netPoint.y-70,'#d5caa1',13);}
+  if(s.debris&&s.depth>0){net(c,debrisPoint.x,debrisPoint.y,85);label(c,'떠밀려온 폐어망',debrisPoint.x,debrisPoint.y-110,'#d5caa1',13);}
   if(s.depth===2&&s.map.secret){
-    prop(c,'station',2080,175,95,100);prop(c,'buoy',2180,205,18,30);
-    label(c,s.secretFound?'백야 관측소 · 영구 폐쇄':'봉쇄된 관측소 · E',2080,78,'#c9bc95',13);
+    prop(c,'station',sitePoint.x,sitePoint.y-15,95,100);prop(c,'buoy',sitePoint.x+100,sitePoint.y+15,18,30);
+    label(c,s.secretFound?'백야 관측소 · 영구 폐쇄':'봉쇄된 관측소 · E',sitePoint.x,sitePoint.y-112,'#c9bc95',13);
   }
   const boss=s.boss,p=s.map.boss;
   const dredger=usesDredger(s);

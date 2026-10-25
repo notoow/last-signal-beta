@@ -1,3 +1,4 @@
+import {drawReturnLanding,isOwnReturnTarget} from './shore-return-cue.js';
 import {project,unproject} from './world-projection.js';
 import {edgeMarker} from './rogue-camera.js';
 import {WORLD_UNITS_PER_METRE as M,CREW_HEIGHT,shoreScale,shoreRanges} from './shore-scale.js';
@@ -334,12 +335,13 @@ export function drawQuay(c,s,f,{reduced=false,language='ko',task=null,search=nul
   for(const fx of s.combat.effects){const p=project(f,fx,3*shoreScale(s));c.save();c.globalAlpha=fx.left/.3;c.strokeStyle=fx.kind==='hurt'?'#f18c76':'#ffda8d';c.lineWidth=1.5;
     const r=(1-fx.left/.3)*7+2;for(let i=0;i<6;i++){const a=i*Math.PI/3;c.beginPath();c.moveTo(p.x+Math.cos(a)*r*.4,p.y+Math.sin(a)*r*.4);c.lineTo(p.x+Math.cos(a)*r,p.y+Math.sin(a)*r);c.stroke();}c.restore();}
   if(s.person&&search?.progress>0){const p=project(f,s.person,CREW_HEIGHT);c.strokeStyle='#efc567';c.lineWidth=2;c.beginPath();c.arc(p.x,p.y-7,4,-Math.PI/2,-Math.PI/2+Math.PI*2*search.progress/search.required);c.stroke();}
-  if(task?.target&&s.person){
+  const returnCue=drawReturnLanding(c,s,f,boat?.bounds);
+  if(task?.target&&s.person&&!isOwnReturnTarget(s,task.target)){
     const mark=edgeMarker(f,task.target,20);
     if(mark){
       c.save();c.translate(mark.x,mark.y);c.rotate(mark.angle);polygon(c,[{x:6,y:0},{x:-4,y:-4},{x:-4,y:4}],'#ecd393');c.restore();
       label(c,language==='en'?'Objective':'목표',{x:Math.max(30,Math.min(f.width-30,mark.x)),y:mark.y-10});
     }
   }
-  return {ready:true,boat,tow,vesselOrder:supplyBehind?['supply','captain']:['captain','supply'],actorBounds,captainOcclusion,scenery:props.filter(p=>p.box).map(p=>({box:p.box,bounds:p.bounds})),shoreEdges:edgeCount};
+  return {ready:true,returnCue,boat,tow,vesselOrder:supplyBehind?['supply','captain']:['captain','supply'],actorBounds,captainOcclusion,scenery:props.filter(p=>p.box).map(p=>({box:p.box,bounds:p.bounds})),shoreEdges:edgeCount};
 }

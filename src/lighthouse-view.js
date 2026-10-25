@@ -1,4 +1,4 @@
-import {LIGHTHOUSE,RELAYS,BREAKWATERS,lighthouseStatus,lighthouseRayLength,relayApproach} from './lighthouse-counterplay.js';
+import {LIGHTHOUSE,relayPosition,relayPositions,breakwaterPositions,lighthouseStatus,lighthouseRayLength,relayApproach} from './lighthouse-counterplay.js';
 const images=Object.fromEntries(['base','head','relay-off','relay-on','breakwater'].map(id=>{
   const image=new Image();image.src=`assets/art/lighthouse-${id}-v1.png`;return [id,image];
 }));
@@ -16,7 +16,7 @@ function sprite(c,id,x,y,angle=0){
 export function lighthouseConnectionMarker(s,task,language='ko'){
   const a=lighthouseStatus(s),target=task?.target;
   if(!s.boss.active||s.boss.cleared||a.pendingImpact||a.index<0||!target||task.planSite||task.planBoss||task.rescue)return null;
-  const relay=RELAYS[a.index],point=a.linked?relay:relayApproach(s,a.index);
+  const relay=relayPosition(a.index,s),point=a.linked?relay:relayApproach(s,a.index);
   if(target.x!==point.x||target.y!==point.y)return null;
   const number=String(a.index+1).padStart(2,'0'),en=language==='en';
   return {index:a.index,point,relay,linked:a.linked,canConnect:a.canConnect,color:'#8de1e3',
@@ -63,9 +63,9 @@ export function drawLighthouse(c,s,{label,reduced=false,language='ko',task=null}
       c.strokeStyle='#f7dbb5';c.lineWidth=2/scale;c.beginPath();c.arc(t.x,t.y,LIGHTHOUSE.radius,0,Math.PI*2);c.stroke();
     }
   }
-  for(const cover of BREAKWATERS)sprite(c,'breakwater',cover.x,cover.y);
-  for(let i=0;i<RELAYS.length;i++){
-    const r=RELAYS[i],sent=b.parts[i]===0;
+  for(const cover of breakwaterPositions(s))sprite(c,'breakwater',cover.x,cover.y);
+  for(let i=0;i<relayPositions(s).length;i++){
+    const r=relayPosition(i,s),sent=b.parts[i]===0;
     sprite(c,sent?'relay-on':'relay-off',r.x,r.y);
     label(c,`${String(i+1).padStart(2,'0')} · ${sent?(en?'ACKNOWLEDGED':'수신 확인'):en?'RELAY':'중계기'}`,r.x,r.y-48,sent?'#afd8ad':'#e5d3a2',13);
     if(marker?.index===i){

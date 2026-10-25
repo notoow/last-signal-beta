@@ -7,8 +7,9 @@ import {random,inside} from './rogue-map-v1.js';
 import {WORLD_UNITS_PER_METRE as METRE,crewRadius} from './shore-scale.js';
 import {branchGraph} from './harbor-branch-graph.js';
 import {placeShoreSearch} from './shore-search-layout.js';
+import {compactHarbor} from './compact-harbor.js';
 import {shoreRoute} from './shore-navigation.js';
-export const GENERATOR_VERSION=7;
+export const GENERATOR_VERSION=8;
 export const TILE=40;
 export const LAND={water:0,quay:1,brick:2,deck:3,rock:4};
 export const shoreBuildings=r=>r.buildings||[{kind:'hut',x:r.x+r.w-130,y:r.y+20,w:112,h:125}];
@@ -243,6 +244,12 @@ export function validateMap(map){
 }
 export function generateHarbor(seed,depth=0,version=GENERATOR_VERSION){
   if(!Number.isInteger(seed)||seed<0||seed>0xffffffff||!Number.isInteger(depth)||depth<0||depth>2)throw Error('Invalid harbor seed/depth/version');
+  if(version===8){
+    const map=compactHarbor(generateHarbor(seed,depth,7),seed);
+    const check=validateMap(map);
+    if(!check.ok)throw Error('Compact harbor failed validation: '+check.errors.join(', '));
+    return map;
+  }
   if(version===1)return legacyHarbor(seed,depth);
   if(version===2)return harborV2(seed,depth,2);
   if(version===4)return humanHarbor(seed,depth);

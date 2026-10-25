@@ -1,3 +1,4 @@
+import {harborArenaX} from './rogue-landmarks.js';
 import {SLUICE,sluiceGate,sluiceCleat,sluiceStatus,recentSluiceImpact} from './sluice-counterplay.js';
 const sprites=Object.fromEntries(['gate-closed','gate-exposed','gate-open','capstan','foam-1','foam-2'].map(id=>{
   const image=new Image();image.src='assets/art/sluice-'+id+'-v1.png';return [id,image];
@@ -100,19 +101,19 @@ export function drawSluice(c,s,{label,reduced=false,language='ko',overview=false
     const color=reverse?'#d78e6b':warn?'#d9c286':'#aedaca';
     c.save();
     c.fillStyle=reverse?'#b05e411a':warn?'#c8aa5410':'#9bd6c10d';
-    c.fillRect(SLUICE.left,y-SLUICE.halfWidth,SLUICE.right-SLUICE.left,SLUICE.halfWidth*2);
+    c.fillRect(harborArenaX(s,SLUICE.left),y-SLUICE.halfWidth,harborArenaX(s,SLUICE.right)-harborArenaX(s,SLUICE.left),SLUICE.halfWidth*2);
     c.strokeStyle=color;c.globalAlpha=.55;c.lineWidth=2;
     c.setLineDash(warn&&!a.locked?[8,9]:[]);
     for(const dy of [-SLUICE.halfWidth,SLUICE.halfWidth]){
-      c.beginPath();c.moveTo(SLUICE.left,y+dy);c.lineTo(SLUICE.right,y+dy);c.stroke();
+      c.beginPath();c.moveTo(harborArenaX(s,SLUICE.left),y+dy);c.lineTo(harborArenaX(s,SLUICE.right),y+dy);c.stroke();
     }
     c.setLineDash([]);
     // Mark the flow direction, never a mandatory route. Sparse foam advects
     // inside the same physical band; reduced motion uses static chevrons only.
-    const travel=reduced||warn?0:(s.time*110)%(SLUICE.right-SLUICE.left);
+    const travel=reduced||warn?0:(s.time*110)%(harborArenaX(s,SLUICE.right)-harborArenaX(s,SLUICE.left));
     for(let i=0;i<4;i++){
-      const offset=(i*145+travel)%(SLUICE.right-SLUICE.left);
-      const x=reverse?SLUICE.right-offset:SLUICE.left+offset;
+      const offset=(i*145+travel)%(harborArenaX(s,SLUICE.right)-harborArenaX(s,SLUICE.left));
+      const x=reverse?harborArenaX(s,SLUICE.right)-offset:harborArenaX(s,SLUICE.left)+offset;
       c.save();c.translate(x,y);if(reverse)c.scale(-1,1);
       c.beginPath();c.moveTo(-10,-6);c.lineTo(0,0);c.lineTo(-10,6);c.stroke();c.restore();
       if(!warn&&!reduced){
@@ -125,10 +126,10 @@ export function drawSluice(c,s,{label,reduced=false,language='ko',overview=false
     const text=reverse?(en?'BACKWASH ←':'역류 ←'):warn?
       (a.locked?(en?'LANE LOCKED →':'수로 고정 →'):(en?'SELECTING LANE →':'방류 수로 선택 →')):
       (a.exposed?(en?'SURGE → hit the brass plate':'방류 → 황동판에 선수 충돌'):(en?'UNLOCKED →':'잠금 해제 →'));
-    if(!hud)label(c,text,2720,y-SLUICE.halfWidth-20,color,14);
+    if(!hud)label(c,text,harborArenaX(s,2720),y-SLUICE.halfWidth-20,color,14);
   }
   for(let i=0;i<3;i++){
-    const p=sluiceGate(i),opened=b.parts[i]<=0,exposed=a.exposed&&i===a.lane;
+    const p=sluiceGate(i,s),opened=b.parts[i]<=0,exposed=a.exposed&&i===a.lane;
     const motion=impact?.lane===i?sluiceImpactMotion(impact,{opened,reduced,overview,scale:frame?.scale}):null;
     drawSluiceGate(c,p,{opened,exposed,motion,frame});
     label(c,`${String(i+1).padStart(2,'0')} · ${opened?(en?'OPEN':'열림'):exposed?(en?'HIT':'충돌'):en?'LOCKED':'잠김'}`,
@@ -141,7 +142,7 @@ export function drawSluice(c,s,{label,reduced=false,language='ko',overview=false
       }
     }
     if(!opened){
-      const cleat=sluiceCleat(i);sprite(c,'capstan',cleat.x,cleat.y);
+      const cleat=sluiceCleat(i,s);sprite(c,'capstan',cleat.x,cleat.y);
       if(b.active&&Math.hypot(s.boat.x-cleat.x,s.boat.y-cleat.y)<130)
         label(c,b.hook===i?(en?'E · release':'E · 놓기'):(en?'E · mooring ring':'E · 계류 고리'),cleat.x,cleat.y+35,'#d8ceb0',13);
     }

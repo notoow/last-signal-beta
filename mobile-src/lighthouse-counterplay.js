@@ -1,5 +1,6 @@
 // A voyage opts in once. The lighthouse checks a physical radio link; towing
 // force, collision damage and a stored burst never substitute for transmission.
+import {harborArenaPoint} from './rogue-landmarks.js';
 import {hullHitsCircle} from './dredger-counterplay.js';
 export const LIGHTHOUSE_MODEL='signal-v1';
 export const LIGHTHOUSE={range:720,spread:.17,detection:.7,warning:2.3,impactTail:.25,
@@ -13,12 +14,14 @@ const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 export const usesLighthouse=s=>s.lighthouseModel===LIGHTHOUSE_MODEL&&s.depth===2&&!!s.boss.lighthouse;
 export const newLighthouse=seed=>({direction:seed%2?1:-1,exposure:0,target:null,impact:false,
   impactAt:-1,hit:false,progress:[0,0,0],lastSent:-1,sentAt:-1,decoyUsed:0});
-export const relayPosition=i=>RELAYS[i];
+export const relayPosition=(i,s)=>harborArenaPoint(s,RELAYS[i]);
+export const relayPositions=s=>RELAYS.map(p=>harborArenaPoint(s,p));
+export const breakwaterPositions=s=>BREAKWATERS.map(p=>harborArenaPoint(s,p));
 export function relayApproach(s,i){
   // Suggest clear water with room for a keyboard heading and current drift.
   // This is a navigation cue, not a required berth: the physical link still
   // accepts every position/heading allowed by lighthouseStatus.
-  const p=RELAYS[i],a=[-Math.PI*3/4,-Math.PI/2,Math.PI][i];
+  const p=relayPosition(i,s),a=[-Math.PI*3/4,-Math.PI/2,Math.PI][i];
   const x=p.x+Math.cos(a)*90,y=p.y+Math.sin(a)*90;
   return {x,y,angle:Math.atan2(s.map.boss.y-y,s.map.boss.x-x)};
 }
@@ -40,15 +43,15 @@ const ends=b=>{
 };
 const coverEnds=p=>[{x:p.x-20,y:p.y},{x:p.x+20,y:p.y}];
 export function lighthouseSight(s,p){
-  return !BREAKWATERS.some(c=>segmentDistance(s.map.boss,p,...coverEnds(c))<=35);
+  return !breakwaterPositions(s).some(c=>segmentDistance(s.map.boss,p,...coverEnds(c))<=35);
 }
 export function lighthouseBlocked(s,body){
   if(!usesLighthouse(s))return false;
   // The pivot is the elevated lamp mount. Its round floating base's waterline
   // centre is 18 world units below it (asset contract), never the antenna top.
   const base={x:s.map.boss.x-.878225,y:s.map.boss.y+18.131875};
-  return hullHitsCircle(base,body,70)||RELAYS.some(p=>hullHitsCircle(p,body,16))||
-    BREAKWATERS.some(p=>segmentDistance(...ends(body),...coverEnds(p))<=35+body.width/2);
+  return hullHitsCircle(base,body,70)||relayPositions(s).some(p=>hullHitsCircle(p,body,16))||
+    breakwaterPositions(s).some(p=>segmentDistance(...ends(body),...coverEnds(p))<=35+body.width/2);
 }
 // Each tested point includes the hull width. A stern still exposed beyond
 // cover can be detected, even when the boat's centre is in shadow.
@@ -68,8 +71,9 @@ export function lighthouseRayLength(s,angle){
 }
 export function lighthouseStatus(s){
   const b=s.boss,l=b.lighthouse,boat=s.boat;
-  const nearest=RELAYS.reduce((best,p,i)=>b.parts[i]>0&&(best<0||dist(boat,p)<dist(boat,RELAYS[best]))?i:best,-1);
-  const index=b.hook>=0?b.hook:nearest,p=RELAYS[index];
+  const relays=relayPositions(s);
+  const nearest=relays.reduce((best,p,i)=>b.parts[i]>0&&(best<0||dist(boat,p)<dist(boat,relays[best]))?i:best,-1);
+  const index=b.hook>=0?b.hook:nearest,p=relays[index];
   const angle=Math.atan2(s.map.boss.y-boat.y,s.map.boss.x-boat.x);
   const speed=Math.hypot(boat.vx,boat.vy),aligned=Math.abs(wrap(angle-boat.angle))<=LIGHTHOUSE.signalAngle;
   const inRange=!!p&&dist(boat,p)<=LIGHTHOUSE.linkRange;
