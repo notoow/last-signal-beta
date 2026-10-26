@@ -5,3 +5,19 @@ body:has(.beta-form){background:#15191d;color:#f3f1e8;font:16px/1.6 sans-serif;m
 .beta-form button{font:inherit;background:#f3a343;color:#15191d;border:0;padding:12px 24px;margin-top:16px;cursor:pointer}
 .beta-form button:disabled{opacity:.6}.beta-form pre{white-space:pre-wrap}.beta-form :focus-visible{outline:2px solid #75b4c4;outline-offset:2px}
 .rp-view>.beta-report-link{position:absolute;top:0;right:22px;min-height:44px;display:flex;align-items:center;margin:0;padding:8px 10px;font-size:11px;max-width:42%;box-sizing:border-box;z-index:3}
+/* Feedback-only performance snapshot; no in-game HUD changes. */
+.beta-form .performance-summary{margin:24px 0;border-block:1px solid #41484e;padding:16px 0}
+.beta-form .performance-summary h2{font-size:18px;margin:0 0 8px}
+.beta-form .performance-summary h2 span,.beta-form .performance-meta{font-size:13px;color:#b9c5cb}
+.beta-form #performance-status,.beta-form #performance-note{font-size:13px;color:#c6d0d5;margin:8px 0}
+.beta-form #performance-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin:16px 0}
+.beta-form .performance-row{border-left:2px solid #75b4c4;padding-left:12px}
+.beta-form .performance-row h3{font-size:16px;margin:0 0 4px}
+.beta-form .performance-row p{font-size:13px;margin:3px 0}
+.beta-form .report-actions{display:flex;gap:8px;flex-wrap:wrap}
+.beta-form .report-actions button{flex:1 1 200px;padding:12px;min-height:48px}
+.beta-form #copy-report{background:transparent;color:#f3f1e8;border:1px solid #72818a}
+.beta-form a{color:#a4d6e2;text-underline-offset:3px}
+.beta-form pre{overflow-wrap:anywhere;font-size:13px}
+.beta-form #copy-fallback[hidden]{display:none}
+@media(max-width:600px){body:has(.beta-form){padding:16px}.beta-form h1{font-size:25px}.beta-form #performance-groups{grid-template-columns:1fr}.beta-form .performance-row{display:grid;grid-template-columns:1fr 1.5fr;column-gap:8px}.beta-form .performance-row h3{grid-row:span 2}.beta-form .performance-row p{font-size:12px}}

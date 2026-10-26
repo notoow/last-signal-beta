@@ -1,4 +1,5 @@
 import {VoyageScore} from './soundtrack.js';
+import {frameSampler} from './frame-performance.js';
 import {audioMarkup,bindAudio} from './audio-settings.js';
 import {visibleAt} from './rogue-vision.js';
 import {steeringInput} from './steering-input.js';
@@ -50,6 +51,12 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   $('rogueChart').innerHTML='<canvas id="rogueMinimap" width="336" height="192" aria-hidden="true"></canvas><span>'+(en?'M · Chart':'M · 해도')+'</span>';
   $('rogueChart').setAttribute('aria-label',en?'Expand chart · current position':'해도 확대 · 현재 위치');
   let state=null,paused=true,mapOpen=false,last=performance.now(),clock=0,frameId,closed=false,captain='woo',build='standard',saveError=false;
+  const performanceSamples=frameSampler();
+  window.addEventListener('lastsignal:performance-request',event=>{
+    if(!event.detail||closed)return;
+    event.detail.snapshot={schema:1,capturedAt:Date.now(),viewport:{width:innerWidth,height:innerHeight,dpr:devicePixelRatio},
+      summary:performanceSamples.summary(),rendererError:$('rogueSea')?.dataset.shoreGpuError?.slice(0,160)||null};
+  },options);
   let inputMode=null;
   const steering=steeringInput(keys,{target:window,game:'rogue',active:()=>!paused&&!mapOpen&&!closed,signal:controller.signal});
   function releaseControls(){clearRigAction(state);keys.clear();steering.clear();window.dispatchEvent(new CustomEvent('lastsignal:input-reset',{detail:{game:'rogue'}}));}
@@ -430,6 +437,9 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   window.addEventListener('beforeunload',save,options);
   function frame(now){
     if(closed)return;const dt=Math.min((now-last)/1000,.05);last=now;
+    const shore=state&&['moored','ashore'].includes(state.mode),sea=$('rogueSea');
+    performanceSamples.sample(now,{mode:state?.mode,renderer:shore?(sea?.dataset.shoreGpuReady==='true'?'gpu':sea?.dataset.shoreGpuReady==='false'?'canvas':'unknown'):'canvas',
+      active:!!state&&state.status==='playing'&&!paused&&!mapOpen&&!document.hidden&&root.dataset.surface==='playing'});
     const shoreProfile=state?.generator>=4&&['moored','ashore'].includes(state.mode)?'metre':'';
     if(root.dataset.shoreProfile!==shoreProfile){root.dataset.shoreProfile=shoreProfile;probe.invalidate();}
     if(state&&inputMode!==state.mode){if(inputMode!==null)releaseControls();inputMode=state.mode;}

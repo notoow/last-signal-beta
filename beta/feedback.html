@@ -5,9 +5,18 @@
 <main class="beta-form"><h1>버그 제보 / Report a bug</h1>
 <p>상황을 적으면 버전과 저장된 항해 정보를 넣은 GitHub 이슈 작성 화면으로 이동합니다. 최종 등록에는 GitHub 로그인이 필요합니다.</p>
 <p>제보는 공개됩니다. 이름·이메일 등 개인정보는 적지 마세요. 전체 저장 파일은 첨부하지 않습니다.</p>
-<form><label for="description">상황과 재현 방법 / What happened?</label><textarea id="description" required minlength="3" maxlength="3000" rows="8"></textarea>
-<details open><summary>함께 첨부할 정보 / Attached context</summary><pre id="context"></pre></details>
-<button type="submit">GitHub에서 제보 작성 / Open GitHub issue</button><p id="result" role="status"></p></form>
+<form><label for="description">상황과 재현 방법 / What happened?</label><textarea id="description" required minlength="3" maxlength="3000" rows="5" placeholder="예: 부두에 내린 뒤 이동할 때 화면이 끊겨요."></textarea>
+<section class="performance-summary" aria-labelledby="performance-heading">
+<h2 id="performance-heading">최근 플레이 기록 <span>/ Recent performance</span></h2>
+<p id="performance-status"></p>
+<div id="performance-groups"></div>
+<p id="performance-note" hidden>화면 갱신 간격은 낮을수록 부드럽습니다. 각 구간의 최근 최대 300회 기록이며, 메뉴·백그라운드 시간은 제외합니다. <span lang="en">Frame intervals, up to 300 per group; menus and background time excluded.</span></p>
+</section>
+<details><summary>함께 첨부할 정보 / Attached context</summary><pre id="context"></pre></details>
+<div class="report-actions"><button type="submit">GitHub에서 제보 작성 / Open GitHub issue</button><button id="copy-report" type="button">제보 내용 복사 / Copy report</button></div>
+<p id="result" role="status"></p>
+<div id="copy-fallback" hidden><label for="copy-text">아래 내용을 선택해 복사하세요. / Select and copy below.</label><textarea id="copy-text" rows="8" readonly></textarea></div>
+</form>
 <p><a href="https://github.com/notoow/last-signal-beta/issues" target="_blank" rel="noopener">기존 제보 보기 / Existing reports</a> · <a href="../">게임으로 / Play</a></p>
 <p>GitHub 작성 화면에서 Submit new issue를 눌러야 등록이 완료됩니다.</p></main>
 <script type="module" src="./feedback.js"></script></html>
