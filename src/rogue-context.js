@@ -1,6 +1,6 @@
 import {berthReadiness,shoreSearchStatus,bossLinkCandidate} from './rogue-core.js';
 import {rescueStatus} from './shore-rescue.js';
-import {visibleAt,visibleSurvey,surveyedAt,SURVEY_COLS,SURVEY_CELL} from './rogue-vision.js';
+import {visibleAt,visibleSurvey,surveyedAt,surveyGrid,newSurvey} from './rogue-vision.js';
 import {campStatus} from './voyage-daylight.js';
 import {shoreRanges} from './shore-scale.js';
 import {salvageStatus,winchBurstReady,winchStoreReady,winchLaunchReady} from './rogue-salvage.js';
@@ -99,6 +99,7 @@ export function rogueContextActions(s){
 }
 export function rogueMinimap(s){
   if(!s)return null;
+  const grid=surveyGrid(s.map);
   const known=p=>s.harborIntel?knownBerth(s,p):surveyedAt(s,p);
   const player=s.person||s.boat,rescue=rescueStatus(s),destination=harborDestination(s);
   // Send remembered terrain, not a complete map hidden only by a paint layer.
@@ -110,7 +111,7 @@ export function rogueMinimap(s){
   return {width:s.map.width,height:s.map.height,cols:s.map.cols,rows:s.map.rows,tiles,
     islands:s.map.tiles?[]:s.map.islands.map(p=>({x:p.x,y:p.y,w:p.w,h:p.h})),mode:s.mode,
     target:destination?{x:destination.point.x,y:destination.point.y}:null,
-    survey:s.survey?.slice()||null,visible:visibleSurvey(s),surveyCols:SURVEY_COLS,surveyCell:SURVEY_CELL,
+    survey:s.survey?(s.survey.length===grid.cols*grid.rows?s.survey.slice():newSurvey(s.map)):null,visible:visibleSurvey(s),surveyCols:grid.cols,surveyCell:grid.cell,
     player:{x:player.x,y:player.y,angle:player.angle},boat:{x:s.boat.x,y:s.boat.y},
     berths:s.map.berths.filter(known).map(b=>({x:b.x,y:b.y,claimed:s.claimed.includes(b.id)})),
     rescue:rescue?.active&&rescue.discovered&&visibleAt(s,rescue.point)?{x:rescue.point.x,y:rescue.point.y,stage:rescue.stage,blocked:rescue.blocked}:null,

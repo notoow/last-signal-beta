@@ -208,13 +208,25 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     },options));
     selectCaptain();selectBuild();
     root.querySelectorAll('.embark details').forEach(d=>d.addEventListener('toggle',()=>{if(d.open)root.querySelectorAll('.embark details').forEach(x=>{if(x!==d)x.open=false;});},options));
+    const protectNewerVoyage=()=>{
+      try{
+        const raw=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');
+        if(raw&&(raw.version>RUN_VERSION||raw.generator>GENERATOR_VERSION)){
+          $('rogueLaunch').disabled=true;
+          $('rogueLaunch').textContent=t('더 최신 버전의 항해 기록이 있습니다','Saved voyage needs a newer version');
+          return true;
+        }
+      }catch{}
+      return false;
+    };
     try{
       const previous=restoreRun(localStorage.getItem(SAVE_KEY));
       if(previous?.status==='playing')$('rogueLaunch').textContent=t('현재 항해를 끝내고 새 출항','Replace current voyage and sail');
-      const raw=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');
-      if(raw&&(raw.version>RUN_VERSION||raw.generator>GENERATOR_VERSION)){$('rogueLaunch').disabled=true;$('rogueLaunch').textContent=t('더 최신 버전의 항해 기록이 있습니다','Saved voyage needs a newer version');}
     }catch{}
+    protectNewerVoyage();
     activateModal($('rogueModal'),'[data-captain][aria-pressed=true]');bind('rogueHome',()=>preparationReturn?end():close());bind('rogueLaunch',()=>{
+      // Another tab may have saved a newer voyage while this selection was open.
+      if(protectNewerVoyage())return;
       const value=$('rogueSeed').value.trim(),seed=value===''?crypto.getRandomValues(new Uint32Array(1))[0]:Number(value);
       if(!/^\d{1,10}$/.test(value)&&value!==''||!Number.isInteger(seed)||seed<0||seed>0xffffffff){$('rogueSeed').setCustomValidity(t('0~4294967295 범위의 정수를 입력하세요.','Enter an integer from 0 to 4294967295.'));$('rogueSeed').reportValidity();return;}
       state=createRun(seed,captain,build,paint);preparationReturn=null;mapOpen=false;save();launchIntro();

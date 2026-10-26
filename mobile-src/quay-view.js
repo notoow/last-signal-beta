@@ -1,13 +1,14 @@
+import {makeCliffs,isCliff,h12Ready} from './cliff-view.js';
 import {drawReturnLanding,isOwnReturnTarget} from './shore-return-cue.js';
 import {project,unproject} from './world-projection.js';
 import {edgeMarker} from './rogue-camera.js';
 import {WORLD_UNITS_PER_METRE as M,CREW_HEIGHT,shoreScale,shoreRanges,humanVisualScale} from './shore-scale.js';
 import {TILE,tileAt,shoreMask,shoreBuildings} from './rogue-map.js';
-import {visibleAt,drawSurvey,SURVEY_CELL,SURVEY_COLS} from './rogue-vision.js';
+import {visibleAt,drawSurvey,surveyedAt} from './rogue-vision.js';
 import {fauna} from './shore-encounters.js';
 import {shoreActors,drawProjectedShoreActor} from './shore-animation.js';
 import {drawDockedCaptainBoat,prepareDockedFleet} from './captain-fleet.js';
-import {workRope,workSprite} from './harbor-work-art.js';
+import {workRope,dockWorkRope,dockWorkSprite} from './harbor-work-art.js';
 import {bakeQuayMaterial} from './quay-material.js';
 import {prepareSupplyFleet,drawSupplyBoat} from './supply-fleet.js';
 import {tugStern,towBow} from './rogue-tow.js';
@@ -16,6 +17,15 @@ import {drawCaptainOcclusion,drawCaptainVisible} from './shore-occlusion-outline
 
 const load=(file,retry=0)=>{const im=new Image();im.src='assets/art/'+file+(retry?'?quayRetry='+retry:'');return im;};
 let art=null,loadStarted=0,retryAttempt=0;
+let chestSource=null,chestCrop=null;
+function chestRaster(){
+  if(chestSource!==art.chest){
+    chestSource=art.chest;chestCrop=document.createElement('canvas');
+    chestCrop.width=465;chestCrop.height=318;
+    chestCrop.getContext('2d').drawImage(art.chest,885,90,465,318,0,0,465,318);
+  }
+  return chestCrop;
+}
 const files={serviceGround:'quay-service-diffuse-v1.png',serviceWetness:'quay-service-wetness-v1.png',workshop:'quay-landing-workshop-v1.png',warehouse:'quay-landing-warehouse-v1.png',
   ground:'quay-landing-ground-v2.png',wall:'quay-landing-wall-v1.png',wet:'quay-landing-wet-material-v4.png',
   gold:'quay-landing-ground-gold-v3.png',patch:'quay-landing-wet-patch-v1.png',props:'quay-landing-props-v1.png',
@@ -192,7 +202,7 @@ function scenery(c,s,f,tiles){
   for(const b of boxes){
     if(!b.visual)continue;
     if(s.survey&&![{x:b.x,y:b.y},{x:b.x+b.w,y:b.y+b.h},{x:b.x,y:b.y+b.h}].some(p=>
-      s.survey[Math.floor(p.y/SURVEY_CELL)*SURVEY_COLS+Math.floor(p.x/SURVEY_CELL)]))continue;
+      surveyedAt(s,p)))continue;
     const p=project(f,{x:b.x+b.w/2,y:b.y+b.h});
     const supply=b.visual==='supplies',im=supply?art.supplies:art[b.visual];if(!im)continue;
     const scale=supply?2*unit/996:unit/98.5,rect=supply?[284,92,996,809]:[0,0,1536,1024],pivot=supply?[498,809]:[704,858];
@@ -231,13 +241,13 @@ function boatAndLadder(c,s,f,tiles){
   const bounds=drawDockedCaptainBoat(c,p,s.boat.length*f.scale,s.captain,s.paint);
   for(const x of [-.32,.32]){
     const a=project(f,{x:b.x+s.boat.length*x,y:b.landing.y}),end=project(f,{x:s.boat.x+s.boat.length*x,y:s.boat.y-s.boat.width*.3},-.15*M);
-    workRope(c,a,end,1,Math.max(1.3,unit*.1));workSprite(c,'cleat',a.x,a.y,unit*.6,unit*.48);
+    dockWorkRope(c,a,end,1,Math.max(1.3,unit*.1));dockWorkSprite(c,'cleat',a.x,a.y,unit*.6,unit*.48);
   }
   // The usable landing is a physical bridge to the near gunwale. Render its
   // boards above the docked hull so the return point does not disappear behind
   // the wheelhouse. It has no extra collision beyond the real E interaction.
   const shore=project(f,b.landing),deck=project(f,{x:b.landing.x,y:s.boat.y-s.boat.width/2},-.3*M),dx=deck.x-shore.x,dy=deck.y-shore.y;
-  workSprite(c,'gangway',(deck.x+shore.x)/2,(deck.y+shore.y)/2,Math.hypot(dx,dy)+unit*.3,unit*.65,Math.atan2(dy,dx));
+  dockWorkSprite(c,'gangway',(deck.x+shore.x)/2,(deck.y+shore.y)/2,Math.hypot(dx,dy)+unit*.3,unit*.65,Math.atan2(dy,dx));
   return {bounds,point:p,ladder};
 }
 function groundThreats(c,s,f){
@@ -285,14 +295,16 @@ function label(c,text,p){
   c.font='600 11px Pretendard, sans-serif';c.textAlign='center';c.lineWidth=3;c.strokeStyle='#07191f';c.strokeText(text,p.x,p.y);c.fillStyle='#eee3c4';c.fillText(text,p.x,p.y);
 }
 export function drawQuay(c,s,f,{reduced=false,language='ko',task=null,search=null,cacheTerrain=true}={}){
-  if(prepareQuayArt().status!=='ready')return {ready:false};
+  if(prepareQuayArt().status!=='ready'||s.map.cliffs&&!h12Ready())return {ready:false};
   const unit=f.pixelsPerMetre,tiles=visibleTiles(s,f);
   c.fillStyle='#092d38';c.fillRect(0,0,f.width,f.height);
   const texture=c.createPattern(art.water,'repeat'),motion=reduced?0:s.time;
   texture.setTransform(new DOMMatrix().translate(f.ox+Math.sin(motion*.14)*unit*.055,f.oy+Math.sin(motion*.11)*unit*.025).scale(18*unit/art.water.width));
   c.save();c.globalAlpha=.68;c.fillStyle=texture;c.fillRect(0,0,f.width,f.height);c.restore();
-  const edgeCount=cacheTerrain?cachedTerrain(c,s,f,tiles):terrain(c,s,f,tiles).length;
+  const groundTiles=s.map.cliffs?tiles.filter(t=>!isCliff(s,t)):tiles;
+  const edgeCount=cacheTerrain?cachedTerrain(c,s,f,groundTiles):terrain(c,s,f,groundTiles).length;
   const props=scenery(c,s,f,tiles),searchLabels=[];
+  if(s.map.cliffs)props.push(...makeCliffs(c,s,f,tiles));
   // Survey dims remembered terrain, never a visible captain's actual painted
   // silhouette. Dynamic actors have their own LOS test; seen scenery retains
   // the same footprint ordering after this ground mask.
@@ -307,7 +319,7 @@ export function drawQuay(c,s,f,{reduced=false,language='ko',task=null,search=nul
   for(const b of s.map.berths){
     if(!visibleAt(s,b.searchPoint||b.loot))continue;
     const p=project(f,b.loot),k=1.2*unit/465,claimed=s.claimed.includes(b.id);
-    props.push({type:'cache',p,draw:()=>{c.save();c.globalAlpha=claimed?.45:1;c.drawImage(art.chest,885,90,465,318,p.x-465*k/2,p.y-318*k,465*k,318*k);c.restore();}});
+    props.push({type:'cache',p,draw:()=>{c.save();c.globalAlpha=claimed?.45:1;c.drawImage(chestRaster(),0,0,465,318,p.x-465*k/2,p.y-318*k,465*k,318*k);c.restore();}});
     if(s.person&&distance(s.person,b.loot)<shoreRanges(s).search&&!claimed){
       c.strokeStyle='#f3c477';c.lineWidth=1.25;c.beginPath();c.ellipse(p.x,p.y,unit*.55,unit*.18,.198,0,7);c.stroke();
       searchLabels.push({text:language==='en'?'Search':'수색',point:{x:p.x,y:p.y-Math.max(1.2*unit,CREW_HEIGHT*humanVisualScale(s)*f.scale+8)}});

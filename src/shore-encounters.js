@@ -1,5 +1,6 @@
 import {walkableAt,shoreBuildings,shoreSolid} from './rogue-map.js';
-import {shoreWaypoint} from './shore-navigation.js';
+import {cliffRayClear} from './shore-cliffs.js';
+import {shoreWaypoint,shoreRoute} from './shore-navigation.js';
 import {recordHit} from './rogue-voyage-record.js';
 import {publishImpact} from './rogue-impact.js';
 import {crewEffects} from './crew-upgrades.js';
@@ -24,7 +25,8 @@ const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const diff=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b));
 export const toolBerth=s=>s.map.berths[((s.seed^Math.imul(s.depth+1,2654435761))>>>0)%s.map.berths.length];
 export const hasTool=(s,id)=>s.tools?.includes(id);
-export function sightLine(map,a,b){
+export function sightLine(map,a,b,{revealTerrainFace=false}={}){
+  if(!cliffRayClear(map,a,b,{revealFace:revealTerrainFace}))return false;
   const length=dist(a,b),n=Math.max(1,Math.ceil(length/(map.version>=4?1:8))),pad=map.version>=4?.25:2;
   let candidates=null;
   if(map.version>=4){
@@ -69,6 +71,23 @@ function place(map,origin,radius){
   }
   return null;
 }
+// Compact waterfronts use metre-scale clearance rather than the old broad
+// warehouse exclusion. Keep wildlife away from the landing and cache itself.
+function coastAlleyHome(s,building,spec,enemies){
+  const origin={x:building.x+building.w/2,y:building.y+building.h+8};
+  for(let radius=0;radius<=24;radius+=4)for(let i=0;i<12;i++){
+    const p={x:origin.x+Math.cos(i*Math.PI/6)*radius,y:origin.y+Math.sin(i*Math.PI/6)*radius};
+    if(!walkableAt(s.map,p,spec.radius)||s.map.berths.some(b=>dist(p,b.loot)<28.8||dist(p,b.landing)<28.8)||enemies.some(e=>dist(e,p)<19.2))continue;
+    // Coast work yards are separated by water or solid cliffs. Avoid running
+    // an exhaustive failed shore search toward each unrelated island first.
+    if(s.map.berths.some(b=>{
+      const yard=s.map.islands[b.island];
+      return p.x>=yard.x&&p.x<=yard.x+yard.w&&p.y>=yard.y&&p.y<=yard.y+yard.h&&
+        shoreRoute(s.map,p,b.searchPoint,spec.radius);
+    }))return p;
+  }
+  return null;
+}
 export function newEncounter(s,ammo=12){
   const enemies=[];
   s.map.berths.forEach((b,i)=>{
@@ -88,8 +107,9 @@ export function newEncounter(s,ammo=12){
     const props=s.map.props.filter(p=>p.kind==='warehouse');
     for(let i=0;i<4&&props.length;i++){
       const r=props[((s.seed>>>0)+i*19+s.depth*7)%props.length],kind=i%2?'rat':'dog',spec=fauna(s,kind);
-      const p=place(s.map,{x:r.x+r.w/2,y:r.y+r.h+34},spec.radius);
-      if(!p||s.map.berths.some(b=>dist(p,b.loot)<125)||enemies.some(e=>dist(e,p)<60))continue;
+      const coast=s.generator===12&&s.depth===0;
+      const p=coast?coastAlleyHome(s,r,spec,enemies):place(s.map,{x:r.x+r.w/2,y:r.y+r.h+34},spec.radius);
+      if(!p||!coast&&(s.map.berths.some(b=>dist(p,b.loot)<125)||enemies.some(e=>dist(e,p)<60)))continue;
       enemies.push({...p,id:'alley-'+i,kind,homeX:p.x,homeY:p.y,angle:Math.PI/2,hp:spec.hp,phase:'idle',left:0,hit:0,stride:0,moving:false,stolen:0,stash:0,dead:0,alert:false,asleep:i%2===0,awareness:0});
     }
   }

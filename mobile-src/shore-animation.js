@@ -6,7 +6,7 @@ import {crewWalkCycle,crewPose,CREW_CYCLE} from './shore-pose.js';
 import {drawCrewRig} from './shore-rig.js';
 export {crewPose} from './shore-pose.js';
 const load=file=>{const i=new Image();i.src='assets/art/'+file;return i;};
-const fauna=load('shore-fauna-v1.png');
+const fauna=load('shore-fauna-v2.png');
 const crew=Object.fromEntries(['woo','park','han','jeong'].map(id=>[id,load('crew-sd-'+id+'-v1.png')]));
 const idleSheet=load('crew-sd-idle-v1.png');
 const workerSheet=load('shore-worker-v1.png');
@@ -98,7 +98,7 @@ export function drawShoreEncounter(c,s,reduced){
   actors.sort((a,b)=>(a.p.y+(a.p.kind==='gull'?100:0))-(b.p.y+(b.p.kind==='gull'?100:0)));
   for(const {p,enemy,worker} of actors){
     if(unit!==1){drawProjectedShoreActor(c,s,{p,enemy,worker},{scale:1,ox:0,oy:0,projection:IDENTITY_PROJECTION},reduced);continue;}
-    const bird=p.kind==='gull',size=enemy?{rat:32,dog:49,crab:78,gull:53}[p.kind]:55;
+    const bird=p.kind==='gull',size=enemy?{rat:48,dog:49,crab:78,gull:53}[p.kind]:55;
     c.fillStyle='#04141866';c.beginPath();c.ellipse(p.x,p.y+2,size*.23,size*.075,0,0,7);c.fill();
     const pose=enemy?p:{...fight,phase:'idle'};
     const frame=animationFrame(pose,enemy?null:fight.action);
@@ -150,7 +150,7 @@ export function drawProjectedShoreActor(c,s,actor,frame,reduced=false,{shadow=tr
   const m=frame.projection||HARBOR_PROJECTION,v={x:Math.cos(angle),y:Math.sin(angle)};
   const face=Math.atan2(m.yx*v.x+m.yy*v.y,m.xx*v.x+m.xy*v.y);
   const stride=(enemy||worker?p.stride:fight.stride)/unit/visual,moving=enemy||worker?p.moving:fight.moving;
-  const bird=p.kind==='gull',height=(enemy?{rat:32,dog:49,crab:78,gull:53}[p.kind]:55)*k;
+  const bird=p.kind==='gull',height=(enemy?{rat:48,dog:49,crab:78,gull:53}[p.kind]:55)*k;
   const lift=(bird?16+(reduced?0:Math.sin(s.time*7+p.homeX)*2):0)*k;
   const contact=enemy||worker?8:CREW_CYCLE/2;
   const stepLift=!reduced&&moving&&(enemy||worker)?Math.sin(stride/contact*Math.PI)**2*(enemy?1:1.5)*k:0;

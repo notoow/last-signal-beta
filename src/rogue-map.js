@@ -1,3 +1,5 @@
+import {generateSeededCoast} from './harbor-coastal-layout.js';
+import {coastalHarbor} from './harbor-coast.js';
 // Original harbor: topology -> channel carving -> terrain -> validation.
 // Frozen v1 preserves underway saves. No third-party generation code is included.
 import {generateHarbor as legacyHarbor,validateMap as legacyValidate,waterAt as legacyWater} from './rogue-map-v1.js';
@@ -11,7 +13,9 @@ import {compactHarbor} from './compact-harbor.js';
 import {shoreRoute} from './shore-navigation.js';
 import {applyLayout} from './shore-layouts.js';
 import {layoutOrder} from './shore-sites.js';
-export const GENERATOR_VERSION=9;
+import {selectDenseHarbor} from './harbor-density.js';
+import {cliffBlocksBody} from './shore-cliffs.js';
+export const GENERATOR_VERSION=12;
 export const TILE=40;
 export const LAND={water:0,quay:1,brick:2,deck:3,rock:4};
 export const shoreBuildings=r=>r.buildings||[{kind:'hut',x:r.x+r.w-130,y:r.y+20,w:112,h:125}];
@@ -47,13 +51,14 @@ export function waterAt(map,p,radius=0){
 }
 export function walkableAt(map,p,radius=9){
   if(p.x<radius||p.y<radius||p.x>map.width-radius||p.y>map.height-radius)return false;
+  if(cliffBlocksBody(map,p,radius))return false;
   if(map.version===1)return map.islands.some(r=>inside(p,r,-radius)&&!shoreBuildings(r).some(b=>inside(p,b,radius)));
   for(let y=Math.floor((p.y-radius)/TILE);y<=Math.floor((p.y+radius)/TILE);y++)
     for(let x=Math.floor((p.x-radius)/TILE);x<=Math.floor((p.x+radius)/TILE);x++)
       if(!tileAt(map,x,y))return false;
   return !map.props.some(b=>shoreSolid(p,b,radius))&&!map.islands.some(r=>shoreBuildings(r).some(b=>shoreSolid(p,b,radius)));
 }
-function candidate(seed,depth,attempt,exploration=false,branching=false){
+function candidate(seed,depth,attempt,exploration=false,branching=false,densityBands=null){
   const rng=random(seed^Math.imul(depth+1,0x9e3779b9)^Math.imul(attempt,0x85ebca6b)^(exploration?0x34e817a9:0));
   const content=random(seed^Math.imul(depth+17,0x27d4eb2d));
   const pick=(min,n)=>min+Math.floor(rng()*n)*TILE;
@@ -63,7 +68,7 @@ function candidate(seed,depth,attempt,exploration=false,branching=false){
     islands:[],berths:[],tiles:Array(85*45).fill(1),nodes:[],edges:[],props:[]};
   const node=(id,x,y,role='channel')=>{const n={id,x,y,role};map.nodes.push(n);return n;};
   const start=node('arrival',map.spawn.x,map.spawn.y,'arrival'),gate=node('sea-gate',2180,900,'gate');
-  const bands=[760,1000,1240];
+  const bands=densityBands?[...densityBands]:[760,1000,1240];
   if(branching)for(let i=2;i>0;i--){const j=Math.floor(rng()*(i+1));[bands[i],bands[j]]=[bands[j],bands[i]];}
   const main=[0,1,2].map(i=>node('basin-'+i,pick(branching?520+i*640:600+i*560,branching?2:3),pick(exploration?960:1000,branching?3:exploration?10:5),'service'));
   if(branching)main.forEach((n,i)=>n.y=bands[i]+pick(0,2));
@@ -197,6 +202,7 @@ function candidate(seed,depth,attempt,exploration=false,branching=false){
 export function validateMap(map){
   if(map.version===1)return legacyValidate(map);
   const radius=78,errors=[],nx=map.cols,ny=map.rows;
+  if(map.cliffs!==undefined&&(!Array.isArray(map.cliffs)||map.cliffs.length!==map.tiles.length||map.cliffs.some((v,i)=>(v!==0&&v!==1)||(v===1&&map.tiles[i]!==LAND.rock))))errors.push('invalid cliff mask');
   const cell=p=>({x:Math.floor(p.x/TILE),y:Math.floor(p.y/TILE)});
   const start=cell(map.spawn),seen=new Set(),queue=[];
   const add=(x,y)=>{
@@ -246,6 +252,32 @@ export function validateMap(map){
 }
 export function generateHarbor(seed,depth=0,version=GENERATOR_VERSION){
   if(!Number.isInteger(seed)||seed<0||seed>0xffffffff||!Number.isInteger(depth)||depth<0||depth>2)throw Error('Invalid harbor seed/depth/version');
+  if(version===12){
+    const original=generateHarbor(seed,depth,9);
+    const map=depth===0?generateSeededCoast(original,seed,validateMap):original;
+    map.version=12;return map;
+  }
+  if(version===11){
+    const original=generateHarbor(seed,depth,9);
+    const map=depth===0?coastalHarbor(original):original;
+    map.version=11;
+    const check=validateMap(map);
+    if(!check.ok)throw Error('Coastal harbor failed validation: '+check.errors.join(', '));
+    return map;
+  }
+  if(version===10){
+    const original=generateHarbor(seed,depth,9);
+    // First-region density is opt-in until integrated visual/input gates pass.
+    const map=depth===0?selectDenseHarbor(original,bands=>{
+      let proposed=candidate(seed,depth,original.attempt,true,true,bands);proposed.version=6;
+      if(!validateMap(proposed).ok)throw Error('Density terrain invalid');
+      proposed=compactHarbor(humanHarbor(seed,depth,proposed,6),seed);
+      const order=layoutOrder(seed,depth);
+      proposed.berths.forEach((b,i)=>{b.layout=order[i];b.rescuePoint=applyLayout(proposed,b,order[i]).rescue;});
+      proposed.version=9;return proposed;
+    },validateMap):original;
+    map.version=10;return map;
+  }
   if(version===9){
     const map=generateHarbor(seed,depth,8),order=layoutOrder(seed,depth);
     map.berths.forEach((b,i)=>{b.layout=order[i];b.rescuePoint=applyLayout(map,b,order[i]).rescue;});

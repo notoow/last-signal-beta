@@ -65,8 +65,18 @@ function floor(s){
     return {x,y,homeX:x,homeY:y,island:b.island,alert:0,bite:0};
   });
   if(s.combat!==null)s.combat=newEncounter(s,s.combat?.ammo??12);
-  s.survey=s.combat?newSurvey():null;
+  s.survey=s.combat?newSurvey(s.map):null;
   s.tow=s.combat&&s.generator>=2?newRogueTow(s):null;
+  // Begin alongside the first quay: both hulls share the landscape viewport.
+  // Keep the supply boat anchored until the player deliberately takes it along.
+  if(s.generator===12&&s.depth===0){
+    const berth=s.map.berths[0];
+    Object.assign(s.boat,{x:berth.x-80,y:berth.y+80});
+    if(s.tow){
+      Object.assign(s.tow,{x:s.boat.x-s.boat.length/2-132,y:s.boat.y,angle:0});
+      s.tow.anchor={x:s.tow.x,y:s.tow.y,angle:s.tow.angle};
+    }
+  }
   s.boss={active:false,cleared:false,phase:'idle',timer:0,cycle:0,aim:0,parts:Array(s.depth===0?2:3).fill(30),hook:-1,rest:70,tension:0};
   s.boss.crane=s.bossModel===DREDGER_MODEL&&s.depth===0?newCrane():null;
   s.boss.sluice=s.sluiceModel===SLUICE_MODEL&&s.depth===1?newSluice():null;
@@ -747,7 +757,7 @@ export function restoreRun(raw){
   try{
     if(typeof raw!=='string'||raw.length>160000)return null;
     const s=JSON.parse(raw),finite=(v,min,max)=>Number.isFinite(v)&&v>=min&&v<=max;
-    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,RUN_VERSION].includes(s.version)||![1,2,3,4,5,6,7,8,9].includes(s.generator)||!Number.isInteger(s.seed)||!finite(s.seed,0,0xffffffff)||!Number.isInteger(s.depth)||!finite(s.depth,0,2))return null;
+    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,RUN_VERSION].includes(s.version)||![1,2,3,4,5,6,7,8,9,10,11,12].includes(s.generator)||!Number.isInteger(s.seed)||!finite(s.seed,0,0xffffffff)||!Number.isInteger(s.depth)||!finite(s.depth,0,2))return null;
     if(s.version<18){s.daylight=newDaylight();if(s.combat?.enemies)for(const e of s.combat.enemies)e.stash=0;}
     if(!validDaylight(s))return null;
     if(s.version<17)s.crewUpgrades=null;
@@ -777,7 +787,7 @@ export function restoreRun(raw){
     if(s.version===1)s.skill=newSkillState();
     if(s.version<4){s.combat=null;s.tools=[];s.survey=null;s.tow=null;}
     s.version=RUN_VERSION;
-    if(!validateEncounter(s,finite)||!validSurvey(s.survey)||!validRogueTow(s.tow,finite,s.map))return null;
+    if(!validateEncounter(s,finite)||!validSurvey(s.survey,s.map)||!validRogueTow(s.tow,finite,s.map))return null;
     if(!validateSkill(s,finite))return null;
     const b=s.boat;if(!b||!finite(b.x,0,s.map.width)||!finite(b.y,0,s.map.height)||!finite(b.vx,-2000,2000)||!finite(b.vy,-2000,2000)||!finite(b.angle,-1e7,1e7)||!finite(b.inv,0,2))return null;
     if(!finite(b.omega,-20,20))return null;

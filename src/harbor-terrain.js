@@ -1,3 +1,4 @@
+import {identityCliffs,h12Ready} from './cliff-view.js';
 import {TILE,tileAt,shoreMask,shoreBuildings} from './rogue-map.js';
 import {harborFrames,gameArt} from './game-art.js';
 import {quayReady,quaySprite,quayFrames} from './quay-details.js';
@@ -51,6 +52,12 @@ function build(map){
     }
     c.restore();
   }
+  let floor=null;
+  if(map.cliffs){
+    c.save();c.beginPath();for(let y=0;y<map.rows;y++)for(let x=0;x<map.cols;x++)if(map.cliffs[y*map.cols+x]===1)c.rect(x*TILE,y*TILE,TILE,TILE);
+    c.clip();c.clearRect(0,0,map.width,map.height);c.restore();
+    floor=document.createElement('canvas');floor.width=map.width;floor.height=map.height;floor.getContext('2d').drawImage(canvas,0,0);c.clearRect(0,0,map.width,map.height);
+  }
   // Architecture uses fixed-size pieces placed only on solid footprints.
   for(const p of map.props)sprite(c,p.kind,p.x,p.y,p.w,p.h);
   for(const r of map.islands){
@@ -72,12 +79,13 @@ function build(map){
     c.strokeStyle='#c5b57d55';c.lineWidth=2;c.setLineDash([8,14]);
     c.beginPath();c.moveTo(r.x+16,r.y+r.h-50);c.lineTo(r.x+r.w-16,r.y+r.h-50);c.stroke();c.setLineDash([]);
   }
-  return {canvas,edges};
+  return {canvas:floor||canvas,scenery:floor?canvas:null,edges};
 }
-export function drawHarborTerrain(c,map,time=0,bounds=null){
-  if(!ready(atlas)||!ready(modules)||!quayReady())return false;
+export function drawHarborTerrain(c,map,time=0,bounds=null,state=null,frame=null){
+  if(!ready(atlas)||!ready(modules)||!quayReady()||map.cliffs&&!h12Ready())return false;
   let data=cache.get(map);if(!data){data=build(map);cache.set(map,data);}
   c.drawImage(data.canvas,0,0);
+  if(map.cliffs&&state&&frame){identityCliffs(c,state,data,frame);c.drawImage(data.scenery,0,0);}
   // Small moving wash belongs to shore edges, rather than uniformly covering the screen.
   c.save();c.strokeStyle='#b1d3cf';c.lineWidth=1.2;
   for(const e of data.edges){

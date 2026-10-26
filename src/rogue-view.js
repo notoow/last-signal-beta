@@ -1,3 +1,4 @@
+import {identitySurvey} from './cliff-view.js';
 import {shoreSiteName} from './shore-sites.js';
 import {harborLandmark} from './rogue-landmarks.js';
 import {gameArt} from './game-art.js';
@@ -166,7 +167,7 @@ function dockGeometry(c,a,scale){
   c.fillStyle='#f3f1e8';c.strokeStyle='#10171c';c.lineWidth=2/scale;
   c.beginPath();c.arc(p.x,p.y,4/scale,0,Math.PI*2);c.fill();c.stroke();c.restore();
 }
-function dockPanel(c,a,frame,presentation,s,language,exitScene=null){
+function dockPanelLayout(c,a,frame,presentation,s,language,exitScene=null){
   const point=p=>({x:p.x*frame.scale+frame.ox,y:p.y*frame.scale+frame.oy}),t=point(a.berth),p=point(a.boat),r=a.limits.distance*frame.scale;
   const rect=(x,y,w,h)=>({x,y,w,h}),pad=16,v=frame.viewport;
   const hullRadius=(Math.hypot(s.boat.length,s.boat.width)/2+5)*frame.scale;
@@ -176,7 +177,7 @@ function dockPanel(c,a,frame,presentation,s,language,exitScene=null){
     return rect(q.x-size*.55,q.y-size,size*1.1,size*1.25);
   });
   const width=Math.min(376,v.w-16),font=14,lines=[];
-  if(width<290)return null;
+  if(width<80||width<290&&!presentation.ready)return null;
   c.save();c.font=`600 ${font}px Pretendard, sans-serif`;
   let line='';for(const word of presentation.hint.split(' ')){
     const next=line?line+' '+word:word;
@@ -192,8 +193,9 @@ function dockPanel(c,a,frame,presentation,s,language,exitScene=null){
   });
   const hintY=28+(checkRow+1)*24,height=hintY+lines.length*19+8;
   const left=Math.min(hull.x,marker.x),right=Math.max(hull.x+hull.w,marker.x+marker.w),top=Math.min(hull.y,marker.y),bottom=Math.max(hull.y+hull.h,marker.y+marker.h);
-  const candidates=[rect((p.x+t.x)/2-width/2,bottom+pad,width,height),rect(right+pad,(p.y+t.y)/2-height/2,width,height),rect(left-pad-width,(p.y+t.y)/2-height/2,width,height),rect((p.x+t.x)/2-width/2,top-pad-height,width,height)]
-    .map(q=>({...q,x:Math.max(v.x+4,Math.min(v.x+v.w-q.w-4,q.x)),y:Math.max(v.y+4,Math.min(v.y+v.h-q.h-4,q.y))}));
+  const candidates=(w,h)=>[rect((p.x+t.x)/2-w/2,bottom+pad,w,h),rect(right+pad,(p.y+t.y)/2-h/2,w,h),rect(left-pad-w,(p.y+t.y)/2-h/2,w,h),rect((p.x+t.x)/2-w/2,top-pad-h,w,h)]
+    .map(q=>({...q,x:Math.max(v.x+4,Math.min(v.x+v.w-q.w-4,q.x)),y:Math.max(v.y+4,Math.min(v.y+v.h-q.h-4,q.y))}))
+    .filter(q=>q.x>=v.x&&q.y>=v.y&&q.x+q.w<=v.x+v.w&&q.y+q.h<=v.y+v.h);
   const supply=[];
   if(s.tow?.hp>0&&visibleAt(s,s.tow)){
     // Include the rotated rendered hull and its contact shadow, plus the
@@ -207,14 +209,33 @@ function dockPanel(c,a,frame,presentation,s,language,exitScene=null){
   }
   const facility=[];
   if(a.exit&&exitScene){const r=exitScene.site.surface,q=point(r);facility.push({...rect(q.x,q.y,r.w*frame.scale,r.h*frame.scale),kind:'exit-apron'});}
-  const protectedContent=[hull,marker,...enemies,...supply,...facility],blocks=[...protectedContent,...frame.occupied];
-  const panel=candidates.find(q=>!blocks.some(b=>dockOverlap(q,b)));if(!panel){c.restore();return null;}
+  const captions=supply.filter(b=>b.kind==='supply-caption');
+  const required=[hull,marker,...enemies,...supply.filter(b=>b.kind!=='supply-caption'),...facility];
+  const choose=(options,withCaptions)=>options.find(q=>![...required,...frame.occupied,...withCaptions?captions:[]].some(b=>dockOverlap(q,b)));
+  const full=width>=290?candidates(width,height):[];
+  let panel=choose(full,true),compact=false;
+  // An available action takes precedence over a secondary description, but
+  // never over the boat, enemies, docking geometry or painted HUD controls.
+  if(!panel&&presentation.ready)panel=choose(full,false);
+  if(!panel&&presentation.ready){
+    c.font=`600 ${font}px Pretendard, sans-serif`;
+    const small=candidates(c.measureText(presentation.hint).width+24,35);
+    panel=choose(small,true)||choose(small,false);compact=!!panel;
+  }
+  if(!panel){c.restore();return null;}
+  const suppressSupplyCaption=captions.some(b=>dockOverlap(panel,b));
+  c.restore();
+  return {...panel,compact,suppressSupplyCaption,font,lines:compact?[presentation.hint]:lines,
+    checkLabels:compact?[]:checkLabels,hintY:compact?8:hintY,protected:[...required,...suppressSupplyCaption?[]:captions]};
+}
+function drawDockPanel(c,a,presentation,language,panel){
+  const {font,lines,checkLabels,hintY}=panel;c.save();
   c.fillStyle='#10171cf2';c.fillRect(panel.x,panel.y,panel.w,panel.h);
   c.strokeStyle=presentation.ready?'#a4d7b3':'#95d1df';c.lineWidth=2;c.beginPath();c.moveTo(panel.x,panel.y);c.lineTo(panel.x,panel.y+panel.h);c.stroke();
   c.textAlign='left';c.textBaseline='top';c.font='600 12px Pretendard, sans-serif';c.fillStyle='#95d1df';
-  c.fillText(presentation.title,panel.x+12,panel.y+9);
+  if(!panel.compact)c.fillText(presentation.title,panel.x+12,panel.y+9);
   const label=a.status.freeHeading?(language==='en'?'● Boat centre   ○ Docking area':'● 배 중심   ○ 접안 구역'):(language==='en'?'● Boat centre   → Berth bow':'● 배 중심   → 계류 방향');c.font='400 11px Pretendard, sans-serif';c.fillStyle='#aab9c1';
-  c.textAlign='right';c.fillText(label,panel.x+panel.w-12,panel.y+9);c.textAlign='left';
+  c.textAlign='right';if(!panel.compact)c.fillText(label,panel.x+panel.w-12,panel.y+9);c.textAlign='left';
   c.font='500 14px Pretendard, sans-serif';
   const textBounds=[];
   for(const check of checkLabels){
@@ -225,7 +246,7 @@ function dockPanel(c,a,frame,presentation,s,language,exitScene=null){
   }
   c.font=`600 ${font}px Pretendard, sans-serif`;c.fillStyle=presentation.tone==='warning'?'#ffbe78':'#f3f1e8';
   lines.forEach((text,i)=>{const x=panel.x+12,y=panel.y+hintY+i*19;c.fillText(text,x,y);textBounds.push({x,y,w:c.measureText(text).width,h:19});});c.restore();
-  return {...panel,lines,textBounds,protected:protectedContent};
+  return {...panel,textBounds};
 }
 const towCaption=(t,language)=>language==='en'?(t.connected?'T Release · H '+(t.anchor?'Raise anchor':'Drop anchor'):'Supply boat · T Tow / H Anchor'):
   t.connected?'T 분리 · H 닻 '+(t.anchor?'올리기':'내리기'):'보급정 · T 견인 / H 닻';
@@ -367,14 +388,17 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
     if(!waterAt(s.map,{x,y},35))continue;
     c.save();c.translate(x,y);c.rotate(a);c.beginPath();c.moveTo(-12,0);c.lineTo(12,0);c.lineTo(6,-4);c.moveTo(12,0);c.lineTo(6,4);c.stroke();c.restore();
   }
-  if(s.map.version>=2)drawHarborTerrain(c,s.map,reduced?0:s.time,frame.bounds);
+  if(s.map.version>=2)drawHarborTerrain(c,s.map,reduced?0:s.time,frame.bounds,s,frame);
   else for(const island of s.map.islands){
     // Walkable service yard: roof modules are confined to a small back apron.
     gameArt.wall(c,{...island,id:'walkable-quay'});
     if(!['scenery','observation'].includes(island.role))gameArt.wall(c,{id:'service-pump',x:island.x+island.w-130,y:island.y+20,w:112,h:125});
     gameArt.dressing(c,island,reduced?0:s.time,true,s.map.islands);
   }
-  const exitScene=drawExitQuay(c,s);
+  // Fog raster edges can be antialiased at the chart boundary. Undiscovered
+  // exit artwork must never enter the canvas underneath that boundary.
+  const exitKnown=surveyedAt(s,s.map.exit);
+  const exitScene=exitKnown?drawExitQuay(c,s):null;
   if(exitScene)exitFrames.set(canvas,exitScene);else exitFrames.delete(canvas);
   for(const berth of s.map.berths){
     const selected=berth.id===s.mooring,docking=berthReadiness(s,berth),ok=docking.ready;
@@ -465,16 +489,17 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
     ring(c,decoy,20,'#a7e3d9');label(c,tracking?'미끼 부표 · 조준 유도':'미끼 부표 · 조준 고정',decoy.x,decoy.y-38,'#b9e9de',13);
     if(tracking){c.save();c.strokeStyle='#b9e9de88';c.setLineDash([5,7]);c.beginPath();c.moveTo(p.x,p.y);c.lineTo(decoy.x,decoy.y);c.stroke();c.restore();}
   }
-  if(!alignment?.exit){c.save();c.translate(s.map.exit.x,s.map.exit.y);c.rotate(s.map.exit.angle);c.strokeStyle=boss.cleared?'#afdcaf':'#667d79';c.lineWidth=3;c.strokeRect(-50,-24,100,48);c.restore();}
-  if(!alignment?.exit)label(c,exitScene?exitQuayLabel(exitScene,language):boss.cleared?dockHint(berthReadiness(s,s.map.exit),language,true):language==='en'?
+  if(exitKnown&&!alignment?.exit){c.save();c.translate(s.map.exit.x,s.map.exit.y);c.rotate(s.map.exit.angle);c.strokeStyle=boss.cleared?'#afdcaf':'#667d79';c.lineWidth=3;c.strokeRect(-50,-24,100,48);c.restore();}
+  if(exitKnown&&!alignment?.exit)label(c,exitScene?exitQuayLabel(exitScene,language):boss.cleared?dockHint(berthReadiness(s,s.map.exit),language,true):language==='en'?
     (lighthouse?'Lighthouse berth · acknowledge all 3 relays':sluice?'Exit berth · open all 3 gates':'Exit berth · stop the drives'):
     (lighthouse?'등대 부두 · 명부 3개 수신 확인 필요':sluice?'탈출 부두 · 수문 3개 개방 필요':'탈출 부두 · 구동부 정지 필요'),s.map.exit.x-40,s.map.exit.y+85);
   if(s.mode!=='sailing'){const berth=s.map.berths.find(b=>b.id===s.mooring);workRope(c,{x:s.boat.x-20,y:s.boat.y},berth.landing,.25,3.2);}
+  const dockLayout=alignment?dockPanelLayout(c,alignment,frame,dockCopy,s,language,exitScene):null;
   if(s.tow&&visibleAt(s,s.tow)&&s.tow.hp>0){
     const t=s.tow;drawWake(c,t,s.time,reduced);gameArt.boat(c,floatPose(t,reduced?0:s.time,!!t.anchor),'inspection');
     if(t.connected)workRope(c,tugStern(s.boat),towBow(t),t.tension,3.3);
     if(t.anchor){workRope(c,towBow(t),{x:t.anchor.x,y:t.anchor.y+36},.55,2);quaySprite(c,'anchor',t.anchor.x-6,t.anchor.y+27,13,24);}
-    label(c,towCaption(t,language),t.x,t.y-43,'#e6d6a9',13);
+    if(!dockLayout?.suppressSupplyCaption)label(c,towCaption(t,language),t.x,t.y-43,'#e6d6a9',13);
   }
   drawWake(c,s.boat,s.time,reduced);
   drawCaptainBoat(c,floatPose(s.boat,reduced?0:s.time,s.mode!=='sailing'),s.captain,s.paint);
@@ -499,7 +524,7 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   }
   voyageLight(c,s,frame,reduced,mapOpen);
   if(!mapOpen)gullScrapMarkers(c,s,frame,language);
-  drawSurvey(c,s);
+  if(s.map.cliffs)identitySurvey(c,s);else drawSurvey(c,s);
   if(mapOpen&&s.survey&&!chartPins){
     const plan=harborPlan(s);
     for(const b of s.map.berths){
@@ -514,7 +539,7 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   if(target&&!alignedTarget&&!connectionMarker)ring(c,target,task.rescue&&target===s.rescue?16*shoreScale(s):s.mode==='ashore'?shoreRanges(s).search:42,'#ebd59e');
   if(alignment)dockGeometry(c,alignment,scale);
   c.restore();
-  const panel=alignment?dockPanel(c,alignment,frame,dockCopy,s,language,exitScene):null;
+  const panel=dockLayout?drawDockPanel(c,alignment,dockCopy,language,dockLayout):null;
   canvas.dataset.dockPanel=String(!!panel);
   if(alignment)dockFrames.set(canvas,{berth:alignment.berth,boat:alignment.boat,worldRadius:alignment.limits.distance,radius:alignment.limits.distance*scale,
     centre:{x:alignment.berth.x*scale+ox,y:alignment.berth.y*scale+oy},presentation:dockCopy,panel,oldTargetRingSuppressed:!!alignedTarget});
