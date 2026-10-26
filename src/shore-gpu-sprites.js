@@ -30,6 +30,14 @@ export function recordShoreActor(s,actor,frame,reduced=false,{shadow=false}={}){
 // order, including the individual limbs of the authored walking rigs.
 export class ShoreGpuSprites{
   constructor(scene,prefix='sprites'){this.scene=scene;this.prefix=prefix;this.sources=new Map();this.colors=new Map();this.previous=[];this.order=[];}
+  prepare(images){
+    for(const image of images){
+      let id=this.sources.get(image);
+      if(!id){id=this.prefix+':atlas:'+this.sources.size;this.scene.atlas(id,image,{mipmaps:false,repeat:false});this.sources.set(image,id);}
+      if(!this.scene.prepareTexture(this.scene.textures.get(id)))return false;
+    }
+    return true;
+  }
   sync(commands){
     const scene=this.scene,order=[],groups=[];
     for(const command of commands){

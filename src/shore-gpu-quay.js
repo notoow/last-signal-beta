@@ -12,7 +12,7 @@ import {drawReturnLanding} from './shore-return-cue.js';
 import {ShoreSpriteRecorder} from './shore-sprite-recorder.js';
 import {ShoreGpuSprites,recordShoreActor,recordQuayScenery,recordQuayLoot} from './shore-gpu-sprites.js';
 import {quayGroundSources,behind,drawQuayVessels,drawQuayCombat,drawQuaySearchProgress,drawQuaySearchLabels,drawQuaySearchRings,drawQuayObjective,drawQuayVesselGuidance} from './quay-view.js';
-import {shoreActors} from './shore-animation.js';
+import {shoreActors,captainActionSources} from './shore-animation.js';
 import {project,HARBOR_PROJECTION} from './world-projection.js';
 import {WORLD_UNITS_PER_METRE as M} from './shore-scale.js';
 
@@ -45,6 +45,7 @@ export class ShoreGpuQuay{
       this.reflections=new ShoreGpuSprites(this.scene,'reflections');this.reflectionGeometry=new ShoreReflections();
       this.outline=new ShoreGpuOutline(this.scene);this.actorMask=new ShoreGpuSprites(this.scene,'actor-mask');this.coverMask=new ShoreGpuSprites(this.scene,'cover-mask');
     }
+    if(s.person){const actionSources=captainActionSources(s.captain);if(!actionSources||!this.sprites.prepare(actionSources))return {ready:false,missing};}
     const width=Math.round(frame.width*dpr),height=Math.round(frame.height*dpr);
     if(this.canvas.width!==width||this.canvas.height!==height){this.canvas.width=width;this.canvas.height=height;}
     const cliffs=recordShoreCliffs(s);if(!cliffs)return {ready:false,missing};

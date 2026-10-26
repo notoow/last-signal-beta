@@ -204,3 +204,9 @@ export function drawProjectedShoreActor(c,s,actor,frame,reduced=false,{shadow=tr
   }
   return {x:foot.x-height*.35,y:foot.y-height-lift,w:height*.7,h:height+lift,foot,height};
 }
+
+export function captainActionSources(id){
+  const primary=ready(crew[id])?crew[id]:id==='jeong'&&ready(originalJeong)?originalJeong:null;
+  if(!primary)return null;
+  return [...new Set([primary,...(id==='jeong'?[ready(jeongStrike)?jeongStrike:originalJeong]:[])].filter(ready))];
+}

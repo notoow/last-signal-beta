@@ -141,29 +141,8 @@ export class ShoreGpuScene{
     g.framebufferTexture2D(g.FRAMEBUFFER,g.COLOR_ATTACHMENT0,g.TEXTURE_2D,target.handle,0);
     if(g.checkFramebufferStatus(g.FRAMEBUFFER)!==g.FRAMEBUFFER_COMPLETE)throw Error('Incomplete shore target');
   }
-  draw({width=this.canvas.width,height=this.canvas.height,camera=identity,order=[...this.layers.keys()],layerViews={},target=null,alphaCutoff=0,clear=true}={}){
-    this.assertLive();if(this.lost)return false;
-    if(!Number.isFinite(width)||!Number.isFinite(height)||!(width>0&&height>0)||camera.length!==9||!camera.every(Number.isFinite))throw Error('Invalid shore camera');
-    const g=this.gl,buffer=target===null?null:this.targets.get(target);
-    if(target!==null&&!buffer)throw Error('Missing shore target');
-    if(buffer)this.prepareTarget(buffer);
-    g.bindFramebuffer(g.FRAMEBUFFER,buffer?.framebuffer||null);
-    g.viewport(0,0,buffer?.width||this.canvas.width,buffer?.height||this.canvas.height);if(clear){g.clearColor(0,0,0,0);g.clear(g.COLOR_BUFFER_BIT);}
-    g.useProgram(this.program);g.uniform2f(this.locations.viewport,width,height);g.uniformMatrix3fv(this.locations.camera,false,camera);
-    g.activeTexture(g.TEXTURE0);g.uniform1i(this.locations.atlas,0);
-    g.uniform1i(this.locations.coverMask,1);g.uniform1f(this.locations.alphaCutoff,alphaCutoff);
-    g.uniform2f(this.locations.pixelSize,buffer?.width||this.canvas.width,buffer?.height||this.canvas.height);
-    // Caller supplies painter order; never regroup transparent objects by
-    // texture and accidentally move the captain in front of a building.
-    for(const id of order){
-      const layer=this.layers.get(id);if(!layer||!layer.count)continue;
-      const cover=layer.occlusionMask?this.targets.get(layer.occlusionMask):null;
-      g.uniform1f(this.locations.useCover,cover?.handle?1:0);
-      g.activeTexture(g.TEXTURE1);g.bindTexture(g.TEXTURE_2D,cover?.handle||null);g.activeTexture(g.TEXTURE0);
-      const view=layerViews[id];
-      g.uniformMatrix3fv(this.locations.camera,false,view?.camera||camera);
-      g.uniform4fv(this.locations.uvTransform,view?.uvTransform||[1,1,0,0]);
-      const texture=this.textures.get(layer.atlas);
+  prepareTexture(texture){
+    this.assertLive();if(this.lost)return false;const g=this.gl;g.activeTexture(g.TEXTURE0);
       if(!texture.handle){
         texture.handle=g.createTexture();g.bindTexture(g.TEXTURE_2D,texture.handle);
         const filter=texture.nearest?g.NEAREST:g.LINEAR;
@@ -188,6 +167,33 @@ export class ShoreGpuScene{
         g.texSubImage2D(g.TEXTURE_2D,0,patch.x,patch.y,patch.width,patch.height,g.RGBA,g.UNSIGNED_BYTE,patch.rgba);this.stats.texturePatches++;
       }
       if(texture.patches)texture.patches.length=0;
+
+    return true;
+  }
+  draw({width=this.canvas.width,height=this.canvas.height,camera=identity,order=[...this.layers.keys()],layerViews={},target=null,alphaCutoff=0,clear=true}={}){
+    this.assertLive();if(this.lost)return false;
+    if(!Number.isFinite(width)||!Number.isFinite(height)||!(width>0&&height>0)||camera.length!==9||!camera.every(Number.isFinite))throw Error('Invalid shore camera');
+    const g=this.gl,buffer=target===null?null:this.targets.get(target);
+    if(target!==null&&!buffer)throw Error('Missing shore target');
+    if(buffer)this.prepareTarget(buffer);
+    g.bindFramebuffer(g.FRAMEBUFFER,buffer?.framebuffer||null);
+    g.viewport(0,0,buffer?.width||this.canvas.width,buffer?.height||this.canvas.height);if(clear){g.clearColor(0,0,0,0);g.clear(g.COLOR_BUFFER_BIT);}
+    g.useProgram(this.program);g.uniform2f(this.locations.viewport,width,height);g.uniformMatrix3fv(this.locations.camera,false,camera);
+    g.activeTexture(g.TEXTURE0);g.uniform1i(this.locations.atlas,0);
+    g.uniform1i(this.locations.coverMask,1);g.uniform1f(this.locations.alphaCutoff,alphaCutoff);
+    g.uniform2f(this.locations.pixelSize,buffer?.width||this.canvas.width,buffer?.height||this.canvas.height);
+    // Caller supplies painter order; never regroup transparent objects by
+    // texture and accidentally move the captain in front of a building.
+    for(const id of order){
+      const layer=this.layers.get(id);if(!layer||!layer.count)continue;
+      const cover=layer.occlusionMask?this.targets.get(layer.occlusionMask):null;
+      g.uniform1f(this.locations.useCover,cover?.handle?1:0);
+      g.activeTexture(g.TEXTURE1);g.bindTexture(g.TEXTURE_2D,cover?.handle||null);g.activeTexture(g.TEXTURE0);
+      const view=layerViews[id];
+      g.uniformMatrix3fv(this.locations.camera,false,view?.camera||camera);
+      g.uniform4fv(this.locations.uvTransform,view?.uvTransform||[1,1,0,0]);
+      const texture=this.textures.get(layer.atlas);
+      this.prepareTexture(texture);
       if(!layer.handle){
         layer.handle=g.createBuffer();g.bindBuffer(g.ARRAY_BUFFER,layer.handle);g.bufferData(g.ARRAY_BUFFER,layer.data,g.DYNAMIC_DRAW);
         this.stats.bufferUploads++;this.stats.uploadedBytes+=layer.data.byteLength;

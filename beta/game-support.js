@@ -1,6 +1,6 @@
 // Web-only support entry. The frozen game modules are copied without edits.
 const link=document.createElement('a');
-const release={version:'0.92.0'},performanceKey='lastsignal.performance.v1';
+const release={version:'0.93.0'},performanceKey='lastsignal.performance.v1';
 link.textContent='버그 제보 / Report bug · F8';
 link.href=new URL('./feedback.html',import.meta.url).href;link.target='_blank';link.rel='noopener';
 link.className='beta-report-link';
