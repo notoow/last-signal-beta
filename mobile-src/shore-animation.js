@@ -7,8 +7,11 @@ import {drawCrewRig} from './shore-rig.js';
 export {crewPose} from './shore-pose.js';
 const load=file=>{const i=new Image();i.src='assets/art/'+file;return i;};
 const fauna=load('shore-fauna-v2.png');
-const crew=Object.fromEntries(['woo','park','han','jeong'].map(id=>[id,load('crew-sd-'+id+'-v1.png')]));
-const idleSheet=load('crew-sd-idle-v1.png');
+const crew=Object.fromEntries(['woo','park','han','jeong'].map(id=>[id,load('crew-sd-'+id+(id==='jeong'?'-v2.png':'-v1.png'))]));
+const originalJeong=load('crew-sd-jeong-v1.png');
+const jeongStrike=load('crew-sd-jeong-strike-v2.png');
+const idleSheet=load('crew-sd-idle-v2.png'),originalIdleSheet=load('crew-sd-idle-v1.png');
+const ready=image=>image.complete&&image.naturalWidth>0;
 const workerSheet=load('shore-worker-v1.png');
 let workerArt=null;
 fetch('assets/art/shore-worker-v1-metadata.json').then(r=>r.ok?r.json():null).then(data=>{workerArt=data;}).catch(()=>{});
@@ -21,24 +24,33 @@ const windupClips={woo:[[-8,24,268,150],[0,174,260,202]],park:[[-12,-8,288,68],[
 const strikeClips={woo:[[-38,44,348,326]],park:[[-10,49,320,32],[-31,81,341,32],[-40,113,350,10],[-46,123,356,22],[-47,145,357,32],[-40,177,350,32],[-26,209,336,32],[-26,241,336,32],[-27,273,337,32],[-32,305,342,32],[-29,337,339,20]],han:[[-6,56,316,326]],jeong:[[-60,53,370,335]]};
 const walkCycles=new WeakMap();
 function crewSprite(c,s,p,reduced,unit=1){
-  const img=crew[s.captain],fight=s.combat;if(!img.complete||!img.naturalWidth)return;
+  let img=crew[s.captain];const fight=s.combat;
+  if(s.captain==='jeong'&&!ready(img))img=originalJeong;
+  if(!ready(img))return;
   const motion=crewWalkCycle({angle:p.angle,stride:fight.stride,moving:fight.moving,hit:fight.hit,action:fight.action,searching:s.work>0},walkCycles.get(s.person));
   if(s.person)walkCycles.set(s.person,motion);
   const {row,col,flip}=crewPose(p.angle,fight.moving,motion.phase,fight.hit,fight.action,s.work>0,motion.facing);
+  if(s.captain==='jeong'&&row===2&&col===3&&!ready(jeongStrike)&&ready(originalJeong))img=originalJeong;
   if(drawCrewRig(c,s,p,reduced,unit,row,flip))return;
   const stepLift=!reduced&&motion.walking?Math.sin(motion.phase/(CREW_CYCLE/2)*Math.PI)**2*1.5*unit:0;
   const anchors=crewAnchors[s.captain],ys=[0,440,820,1254],xs=[0,320,632,944,1254],x=xs[col],y=ys[row],w=xs[col+1]-x,h=ys[row+1]-y;
   const idle=!fight.moving&&!fight.action&&!fight.hit&&!s.work;
   const breath=idle&&!reduced?Math.sin(s.time*2.1+crewRows[s.captain]*1.7)*.012:0,scale=55*unit/anchors[3];
-  if(idle&&row===0&&idleSheet.complete&&idleSheet.naturalWidth){
+  const idleImage=ready(idleSheet)?idleSheet:originalIdleSheet;
+  if(idle&&row===0&&ready(idleImage)){
     const r=crewRows[s.captain],clock=s.time+r*1.31,cycle=clock%13;
     const pose=reduced?0:cycle>11.8&&cycle<12.6?2:clock%5.3>2.9&&clock%5.3<3.04?1:0;
     const starts=[0,378,752,1130],ends=[378,752,1130,1536],feet=[374,744,1124,1510],tops=[28,390,761,1136],k=55*unit/(feet[r]-tops[r]);
     c.save();c.translate(p.x,p.y);c.scale(1,1+breath);
-    c.drawImage(idleSheet,128+pose*264,starts[r],272,ends[r]-starts[r],-136*k,(starts[r]-feet[r])*k,272*k,(ends[r]-starts[r])*k);
+    c.drawImage(idleImage,128+pose*264,starts[r],272,ends[r]-starts[r],-136*k,(starts[r]-feet[r])*k,272*k,(ends[r]-starts[r])*k);
     c.restore();return;
   }
   c.save();c.translate(p.x,p.y-stepLift);c.scale(flip?-1:1,1+breath);
+  if(s.captain==='jeong'&&row===2&&col===3&&ready(jeongStrike)){
+    // Art-owner registration; preserve foot origin and mirror around it.
+    c.drawImage(jeongStrike,-308.3679245283019*scale,-424.8867924528302*scale,640*scale,512*scale);
+    c.restore();return;
+  }
   if(row===2&&col===1){
     // Neighboring atlas pixels enter this cell's upper-right corner. Preserve
     // the original pivot and lower-right tool; never recenter the cut pieces.
