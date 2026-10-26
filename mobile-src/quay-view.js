@@ -4,7 +4,7 @@ import {project,unproject} from './world-projection.js';
 import {edgeMarker} from './rogue-camera.js';
 import {WORLD_UNITS_PER_METRE as M,CREW_HEIGHT,shoreScale,shoreRanges,humanVisualScale} from './shore-scale.js';
 import {TILE,tileAt,shoreMask,shoreBuildings} from './rogue-map.js';
-import {visibleAt,drawSurvey,surveyedAt} from './rogue-vision.js';
+import {visibleAt,drawSurvey,surveyedAt,fogState} from './rogue-vision.js';
 import {fauna} from './shore-encounters.js';
 import {shoreActors,drawProjectedShoreActor} from './shore-animation.js';
 import {drawDockedCaptainBoat,prepareDockedFleet} from './captain-fleet.js';
@@ -30,8 +30,8 @@ function chestRaster(){
   }
   return chestCrop;
 }
-const files={serviceGround:'quay-service-diffuse-v1.png',serviceWetness:'quay-service-wetness-v1.png',workshop:'quay-landing-workshop-v1.png',warehouse:'quay-landing-warehouse-v1.png',
-  ground:'quay-landing-ground-v2.png',wall:'quay-landing-wall-v1.png',wet:'quay-landing-wet-material-v4.png',
+const files={warehouseFloor:'quay-warehouse-foundation-v1.png',workshopFloor:'quay-workshop-floor-v1.png',serviceGround:'quay-service-diffuse-v2.png',serviceWetness:'quay-service-wetness-v1.png',workshop:'quay-landing-workshop-v1.png',warehouse:'quay-landing-warehouse-v1.png',
+  ground:'quay-landing-ground-v2.png',wall:'quay-landing-wall-v2.png',wet:'quay-landing-wet-material-v4.png',
   gold:'quay-landing-ground-gold-v3.png',patch:'quay-landing-wet-patch-v1.png',props:'quay-landing-props-v1.png',
   supplies:'quay-landing-supplies-v1.png',reflection:'quay-landing-water-reflection-v1.png',
   water:'harbor-water-v1.png',chest:'rogue-shore-props-v1.png'};
@@ -213,22 +213,22 @@ export function quayScenerySprites(s,f,{cull=true}={}){
   for(const b of boxes){
     if(!b.visual)continue;
     if(s.survey&&![{x:b.x,y:b.y},{x:b.x+b.w,y:b.y+b.h},{x:b.x,y:b.y+b.h}].some(p=>
-      surveyedAt(s,p)))continue;
+      sceneryKnown(s,p)))continue;
     const p=project(f,{x:b.x+b.w/2,y:b.y+b.h});
     const supply=b.visual==='supplies',im=supply?art.supplies:art[b.visual];if(!im)continue;
     const scale=supply?2*unit/996:unit/98.5,rect=supply?[284,92,996,809]:[0,0,1536,1024],pivot=supply?[498,809]:[704,858];
     const bounds={x:p.x-pivot[0]*scale,y:p.y-pivot[1]*scale,w:rect[2]*scale,h:rect[3]*scale};
     if(cull&&!overlap(bounds,{x:0,y:0,w:f.width,h:f.height}))continue;
-    records.push({b,p,supply,im,scale,rect,bounds});
+    records.push({b,p,supply,im,scale,rect,bounds,floorImage:b.visual==='workshop'?art.workshopFloor:b.visual==='warehouse'?art.warehouseFloor:null});
   }
   return records;
 }
 function scenery(c,s,f,tiles){
   const objects=[],unit=f.pixelsPerMetre;
-  for(const {b,p,supply,im,scale,rect,bounds} of quayScenerySprites(s,f)){
+  for(const {b,p,supply,im,scale,rect,bounds,floorImage} of quayScenerySprites(s,f)){
     objects.push({type:'scenery',p,box:b,bounds,image:im,sourceRect:rect,draw:()=>{
       // Source art and projected anchors stay unchanged; no building fade.
-      c.save();c.globalAlpha=1;c.drawImage(im,...rect,bounds.x,bounds.y,bounds.w,bounds.h);c.restore();
+      c.save();c.globalAlpha=1;if(floorImage)c.drawImage(floorImage,...rect,bounds.x,bounds.y,bounds.w,bounds.h);c.drawImage(im,...rect,bounds.x,bounds.y,bounds.w,bounds.h);c.restore();
     }});
     if(supply)continue;
     c.save();clipLand(c,f,tiles);
@@ -436,4 +436,9 @@ export function drawQuay(c,s,f,{reduced=false,language='ko',task=null,search=nul
   const returnCue=drawReturnLanding(c,s,f,boat?.bounds);
   drawQuayObjective(c,s,f,task,language);
   return {ready:true,returnCue,boat,tow,vesselOrder:supplyBehind?['supply','captain']:['captain','supply'],actorBounds,captainOcclusion,scenery:props.filter(p=>p.box).map(p=>({box:p.box,bounds:p.bounds})),shoreEdges:edgeCount};
+}
+
+function sceneryKnown(s,p){
+ const fog=fogState(s),x=Math.floor(p.x/fog.cell),y=Math.floor(p.y/fog.cell);
+ return x>=0&&y>=0&&x<fog.cols&&y<fog.rows&&fog.alpha[y*fog.cols+x]<255;
 }

@@ -14,7 +14,8 @@ export function recordQuayLoot(s,frame){
 export function recordQuayScenery(s,frame){
   return quayScenerySprites(s,frame,{cull:false}).map(record=>{
     const {bounds:b,rect:r,im:image}=record,w=image.naturalWidth,h=image.naturalHeight;
-    return {...record,commands:[{image,points:[b.x,b.y,b.x+b.w,b.y,b.x+b.w,b.y+b.h,b.x,b.y+b.h],uv:[r[0]/w,r[1]/h,(r[0]+r[2])/w,(r[1]+r[3])/h],opacity:1,mipmaps:true}]};
+    const floor=record.floorImage?[{image:record.floorImage,points:[b.x,b.y,b.x+b.w,b.y,b.x+b.w,b.y+b.h,b.x,b.y+b.h],uv:[0,0,1,1],opacity:1,mipmaps:true}]:[];
+    return {...record,commands:[...floor,{image,points:[b.x,b.y,b.x+b.w,b.y,b.x+b.w,b.y+b.h,b.x,b.y+b.h],uv:[r[0]/w,r[1]/h,(r[0]+r[2])/w,(r[1]+r[3])/h],opacity:1,mipmaps:true}]};
   });
 }
 
