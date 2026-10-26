@@ -22,7 +22,11 @@ function chestRaster(){
   if(chestSource!==art.chest){
     chestSource=art.chest;chestCrop=document.createElement('canvas');
     chestCrop.width=465;chestCrop.height=318;
-    chestCrop.getContext('2d').drawImage(art.chest,885,90,465,318,0,0,465,318);
+    const context=chestCrop.getContext('2d');
+    context.drawImage(art.chest,885,90,465,318,0,0,465,318);
+    // Materialize only this small crop now. A deferred canvas draw otherwise
+    // decodes the whole PNG during the first discovered chest's GPU upload.
+    context.getImageData(0,0,465,318);
   }
   return chestCrop;
 }
@@ -35,6 +39,7 @@ const ready=im=>im.complete&&im.naturalWidth>0;
 export function prepareQuayArt(){
   if(!art){art=Object.fromEntries(Object.entries(files).map(([id,file])=>[id,load(file)]));loadStarted=performance.now();}
   const images=[...Object.values(art),prepareDockedFleet(),...prepareSupplyFleet()],loaded=images.filter(ready).length;
+  if(loaded===images.length)chestRaster();
   return {status:loaded===images.length?'ready':images.some(im=>im.complete&&!im.naturalWidth)||performance.now()-loadStarted>15000?'error':'loading',loaded,total:images.length};
 }
 export function retryQuayArt(){
@@ -98,6 +103,12 @@ function material(s,yard){
     context.globalAlpha=alpha;context.drawImage(paint[layer],0,0);
   }
   const result={area,surface};cache.set(yard.id,result);return result;
+}
+// The GPU migration consumes the same authored textures and baked materials;
+// it must not substitute a separate, simplified set of terrain artwork.
+export function quayGroundSources(s){
+  if(prepareQuayArt().status!=='ready')return null;
+  return {wet:art.wet,wall:art.wall,patch:art.patch,water:art.water,materials:s.map.islands.map(yard=>material(s,yard))};
 }
 function ground(c,s,f,tiles){
   plane(c,f,()=>{
@@ -177,7 +188,7 @@ function alphaCovers(im,bounds,foot,height){
     if(x>=0&&x<384&&y>=0&&y<256&&mask[(y*384+x)*4+3]>64)return true;
   }return false;
 }
-function behind(f,p,box){
+export function behind(f,p,box){
   const foot=project(f,p),corners=(box.footprint||[box,{x:box.x+box.w,y:box.y},{x:box.x+box.w,y:box.y+box.h},{x:box.x,y:box.y+box.h}]).map(q=>project(f,q));
   let front=-Infinity;
   for(let i=0;i<corners.length;i++){const a=corners[i],b=corners[(i+1)%corners.length];if(foot.x<Math.min(a.x,b.x)||foot.x>Math.max(a.x,b.x))continue;
@@ -196,8 +207,8 @@ function architectureReflection(image){
   }
   architectureReflections.set(image,canvas);return canvas;
 }
-function scenery(c,s,f,tiles){
-  const objects=[],unit=f.pixelsPerMetre;
+export function quayScenerySprites(s,f,{cull=true}={}){
+  const records=[],unit=f.pixelsPerMetre;
   const boxes=[...s.map.islands.flatMap(shoreBuildings),...s.map.props];
   for(const b of boxes){
     if(!b.visual)continue;
@@ -207,7 +218,14 @@ function scenery(c,s,f,tiles){
     const supply=b.visual==='supplies',im=supply?art.supplies:art[b.visual];if(!im)continue;
     const scale=supply?2*unit/996:unit/98.5,rect=supply?[284,92,996,809]:[0,0,1536,1024],pivot=supply?[498,809]:[704,858];
     const bounds={x:p.x-pivot[0]*scale,y:p.y-pivot[1]*scale,w:rect[2]*scale,h:rect[3]*scale};
-    if(!overlap(bounds,{x:0,y:0,w:f.width,h:f.height}))continue;
+    if(cull&&!overlap(bounds,{x:0,y:0,w:f.width,h:f.height}))continue;
+    records.push({b,p,supply,im,scale,rect,bounds});
+  }
+  return records;
+}
+function scenery(c,s,f,tiles){
+  const objects=[],unit=f.pixelsPerMetre;
+  for(const {b,p,supply,im,scale,rect,bounds} of quayScenerySprites(s,f)){
     objects.push({type:'scenery',p,box:b,bounds,image:im,sourceRect:rect,draw:()=>{
       // Source art and projected anchors stay unchanged; no building fade.
       c.save();c.globalAlpha=1;c.drawImage(im,...rect,bounds.x,bounds.y,bounds.w,bounds.h);c.restore();
@@ -224,6 +242,22 @@ function scenery(c,s,f,tiles){
     }c.restore();
   }
   return objects;
+}
+export function quayReflectionSprites(s,f){
+  const commands=[];
+  for(const {b,p,supply,im,scale} of quayScenerySprites(s,f,{cull:false})){
+    if(supply)continue;
+    const image=architectureReflection(im),k=.24,slope=f.projection.yx;
+    const matrix=new DOMMatrix([scale,slope*(1+k)*scale,0,-k*scale,p.x-704*scale,p.y+(k*858-slope*(1+k)*704)*scale]);
+    const points=[[-2,0],[image.width-2,0],[image.width-2,image.height],[-2,image.height]].flatMap(([x,y])=>{const q=matrix.transformPoint({x,y});return [q.x,q.y];});
+    commands.push({image,points,opacity:1});
+    for(const light of buildingLights(b)){
+      const q=project(f,{x:light.x,y:light.y+.35*M}),r=light.reflection,w=r.width*f.pixelsPerMetre,h=r.height*f.pixelsPerMetre;
+      const x=q.x-w*.5,y=q.y-h*.08;
+      commands.push({image:art.gold,points:[x,y,x+w,y,x+w,y+h,x,y+h],opacity:r.alpha});
+    }
+  }
+  return commands;
 }
 function boatAndLadder(c,s,f,tiles){
   const b=s.map.berths.find(b=>b.id===s.mooring);if(!b)return null;
@@ -243,22 +277,23 @@ function boatAndLadder(c,s,f,tiles){
     const a=project(f,{x:b.x+s.boat.length*x,y:b.landing.y}),end=project(f,{x:s.boat.x+s.boat.length*x,y:s.boat.y-s.boat.width*.3},-.15*M);
     dockWorkRope(c,a,end,1,Math.max(1.3,unit*.1));dockWorkSprite(c,'cleat',a.x,a.y,unit*.6,unit*.48);
   }
-  // The usable landing is a physical bridge to the near gunwale. Render its
-  // boards above the docked hull so the return point does not disappear behind
-  // the wheelhouse. It has no extra collision beyond the real E interaction.
-  const shore=project(f,b.landing),deck=project(f,{x:b.landing.x,y:s.boat.y-s.boat.width/2},-.3*M),dx=deck.x-shore.x,dy=deck.y-shore.y;
-  dockWorkSprite(c,'gangway',(deck.x+shore.x)/2,(deck.y+shore.y)/2,Math.hypot(dx,dy)+unit*.3,unit*.65,Math.atan2(dy,dx));
+  // Boarding uses the ladder. The existing gangway crop cannot span this gap
+  // at its approved proportions and has no verified captain-specific deck
+  // anchor; drawing it at the midpoint leaves an isolated plank on the water.
   return {bounds,point:p,ladder};
 }
+export function quayThreats(s){
+  return s.combat.enemies.filter(e=>e.hp>0&&e.phase==='warn'&&visibleAt(s,e))
+    .map(e=>({x:e.x,y:e.y,angle:e.angle,radius:fauna(s,e.kind).reach+.9}));
+}
 function groundThreats(c,s,f){
-  plane(c,f,()=>{for(const e of s.combat.enemies){
-    if(e.hp<=0||e.phase!=='warn'||!visibleAt(s,e))continue;
-    const spec=fauna(s,e.kind);c.save();c.translate(e.x,e.y);c.rotate(e.angle);
+  plane(c,f,()=>{for(const e of quayThreats(s)){
+    c.save();c.translate(e.x,e.y);c.rotate(e.angle);
     c.fillStyle='#e16c3444';c.strokeStyle='#ffd28a';c.lineWidth=1.2/f.scale;
-    c.beginPath();c.moveTo(0,0);c.arc(0,0,spec.reach+.9,-1.05,1.05);c.closePath();c.fill();c.stroke();c.restore();
+    c.beginPath();c.moveTo(0,0);c.arc(0,0,e.radius,-1.05,1.05);c.closePath();c.fill();c.stroke();c.restore();
   }});
 }
-function supplyVessel(c,s,f,language){
+function supplyVessel(c,s,f,language,markers=true){
   const t=s.tow;if(!t||t.hp<=0||t.delivered||!visibleAt(s,t))return null;
   const sprite=drawSupplyBoat(c,t,f);if(!sprite)return null;
   const unit=f.pixelsPerMetre;
@@ -268,11 +303,18 @@ function supplyVessel(c,s,f,language){
     workRope(c,sprite.bow,anchor,.65,Math.max(1,unit*.075));
     quaySprite(c,'anchor',anchor.x-unit*.22,anchor.y-unit*.1,unit*.45,unit*.75);
   }
-  const mark=edgeMarker(f,t,26);
+  const mark=markers?edgeMarker(f,t,26):null;
   if(mark){
     c.save();c.translate(mark.x,mark.y);c.rotate(mark.angle);polygon(c,[{x:6,y:0},{x:-4,y:-4},{x:-4,y:4}],'#c8ddd1');c.restore();
   }
   return {...sprite,connected:t.connected,anchored:!!t.anchor,tension:t.tension,physicalBow:project(f,towBow(t),-.15*M),marker:mark};
+}
+export function drawQuayVessels(c,s,f){
+  const supplyBehind=s.tow&&project(f,s.tow).y<project(f,s.boat).y;
+  let boat,tow;
+  if(supplyBehind){tow=supplyVessel(c,s,f,'ko',false);boat=boatAndLadder(c,s,f,[]);}
+  else{boat=boatAndLadder(c,s,f,[]);tow=supplyVessel(c,s,f,'ko',false);}
+  return {boat,tow};
 }
 function supplyCaption(c,tow,boat,f,language){
   if(!tow)return;
@@ -291,8 +333,62 @@ function supplyCaption(c,tow,boat,f,language){
   // label when no clear spot exists; never stamp it onto the other vessel.
   tow.caption=null;
 }
+export function drawQuayVesselGuidance(c,s,f,vessels,language='ko'){
+  const {boat,tow}=vessels;if(!tow)return null;
+  const mark=edgeMarker(f,s.tow,26);
+  if(mark){
+    c.save();c.translate(mark.x,mark.y);c.rotate(mark.angle);
+    polygon(c,[{x:6,y:0},{x:-4,y:-4},{x:-4,y:4}],'#c8ddd1');c.restore();
+  }
+  const annotated={...tow,marker:mark};supplyCaption(c,annotated,boat,f,language);
+  return {marker:mark,caption:annotated.caption};
+}
 function label(c,text,p){
   c.font='600 11px Pretendard, sans-serif';c.textAlign='center';c.lineWidth=3;c.strokeStyle='#07191f';c.strokeText(text,p.x,p.y);c.fillStyle='#eee3c4';c.fillText(text,p.x,p.y);
+}
+// Shared loot image contract for both renderers; visibility and claimed state
+// belong to the voyage, not to a separate GPU scene approximation.
+export function quayLootSprites(s,f){
+  const records=[];
+  for(const berth of s.map.berths){
+    if(!visibleAt(s,berth.searchPoint||berth.loot))continue;
+    const p=project(f,berth.loot),k=1.2*f.pixelsPerMetre/465;
+    records.push({berth,p,image:chestRaster(),claimed:s.claimed.includes(berth.id),
+      rect:[0,0,465,318],bounds:{x:p.x-465*k/2,y:p.y-318*k,w:465*k,h:318*k}});
+  }
+  return records;
+}
+export function drawQuayCombat(c,s,f){
+  for(const shot of s.combat.shots){
+    const p=project(f,shot,8*shoreScale(s)),v=project({...f,ox:0,oy:0},{x:shot.vx,y:shot.vy});
+    const a=Math.atan2(v.y,v.x);c.strokeStyle='#f4d398';c.lineWidth=2;c.beginPath();c.moveTo(p.x-Math.cos(a)*5,p.y-Math.sin(a)*5);c.lineTo(p.x,p.y);c.stroke();
+  }
+  for(const fx of s.combat.effects){const p=project(f,fx,3*shoreScale(s));c.save();c.globalAlpha=fx.left/.3;c.strokeStyle=fx.kind==='hurt'?'#f18c76':'#ffda8d';c.lineWidth=1.5;
+    const r=(1-fx.left/.3)*7+2;for(let i=0;i<6;i++){const a=i*Math.PI/3;c.beginPath();c.moveTo(p.x+Math.cos(a)*r*.4,p.y+Math.sin(a)*r*.4);c.lineTo(p.x+Math.cos(a)*r,p.y+Math.sin(a)*r);c.stroke();}c.restore();}
+}
+export function drawQuaySearchProgress(c,s,f,search){
+  if(s.person&&search?.progress>0){const p=project(f,s.person,CREW_HEIGHT*humanVisualScale(s));c.strokeStyle='#efc567';c.lineWidth=2;c.beginPath();c.arc(p.x,p.y-7,4,-Math.PI/2,-Math.PI/2+Math.PI*2*search.progress/search.required);c.stroke();}
+}
+export function drawQuayObjective(c,s,f,task,language='ko'){
+  if(task?.target&&s.person&&!isOwnReturnTarget(s,task.target)){
+    const mark=edgeMarker(f,task.target,20);
+    if(mark){
+      c.save();c.translate(mark.x,mark.y);c.rotate(mark.angle);polygon(c,[{x:6,y:0},{x:-4,y:-4},{x:-4,y:4}],'#ecd393');c.restore();
+      label(c,language==='en'?'Objective':'목표',{x:Math.max(30,Math.min(f.width-30,mark.x)),y:mark.y-10});
+    }
+  }
+}
+export function drawQuaySearchRings(c,s,f){
+  for(const {berth,p,claimed} of quayLootSprites(s,f)){
+    if(!s.person||distance(s.person,berth.loot)>=shoreRanges(s).search||claimed)continue;
+    c.strokeStyle='#f3c477';c.lineWidth=1.25;c.beginPath();c.ellipse(p.x,p.y,f.pixelsPerMetre*.55,f.pixelsPerMetre*.18,.198,0,7);c.stroke();
+  }
+}
+export function drawQuaySearchLabels(c,s,f,language='ko'){
+  for(const {berth,p,claimed} of quayLootSprites(s,f)){
+    if(s.person&&distance(s.person,berth.loot)<shoreRanges(s).search&&!claimed)
+      label(c,language==='en'?'Search':'수색',{x:p.x,y:p.y-Math.max(1.2*f.pixelsPerMetre,CREW_HEIGHT*humanVisualScale(s)*f.scale+8)});
+  }
 }
 export function drawQuay(c,s,f,{reduced=false,language='ko',task=null,search=null,cacheTerrain=true}={}){
   if(prepareQuayArt().status!=='ready'||s.map.cliffs&&!h12Ready())return {ready:false};
@@ -303,7 +399,7 @@ export function drawQuay(c,s,f,{reduced=false,language='ko',task=null,search=nul
   c.save();c.globalAlpha=.68;c.fillStyle=texture;c.fillRect(0,0,f.width,f.height);c.restore();
   const groundTiles=s.map.cliffs?tiles.filter(t=>!isCliff(s,t)):tiles;
   const edgeCount=cacheTerrain?cachedTerrain(c,s,f,groundTiles):terrain(c,s,f,groundTiles).length;
-  const props=scenery(c,s,f,tiles),searchLabels=[];
+  const props=scenery(c,s,f,tiles);
   if(s.map.cliffs)props.push(...makeCliffs(c,s,f,tiles));
   // Survey dims remembered terrain, never a visible captain's actual painted
   // silhouette. Dynamic actors have their own LOS test; seen scenery retains
@@ -316,15 +412,10 @@ export function drawQuay(c,s,f,{reduced=false,language='ko',task=null,search=nul
   supplyCaption(c,tow,boat,f,language);
   groundThreats(c,s,f);
   // Cache contents, search clock, threats and rewards all come from the voyage.
-  for(const b of s.map.berths){
-    if(!visibleAt(s,b.searchPoint||b.loot))continue;
-    const p=project(f,b.loot),k=1.2*unit/465,claimed=s.claimed.includes(b.id);
-    props.push({type:'cache',p,draw:()=>{c.save();c.globalAlpha=claimed?.45:1;c.drawImage(chestRaster(),0,0,465,318,p.x-465*k/2,p.y-318*k,465*k,318*k);c.restore();}});
-    if(s.person&&distance(s.person,b.loot)<shoreRanges(s).search&&!claimed){
-      c.strokeStyle='#f3c477';c.lineWidth=1.25;c.beginPath();c.ellipse(p.x,p.y,unit*.55,unit*.18,.198,0,7);c.stroke();
-      searchLabels.push({text:language==='en'?'Search':'수색',point:{x:p.x,y:p.y-Math.max(1.2*unit,CREW_HEIGHT*humanVisualScale(s)*f.scale+8)}});
-    }
+  for(const {berth:b,p,image,claimed,rect,bounds} of quayLootSprites(s,f)){
+    props.push({type:'cache',p,draw:()=>{c.save();c.globalAlpha=claimed?.45:1;c.drawImage(image,...rect,bounds.x,bounds.y,bounds.w,bounds.h);c.restore();}});
   }
+  drawQuaySearchRings(c,s,f);
   const actorBounds=[];
   const actors=shoreActors(s).map(a=>({type:'actor',p:project(f,a.p),actor:a,draw:()=>actorBounds.push({enemy:!!a.enemy,worker:!!a.worker,
     ...(a.enemy?{kind:a.p.kind,phase:a.p.phase,hp:a.p.hp}:{}),...(a.p===s.person&&!a.enemy&&!a.worker?drawCaptainVisible(c,s,f,a,props.filter(o=>o.image&&behind(f,a.p,o.box)),reduced):drawProjectedShoreActor(c,s,a,f,reduced))})}));
@@ -339,21 +430,10 @@ export function drawQuay(c,s,f,{reduced=false,language='ko',task=null,search=nul
   const captain=actors.find(a=>a.actor.p===s.person&&!a.actor.enemy&&!a.actor.worker);
   const occluders=captain?objects.slice(objects.indexOf(captain)+1).filter(o=>o.image&&behind(f,s.person,o.box)):[];
   const captainOcclusion=drawCaptainOcclusion(c,s,f,captain?.actor,occluders,reduced);
-  for(const item of searchLabels)label(c,item.text,item.point);
-  for(const shot of s.combat.shots){
-    const p=project(f,shot,8*shoreScale(s)),v=project({...f,ox:0,oy:0},{x:shot.vx,y:shot.vy});
-    const a=Math.atan2(v.y,v.x);c.strokeStyle='#f4d398';c.lineWidth=2;c.beginPath();c.moveTo(p.x-Math.cos(a)*5,p.y-Math.sin(a)*5);c.lineTo(p.x,p.y);c.stroke();
-  }
-  for(const fx of s.combat.effects){const p=project(f,fx,3*shoreScale(s));c.save();c.globalAlpha=fx.left/.3;c.strokeStyle=fx.kind==='hurt'?'#f18c76':'#ffda8d';c.lineWidth=1.5;
-    const r=(1-fx.left/.3)*7+2;for(let i=0;i<6;i++){const a=i*Math.PI/3;c.beginPath();c.moveTo(p.x+Math.cos(a)*r*.4,p.y+Math.sin(a)*r*.4);c.lineTo(p.x+Math.cos(a)*r,p.y+Math.sin(a)*r);c.stroke();}c.restore();}
-  if(s.person&&search?.progress>0){const p=project(f,s.person,CREW_HEIGHT*humanVisualScale(s));c.strokeStyle='#efc567';c.lineWidth=2;c.beginPath();c.arc(p.x,p.y-7,4,-Math.PI/2,-Math.PI/2+Math.PI*2*search.progress/search.required);c.stroke();}
+  drawQuaySearchLabels(c,s,f,language);
+  drawQuayCombat(c,s,f);
+  drawQuaySearchProgress(c,s,f,search);
   const returnCue=drawReturnLanding(c,s,f,boat?.bounds);
-  if(task?.target&&s.person&&!isOwnReturnTarget(s,task.target)){
-    const mark=edgeMarker(f,task.target,20);
-    if(mark){
-      c.save();c.translate(mark.x,mark.y);c.rotate(mark.angle);polygon(c,[{x:6,y:0},{x:-4,y:-4},{x:-4,y:4}],'#ecd393');c.restore();
-      label(c,language==='en'?'Objective':'목표',{x:Math.max(30,Math.min(f.width-30,mark.x)),y:mark.y-10});
-    }
-  }
+  drawQuayObjective(c,s,f,task,language);
   return {ready:true,returnCue,boat,tow,vesselOrder:supplyBehind?['supply','captain']:['captain','supply'],actorBounds,captainOcclusion,scenery:props.filter(p=>p.box).map(p=>({box:p.box,bounds:p.bounds})),shoreEdges:edgeCount};
 }

@@ -1,5 +1,6 @@
 import {usesDredger,recentDredgerBreaks} from './dredger-counterplay.js';
 import {dredgerTarget,dredgerThreat,dredgerPartName} from './dredger-target.js';
+import {surveyedAt,visibleAt} from './rogue-vision.js';
 
 // Presentation only. Selection and connection eligibility belong to the
 // shared target query; labels never grant an interaction or alter a save.
@@ -13,7 +14,13 @@ export function dredgerReadability(s,language='ko'){
     return {index,name:dredgerPartName(index,language),state,status:states[state],
       color:state==='destroyed'?'#9bada2':state==='connected'?'#8de1e3':state==='exposed'?'#f6dda2':'#c4c9bf'};
   });
-  return {parts,threat,target:selected&&!threat?{...selected,name:parts[selected.index].name,color:parts[selected.index].color}:null};
+  const exitKnown=b.cleared&&(surveyedAt(s,s.map.exit)||visibleAt(s,s.map.exit));
+  const completion=b.cleared?{
+    title:en?'DREDGER DISABLED · BLOCKADE LIFTED':'준설선 정지 · 봉쇄 해제',
+    action:exitKnown?(en?'Leave the wreck · dock at the exit pier':'잔해를 떠나 탈출 부두에 접안'):(en?'Leave the wreck · follow the coast to find the exit':'잔해를 떠나 해안을 따라 출구 탐색'),
+    exitKnown:!!exitKnown
+  }:null;
+  return {parts,threat,completion,target:selected&&!threat?{...selected,name:parts[selected.index].name,color:parts[selected.index].color}:null};
 }
 
 // An actual break owns its short local motion. Nothing is inferred from a

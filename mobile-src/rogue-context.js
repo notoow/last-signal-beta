@@ -8,13 +8,38 @@ import {usesSluice} from './sluice-counterplay.js';
 import {usesLighthouse} from './lighthouse-counterplay.js';
 import {harborDestination,rigRecoveryBerth,knownBerth} from './harbor-plan.js';
 import {gullRecovery,gullHornStatus} from './shore-encounters.js';
+import {towBow,canDeliverRogueTow} from './rogue-tow.js';
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const action=(id,code,labelKo,labelEn,enabled=true,hold=false,progress=0)=>({id,code,labelKo,labelEn,enabled,hold,progress});
+// Dedicated slots: connection on the left, anchor on the right. Never displace
+// braking, boarding or encounter controls as the supply boat changes state.
+export function rogueSupplyActions(s){
+  const t=s?.tow;
+  if(!t||t.hp<=0||t.delivered||s.status!=='playing'||s.pendingGear||s.pendingCache||s.salvage?.pending)return null;
+  const near=distance(s.boat,towBow(t))<155;
+  if(!t.connected&&(!near||!visibleAt(s,t)))return null;
+  const aboard=s.mode!=='ashore',slow=Math.hypot(t.vx,t.vy)<=16;
+  const ready=canDeliverRogueTow(s);
+  const hint=!aboard?['승선 후 닻 조작','Board to operate the anchor']:
+    ready?['탈출 접안 후 떠나면 보상','Dock at the exit and depart to collect']:
+    !t.connected?(s.boss.hook>=0?['기계선 줄을 먼저 풀어주세요','Release the drive line first']:['연결 → 닻 올리기 → 탈출 부두로 운송','Connect → raise anchor → tow to exit']):
+    t.anchor?['닻을 올려야 보급정이 움직여요','Raise the anchor before towing']:
+    !slow?['탈출 부두로 운송 · 닻은 감속 후','Tow to exit · slow down to anchor']:
+    ['탈출 부두로 운송 · 하선 전 닻 내리기','Tow to exit · anchor before going ashore'];
+  return {titleKo:'보급정 운송 · 선택',titleEn:'Supply delivery · optional',
+    rewardKo:'연료 +20 · 선원 체력 +20',rewardEn:'Fuel +20 · crew health +20',
+    hintKo:hint[0],hintEn:hint[1],ready,
+    actions:[action('tow','KeyT',t.connected?'견인줄 해제':'견인줄 연결',t.connected?'Disconnect tow':'Connect tow',aboard&&(t.connected||near&&s.boss.hook<0)),
+      action('cargoAnchor','KeyH',t.anchor?'닻 올리기':'닻 내리기',t.anchor?'Raise anchor':'Lower anchor',aboard&&(near||t.connected)&&(!!t.anchor||slow))]};
+}
 // One persistent control slot. Its label changes with the action the same B
 // input will perform, while real water/charge and expiry stay visible.
 export function rogueSpecialAction(s){
   if(!s||s.status!=='playing'||s.mode!=='sailing'||s.pendingGear||s.pendingCache||s.salvage?.pending||s.build==='standard')return null;
   const rig=salvageStatus(s),m=s.salvage;
+  // Defeated machinery cannot supply a new hook. Keep a genuinely stored
+  // launch available, but do not instruct the player to attack the wreck.
+  if(s.build==='winch'&&s.boss.cleared&&s.boss.hook<0&&!((m?.charge||0)>=35&&(m?.window||0)>0))return null;
   const make=(phase,ko,en,enabled,value,labelKo,labelEn,threshold,detailKo,detailEn)=>({
     ...action('build','KeyB',ko,en,enabled),phase,build:s.build,detailKo,detailEn,
     meter:{value,max:100,threshold,labelKo,labelEn},
@@ -55,7 +80,7 @@ export function rogueSpecialAction(s){
 // Read-only affordances. Inputs still pass through interact/tickRun; no UI can
 // award an item, snap a hull, reveal an enemy, or suppress the attack control.
 export function rogueContextActions(s){
-  const result={primary:null,secondary:[],transit:[],response:null,attack:null,special:rogueSpecialAction(s)};
+  const result={primary:null,secondary:[],transit:[],response:null,attack:null,special:rogueSpecialAction(s),supply:rogueSupplyActions(s)};
   if(!s||s.status!=='playing'||s.pendingGear||s.pendingCache||s.salvage?.pending)return result;
   const horn=s.mode==='sailing'&&!s.person?gullHornStatus(s):null;
   if(horn)result.response={...action('horn','KeyQ','경적','Horn'),amount:horn.amount,count:horn.count};

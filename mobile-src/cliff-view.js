@@ -9,6 +9,29 @@ export const isCliff=(s,t)=>s.map.cliffs?.[t.ty*s.map.cols+t.tx]===1;
 const views=new WeakMap(),lastIdentity=new WeakMap();export let h12Diagnostics=null;
 function ownerView(s){let v=views.get(s);if(!v){v={current:visibleSurvey(s),remembered:s.survey?.length===s.map.cols*s.map.rows?s.survey:null};views.set(s,v);}return v;}
 function ownership(s,k){if(!s.survey)return 'revealed';const v=ownerView(s);return v.current?.[k]?'visible':v.remembered?.[k]===1?'remembered':'unknown';}
+// World-space visibility contract for the retained GPU path. No canvas, camera
+// phase or texture rasterization participates in deciding which face is seen.
+export function cliffGpuData(s){
+ if(!h12Ready())return null;views.delete(s);
+ const tiles=[];
+ for(let ty=0;ty<s.map.rows;ty++)for(let tx=0;tx<s.map.cols;tx++){
+  const k=ty*s.map.cols+tx;if(s.map.cliffs?.[k]!==1)continue;
+  const kind=ownership(s,k);if(kind==='unknown')continue;
+  const x=tx*T,y=ty*T,edges=[];
+  for(const side of ['E','S']){
+   if(side==='E'?tx+1<s.map.cols&&s.map.cliffs[k+1]===1:ty+1<s.map.rows&&s.map.cliffs[k+s.map.cols]===1)continue;
+   const tones=[];
+   for(let j=0;j<T;j++){
+    const p=side==='E'?{x:x+T-.001,y:y+j+.5}:{x:x+j+.5,y:y+T-.001};
+    const visible=!s.survey||kind==='visible'&&visibleAt(s,p),remembered=ownerView(s).remembered?.[k]===1;
+    tones.push(visible?1:remembered?.3:0);
+   }
+   edges.push({side,tones});
+  }
+  tiles.push({k,x,y,kind,edges});
+ }
+ return {top,face,height:H,tile:T,period:PERIOD,tiles};
+}
 function area(q){let a=0;for(let i=0;i<q.length;i++){const p=q[i],r=q[(i+1)%q.length];a+=p.x*r.y-r.x*p.y;}return Math.abs(a)/2;}
 const faceQuad=(f,a,b)=>[project(f,a,H),project(f,b,H),project(f,b),project(f,a)];
 export function makeCliffs(context,s,f,tiles){

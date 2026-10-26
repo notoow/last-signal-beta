@@ -777,6 +777,8 @@ function noticeMarkup(m, lang) {
 
 // mobile/hud.js
 var paths = {
+  "signal-speed": "M3 19a9 9 0 1 1 18 0M12 15l5-7M5 15h2m10 0h2M12 5v2",
+  tension: "M2 12h4l2-6 3 12 3-12 3 12 2-6h3",
   hull: "M4 9h16l-3 10H7L4 9Zm4 0V5h8v4M12 2v3",
   crew: "M9 3h6v6H9zM5 21v-6l4-3h6l4 3v6",
   fuel: "M5 4h10v17H5zM7 7h6v5H7zM15 9h3l2 3v6h-2v-4h-3",
@@ -844,7 +846,7 @@ function createMobileHud({ onMap = () => {
   const root = document.createElement("div");
   root.id = "mobileFlightHud";
   root.hidden = true;
-  root.innerHTML = '<div id="mobileObjective"></div><div id="mobileResources"></div><div id="mobileVitals"></div><div id="mobileNotice"></div><div id="mobileContext"></div><div id="mobileBuildStatus"></div>';
+  root.innerHTML = '<div id="mobileObjective"></div><div id="mobileResources"></div><div id="mobileVitals"></div><div id="mobileNotice"></div><div id="mobileContext"></div><div id="mobileBuildStatus"></div><div id="mobileBossEncounter"></div>';
   document.body.append(root);
   const nodes = Object.fromEntries([...root.children].map((el) => [el.id, el]));
   nodes.mobileBuildStatus.setAttribute("role", "status");
@@ -951,6 +953,13 @@ function createMobileHud({ onMap = () => {
     if (!mini.hidden) drawMinimap(presentation.minimap);
     else rescueMarker.hidden = true;
     const en = document.documentElement.lang === "en", source = rogue ? document.getElementById("rogueMission") : document.querySelector("#hud .mission-objective");
+    const encounter = rogue && !presentation?.mapOpen ? source?.querySelector(".boss-encounter") : null;
+    const showEncounter = expanded && encounter?.dataset.kind ? null : encounter;
+    set(nodes.mobileBossEncounter, showEncounter?.outerHTML || "");
+    nodes.mobileBossEncounter.hidden = !showEncounter;
+    root.toggleAttribute("data-boss-encounter", !!showEncounter);
+    if (showEncounter?.dataset.kind) root.dataset.bossKind = showEncounter.dataset.kind;
+    else delete root.dataset.bossKind;
     const special = presentation?.context?.special, actions2 = document.getElementById("mobileActions");
     const sky = source?.querySelector(".rogue-clock"), clock = mini.querySelector("#mobileClock");
     clock.hidden = !sky;
@@ -979,9 +988,9 @@ function createMobileHud({ onMap = () => {
     const sluice = rogue && presentation?.active && !presentation.mapOpen ? presentation.sluice : null;
     nodes.mobileNotice.toggleAttribute("data-sluice", !!sluice);
     root.toggleAttribute("data-sluice-expanded", !!sluice && !!expanded);
-    set(nodes.mobileResources, metrics.filter((m) => !["hull", "crew", "fuel"].includes(m.id) && !(sluice?.hooked && m.id === "tension")).map((m) => sluice && m.id === "east-speed" ? speedMarkup(sluice, en ? "en" : "ko") : `<span class="flight-resource ${m.impact ? "danger" : ""}" aria-label="${escape2(m.label + " " + m.value)}" title="${escape2(m.label)}">${icon(m.id)}<b>${escape2(m.value)}</b></span>`).join(""));
+    set(nodes.mobileResources, metrics.filter((m) => !["hull", "crew", "fuel"].includes(m.id) && !(sluice?.hooked && m.id === "tension")).map((m) => sluice && m.id === "east-speed" ? speedMarkup(sluice, en ? "en" : "ko") : `<span data-resource="${escape2(m.id)}" class="flight-resource ${m.impact ? "danger" : ""}" aria-label="${escape2(m.label + " " + m.value)}" title="${escape2(m.label)}">${icon(m.id)}<b>${escape2(m.value)}</b></span>`).join(""));
     const notices = rogue ? [...document.querySelectorAll("#rogueConditions>[data-tone=warning],#rogueConditions>[data-rogue-condition=dredger-hit],#rogueConditions>.rogue-impact[data-impact-id],#rogueMission .rogue-boss-state")] : [...document.querySelectorAll("#hud .compact-risks>*,#hud .compact-environment>[data-tone=warning]")];
-    set(nodes.mobileNotice, (sluice ? noticeMarkup(sluice, en ? "en" : "ko") : "") + notices.filter((el) => !sluice || !el.matches(".rogue-boss-state,[data-rogue-condition=sluice-heading],[data-rogue-condition=sluice-impact]")).map((el) => `<span>${escape2(el.matches(".rogue-impact") ? [...el.children].map(text).filter(Boolean).join(" \xB7 ") : text(el))}</span>`).join(""));
+    set(nodes.mobileNotice, (sluice ? noticeMarkup(sluice, en ? "en" : "ko") : "") + notices.filter((el) => (!encounter || !el.matches(".rogue-boss-state")) && (!sluice || !el.matches(".rogue-boss-state,[data-rogue-condition=sluice-heading],[data-rogue-condition=sluice-impact]"))).map((el) => `<span>${escape2(el.matches(".rogue-impact") ? [...el.children].map(text).filter(Boolean).join(" \xB7 ") : text(el))}</span>`).join(""));
     const work = document.querySelector(rogue ? "#rogueControls .rogue-work" : "#hud .compact-work"), progress = work?.querySelector("progress");
     const context = rogue ? [...document.querySelectorAll("#rogueControls [data-rogue-context]:not([data-rogue-context=camp])")].map(text) : [...document.querySelectorAll("#hud .compact-actions [data-hud-item=context],#hud .anchor-state")].map(text);
     if (rogue && rogue.dataset.mobileMode !== "sailing") context.unshift(text(document.querySelector("#rogueControls [data-rogue-action=primary]")));
@@ -1057,7 +1066,7 @@ try {
 }
 document.documentElement.dataset.mobileUi = "true";
 var gameEntry = "./mobile-src/rescue-app.js";
-await import(gameEntry);
+var mobileReady = false;
 var pad = document.createElement("nav");
 pad.id = "mobileControls";
 pad.setAttribute("aria-label", "\uD130\uCE58 \uC870\uC791 / Touch controls");
@@ -1065,8 +1074,13 @@ pad.innerHTML = '<div id="mobileStick" role="group" aria-label="\uC774\uB3D9 / M
 document.body.append(pad);
 var rotate = document.createElement("div");
 rotate.id = "mobileRotate";
+rotate.hidden = innerWidth > innerHeight;
 rotate.setAttribute("role", "dialog");
-rotate.setAttribute("aria-label", "\uAC00\uB85C \uD654\uBA74 \uC548\uB0B4");
+rotate.setAttribute("aria-modal", "true");
+rotate.setAttribute("aria-labelledby", "mobileRotateTitle");
+rotate.setAttribute("aria-describedby", "mobileRotateDescription");
+var rotationInert = /* @__PURE__ */ new Map();
+var rotationFocus = null;
 var kakao = /KAKAOTALK/i.test(navigator.userAgent) && !Capacitor.isNativePlatform();
 function browserHelp(en) {
   const help = document.createElement("div");
@@ -1076,7 +1090,9 @@ function browserHelp(en) {
   external.textContent = en ? "Open in external browser" : "\uC678\uBD80 \uBE0C\uB77C\uC6B0\uC800\uB85C \uC5F4\uAE30";
   external.href = "kakaotalk://web/openExternal?url=" + encodeURIComponent(location.href);
   external.hidden = !kakao;
-  external.addEventListener("click", () => pause());
+  external.addEventListener("click", () => {
+    if (mobileReady) pause();
+  });
   const copy = document.createElement("button");
   copy.type = "button";
   copy.className = "mobile-copy-link";
@@ -1119,11 +1135,12 @@ function renderRotation(en) {
   rotate.replaceChildren();
   const card = document.createElement("div");
   card.className = "rotate-card";
-  card.innerHTML = `<div class="rotate-phone" aria-hidden="true">\u21BB</div><h1>${en ? "Turn your phone sideways" : "\uD734\uB300\uD3F0\uC744 \uAC00\uB85C\uB85C \uB3CC\uB824\uC8FC\uC138\uC694"}</h1><p>${en ? "Use both hands with a wider view." : "\uB113\uC740 \uD654\uBA74\uC5D0\uC11C \uB450 \uC190\uC73C\uB85C \uC870\uC791\uD560 \uC218 \uC788\uC5B4\uC694."}</p><button class="mobile-request-landscape" type="button">${en ? "Try landscape fullscreen" : "\uAC00\uB85C \uC804\uCCB4\uD654\uBA74\uC73C\uB85C \uC2DC\uC791"}</button><p class="rotate-hint" role="status">${en ? "If rotation is blocked, unlock screen rotation and turn your phone." : "\uC790\uB3D9 \uD68C\uC804\uC774 \uC548 \uB418\uBA74 \uD734\uB300\uD3F0\uC758 \uD68C\uC804 \uC7A0\uAE08\uC744 \uD480\uACE0 \uC9C1\uC811 \uB3CC\uB824\uC8FC\uC138\uC694."}</p>`;
+  card.innerHTML = `<small class="rotate-brand">LAST SIGNAL</small><div class="rotate-phone" aria-hidden="true">\u21BB</div><h1 id="mobileRotateTitle">${en ? "Turn your phone sideways" : "\uAC00\uB85C\uB85C \uB3CC\uB824\uC8FC\uC138\uC694"}</h1><p id="mobileRotateDescription">${en ? "Continue in landscape with a wider view." : "\uAC00\uB85C \uD654\uBA74\uC5D0\uC11C \uACC4\uC18D\uD560 \uC218 \uC788\uC5B4\uC694."}</p><button class="mobile-request-landscape" type="button">${en ? "Try fullscreen" : "\uC804\uCCB4\uD654\uBA74 \uC2DC\uB3C4"}</button><p class="rotate-hint" role="status">${en ? "If rotation is locked, unlock it and turn your phone." : "\uD68C\uC804 \uC7A0\uAE08\uC774 \uCF1C\uC838 \uC788\uB2E4\uBA74 \uD574\uC81C\uD558\uACE0 \uC9C1\uC811 \uB3CC\uB824\uC8FC\uC138\uC694."}</p>`;
   if (kakao) card.append(browserHelp(en));
   rotate.append(card);
   card.querySelector("button").addEventListener("click", async (e) => {
-    e.currentTarget.disabled = true;
+    const button = e.currentTarget;
+    button.disabled = true;
     try {
       if (!document.fullscreenElement && document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
     } catch {
@@ -1134,11 +1151,37 @@ function renderRotation(en) {
     } catch {
       card.querySelector(".rotate-hint").textContent = en ? "This browser cannot lock rotation. Turn your phone manually or open the link in an external browser." : "\uC774 \uBE0C\uB77C\uC6B0\uC800\uC5D0\uC11C\uB294 \uAC00\uB85C \uACE0\uC815\uC744 \uC9C0\uC6D0\uD558\uC9C0 \uC54A\uC744 \uC218 \uC788\uC5B4\uC694. \uC9C1\uC811 \uB3CC\uB9AC\uAC70\uB098 \uC678\uBD80 \uBE0C\uB77C\uC6B0\uC800\uB85C \uC5F4\uC5B4\uC8FC\uC138\uC694.";
     }
-    e.target.disabled = false;
-    refresh();
+    button.disabled = false;
+    if (mobileReady) refresh();
+    else updateRotation();
   });
 }
 document.body.append(rotate);
+function updateRotation(landscape = innerWidth > innerHeight) {
+  const opening = rotate.hidden && !landscape;
+  if (opening) rotationFocus = document.activeElement;
+  rotate.hidden = landscape;
+  if (!landscape) {
+    for (const el of document.querySelectorAll("#panel,#rogue,#hud,#space,#playPause,#interiorToggle")) {
+      if (!rotationInert.has(el)) rotationInert.set(el, el.inert);
+      el.inert = true;
+    }
+    if (opening) rotate.querySelector("button")?.focus({ preventScroll: true });
+  } else {
+    for (const [el, inert] of rotationInert) el.inert = inert;
+    rotationInert.clear();
+    if (rotationFocus?.isConnected && rotationFocus.getClientRects().length && !rotationFocus.closest("[inert]")) rotationFocus.focus({ preventScroll: true });
+    rotationFocus = null;
+  }
+}
+renderRotation(document.documentElement.lang === "en");
+updateRotation();
+var bootRotation = () => {
+  if (!mobileReady) updateRotation();
+};
+window.addEventListener("resize", bootRotation);
+await import(gameEntry);
+window.removeEventListener("resize", bootRotation);
 var refreshFlightHud = createMobileHud({ onMap: () => {
   if (playing) {
     release();
@@ -1315,6 +1358,19 @@ function render(next) {
     actions.append(button);
   }
   if (mode === "rogue") {
+    const supply = document.createElement("div");
+    supply.id = "mobileSupply";
+    supply.hidden = true;
+    supply.setAttribute("role", "group");
+    supply.innerHTML = "<strong></strong><small></small><p></p>";
+    for (let i = 0; i < 2; i++) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.supplySlot = i;
+      bindAction(button);
+      supply.append(button);
+    }
+    actions.append(supply);
     const transit = document.createElement("div");
     transit.id = "mobileTransit";
     transit.hidden = true;
@@ -1483,6 +1539,25 @@ function refreshContext() {
   }
   actions.dataset.contextCount = available.length;
   actions.dataset.mode = mobileFrame?.mode || "";
+  const supply = document.getElementById("mobileSupply"), cargo = context?.supply;
+  if (supply) {
+    supply.hidden = !cargo;
+    if (cargo) {
+      supply.setAttribute("aria-label", en ? cargo.titleEn : cargo.titleKo);
+      supply.querySelector("strong").textContent = en ? cargo.titleEn : cargo.titleKo;
+      supply.querySelector("small").textContent = en ? cargo.rewardEn : cargo.rewardKo;
+      supply.querySelector("p").textContent = en ? cargo.hintEn : cargo.hintKo;
+      for (const button of supply.querySelectorAll("button")) {
+        const a = cargo.actions[Number(button.dataset.supplySlot)], label = en ? a.labelEn : a.labelKo;
+        button.textContent = label;
+        button.dataset.code = a.code;
+        button.dataset.action = a.id;
+        button.dataset.ready = String(a.enabled);
+        button.disabled = !a.enabled;
+        button.setAttribute("aria-disabled", String(!a.enabled));
+      }
+    }
+  }
   const transit = document.getElementById("mobileTransit"), transitActions = context?.transit || [];
   if (transit) {
     transit.hidden = !transitActions.length;
@@ -1701,7 +1776,16 @@ function installHelp() {
     parent.prepend(label);
   }
 }
+var preparationDetails = /* @__PURE__ */ new WeakMap();
+var preparationTargets = [];
+var preparationObserver = new MutationObserver(() => compactPreparation());
 function compactPreparation() {
+  const targets = [document.getElementById("departureProfile"), document.getElementById("departureBuild")].filter(Boolean);
+  if (targets.length !== preparationTargets.length || targets.some((el, i) => el !== preparationTargets[i])) {
+    preparationObserver.disconnect();
+    preparationTargets = targets;
+    for (const el of targets) preparationObserver.observe(el, { childList: true });
+  }
   const profile = document.getElementById("departureProfile"), en = language === "en";
   if (profile && !profile.querySelector(".mobile-captain-details")) {
     const details = document.createElement("details");
@@ -1709,8 +1793,10 @@ function compactPreparation() {
     const summary = document.createElement("summary");
     summary.textContent = en ? "Stats & skill" : "\uB2A5\uB825 \uC0C1\uC138";
     details.append(summary);
+    details.open = !!preparationDetails.get(profile)?.open;
     for (const el of profile.querySelectorAll(".embark-stats,.embark-skill")) details.append(el);
     profile.append(details);
+    preparationDetails.set(profile, details);
   }
   const build = document.getElementById("departureBuild");
   if (build && !build.querySelector(".mobile-build-details")) {
@@ -1719,13 +1805,19 @@ function compactPreparation() {
     const summary = document.createElement("summary");
     summary.textContent = en ? "Handling details" : "\uC6B4\uD56D \uC0C1\uC138";
     details.append(summary);
+    details.open = !!preparationDetails.get(build)?.open;
     for (const el of build.querySelectorAll(".embark-build-risk,.embark-key")) {
       el.textContent = touchText(el.textContent, language);
       details.append(el);
     }
     build.append(details);
+    preparationDetails.set(build, details);
   }
 }
+document.addEventListener("click", (event) => {
+  const button = event.target.closest?.(".embark-roster [data-captain]");
+  if (button?.getAttribute("aria-pressed") === "true") button.focus({ preventScroll: true });
+});
 function compactHome() {
   const panel = document.querySelector("#panel.cabin-screen"), choices = panel?.querySelector(".title-choices");
   if (!choices || panel.querySelector(".mobile-home-quick")) return;
@@ -1763,8 +1855,8 @@ function refresh() {
   const next = rogue ? "rogue" : "story";
   const active = rogue ? document.getElementById("rogueModal")?.hidden : document.getElementById("panel")?.classList.contains("playing");
   const landscape = innerWidth > innerHeight;
-  rotate.hidden = landscape || !(rogue ? ["playing", "pause"].includes(rogue.dataset.surface) : document.getElementById("panel")?.classList.contains("playing") || document.querySelector("#panel .session-pause"));
   if (mode !== next || language !== document.documentElement.lang) render(next);
+  updateRotation(landscape);
   if (playing && (!active || !landscape)) release();
   if (active && !landscape) pause();
   playing = !!active && landscape;
@@ -1818,6 +1910,7 @@ new MutationObserver(() => {
   watchSurfaces();
   refresh();
 }).observe(document.body, { childList: true });
+mobileReady = true;
 watchSurfaces();
 setInterval(refresh, 100);
 refresh();

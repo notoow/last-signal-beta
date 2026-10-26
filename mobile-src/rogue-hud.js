@@ -15,16 +15,19 @@ import {sluiceInstrument} from './sluice-instrument.js';
 import {usesSluice,sluiceStatus} from './sluice-counterplay.js';
 import {usesLighthouse,lighthouseStatus} from './lighthouse-counterplay.js';
 import {rescueStatus,rescueBerth} from './shore-rescue.js';
-import {visibleAt} from './rogue-vision.js';
+import {visibleAt,surveyedAt} from './rogue-vision.js';
 import {recentImpact,gateImpactText} from './rogue-impact.js';
 import {rigActionPresentation,rigControlPresentation} from './rig-feedback-ui.js';
-import {rogueSpecialAction} from './rogue-context.js';
+import {usesDredger} from './dredger-counterplay.js';
+import {dredgerReadability} from './dredger-readability.js';
+import {rogueSpecialAction,rogueSupplyActions} from './rogue-context.js';
 import {daylight,campStatus} from './voyage-daylight.js';
 import {gullRecovery} from './shore-encounters.js';
 
 const escape=x=>String(touchText(x)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const translations={
   '봉쇄가 풀렸다 · 해안을 따라 출구 찾기':'Blockade open · follow the coast to find the exit',
+  '준설선 무력화 · 해안을 따라 출구 찾기':'Dredger disabled · follow the coast to find the exit',
   '해안을 따라 탐색 · 발견한 부두는 해도에 기록':'Follow the coast · discovered quays stay on your chart',
   'Park: 선실 난로를 켤게. 불침번을 서며 날이 밝기를 기다리자. 연료 8이 필요해.':'Park: I will light the cabin stove. We can keep watch until dawn. It takes 8 fuel.',
   'Park: 쉴 수 없어. 주변을 확인해.':'Park: We cannot rest. Check our surroundings.',
@@ -328,6 +331,70 @@ function instrument(g){
 
 // Read-only presentation. Objective/action eligibility comes from objective();
 // skill eligibility comes from skillStatus(). No simulation state is changed.
+export function dredgerEncounterModel(s,language='ko'){
+  if(!usesDredger(s)||!s.boss.active&&!s.boss.cleared)return null;
+  const b=s.boss,en=language==='en',readability=dredgerReadability(s,language),done=b.parts.filter(hp=>hp<=0).length;
+  const parts=[...readability.parts].reverse().map(p=>({...p,hp:Math.max(0,Math.min(30,b.parts[p.index])),max:30,
+    shortName:p.index===0?(en?'Pump':'흡입 펌프'):(en?'Crane':'크레인')}));
+  let note=en?'Lure the drop to expose the drives':'낙하를 유도해 구동부 노출',tone='active';
+  if(b.cleared){tone='cleared';note=readability.completion.exitKnown?(en?'Dock at the exit pier':'탈출 부두에 접안'):(en?'Follow the coast to find the exit':'해안을 따라 출구 탐색');}
+  else if(b.phase==='warn'){tone='danger';note=b.crane.locked?(en?'Drop locked · leave the circle':'낙하 확정 · 원 밖으로'):(en?'Tracking · keep moving':'표적 추적 · 계속 이동');}
+  else if(b.phase==='attack'){tone='danger';note=b.crane.impact?(en?'Impact ended · wait for exposure':'충격 종료 · 고리 노출 대기'):(en?'Falling · leave the circle':'낙하 중 · 원 밖으로');}
+  else if(b.hook>=0){tone='exposed';note=en?'Connected · pull away':'고리 연결 · 멀어져 당기기';}
+  else if(b.phase==='recover'){tone='exposed';note=en?'Hooks exposed · connect and pull':'고리 노출 · 연결 후 당기기';}
+  return {title:b.cleared?(en?'DREDGER DISABLED':'준설선 무력화'):(en?'RUNAWAY DREDGER':'폭주 준설선'),done,total:parts.length,
+    count:`${done}/${parts.length} ${en?'disabled':'파괴'}`,parts,note,tone,cleared:b.cleared};
+}
+export function dredgerEncounterMarkup(m){
+  if(!m)return '';
+  return `<section class="boss-encounter" data-tone="${m.tone}" aria-label="${escape(m.title+' · '+m.count)}"><header><b class="be-title">${escape(m.title)}</b><span class="be-count">${escape(m.count)}</span></header><div class="be-parts">${m.parts.map(p=>`<div class="be-part" data-part="${p.index}" data-state="${p.state}"><span class="be-label">${escape(p.shortName)}<i aria-hidden="true">${p.hp<=0?'✓':Math.ceil(p.hp)}</i></span><div class="be-meter" role="meter" aria-label="${escape(p.name+' · '+p.status)}" aria-valuemin="0" aria-valuemax="${p.max}" aria-valuenow="${p.hp}"><svg viewBox="0 0 100 5" preserveAspectRatio="none" aria-hidden="true"><rect class="be-fill" width="${p.hp/p.max*100}" height="5"/></svg></div></div>`).join('')}</div><p class="be-note">${escape(m.note)}</p></section>`;
+}
+// Later blockades expose discrete gates and real relay transmission, not HP.
+export function laterBossEncounterModel(s,language='ko'){
+  const sluice=usesSluice(s),lighthouse=usesLighthouse(s);
+  if(!sluice&&!lighthouse||s.status!=='playing'||s.mode!=='sailing'||!s.boss.active&&!s.boss.cleared||harborRoutePriority(s))return null;
+  const en=language==='en',b=s.boss,exitKnown=surveyedAt(s,s.map.exit)||visibleAt(s,s.map.exit);
+  const time=n=>n>0&&n<.1?'<0.1':(Math.floor(Math.max(0,n)*10)/10).toFixed(1);
+  const dockNote=exitKnown?(en?'Dock at the exit pier':'탈출 부두에 접안'):(en?'Follow the coast to find the exit':'해안을 따라 출구 탐색');
+  if(sluice){
+    const a=sluiceStatus(s),instrument=sluiceInstrument(s);
+    const parts=b.parts.map((hp,index)=>({index,name:(en?'Gate ':'수문 ')+(index+1),shortName:(en?'Gate ':'수문 ')+(index+1),
+      value:hp<=0?1:0,max:1,mark:hp<=0?'✓':'·',state:hp<=0?'complete':index===a.lane?'selected':'idle',
+      status:hp<=0?(en?'Open':'개방'):(en?'Closed':'닫힘')}));
+    const phases=en?{open:'Plate open',tracking:'Tracking',locked:'Lane locked',backwash:'Backwash · reset',opened:'Gate opened',recover:'Resetting'}:
+      {open:'잠금판 열림',tracking:'수로 추적',locked:'수로 고정',backwash:'역류 · 재정렬',opened:'수문 개방',recover:'재정비'};
+    const note=b.cleared?dockNote:(en?'Lane ':'수로 ')+instrument.lane+' · '+phases[instrument.phase]+' '+time(instrument.seconds)+(en?'s':'초');
+    return {kind:'sluice',title:b.cleared?(en?'GATES OPEN':'수문 개방 완료'):(en?'GATEKEEPER':'수문지기'),parts,done:a.opened,total:a.total,
+      count:`${a.opened}/${a.total} ${en?'open':'개방'}`,note,tone:b.cleared?'cleared':a.backwash?'danger':a.exposed?'exposed':'active',cleared:b.cleared};
+  }
+  const a=lighthouseStatus(s),parts=b.parts.map((hp,index)=>{
+    const complete=hp===0,value=complete?a.required:Math.max(0,Math.min(a.required,b.lighthouse.progress[index]));
+    return {index,name:(en?'Relay ':'중계기 ')+(index+1),shortName:(en?'R':'중계')+(index+1),value,max:a.required,
+      mark:complete?'✓':Math.floor(value/a.required*100)+'%',state:complete?'complete':a.linked&&a.index===index?'selected':'idle',
+      status:complete?(en?'Sent · retained':'전송 완료 · 보존'):(a.ready&&a.index===index?(en?'Sending':'송신 중'):value>0?(en?'Decaying':'진척 감소'):(en?'Not sent':'미전송'))};
+  });
+  let note,tone='active';
+  if(b.cleared){tone='cleared';note=exitKnown?(en?'Dock to complete the voyage':'접안해야 항해 완료'):dockNote;}
+  else if(a.pendingImpact){tone='danger';note=(a.targetThreatensHull?(en?'Clear the whole hull':'배 전체를 원 밖으로'):(en?'Outside · stay out':'원 밖 · 재진입 주의'))+' · '+time(a.impactIn)+(en?'s':'초');}
+  else if(a.phase==='attack'&&a.impact){tone='danger';note=en?'Impact · stay clear':'충격탄 폭발 · 이탈 유지';}
+  else if(a.phase==='warn'&&a.visible){tone='danger';note=en?'Spotted · leave the beam':'빛에 노출 · 탐조등 회피';}
+  else if(a.linked&&!a.inRange)note=en?'Move closer to the relay':'중계기에 더 가까이';
+  else if(a.linked&&!a.clear)note=en?'Radio blocked · clear the path':'송신선 차단 · 가림막 밖으로';
+  else if(a.linked&&!a.aligned)note=en?'Point the bow at the lighthouse':'선수를 등대 쪽으로';
+  else if(a.linked&&a.speed>a.maxSpeed)note=en?`Brake · speed ≤${a.maxSpeed}`:`감속 · 속도 ${a.maxSpeed} 이하`;
+  else if(a.ready){tone='exposed';note=en?'Sending · hold heading and speed':'송신 중 · 방향과 저속 유지';}
+  else note=a.towBlocked?(en?'Release tow · connect to relay':'견인 해제 후 중계기 접속'):(en?'Approach a relay · connect':'중계기에 접근해 접속');
+  return {kind:'lighthouse',title:b.cleared?(en?'MANIFESTS SENT':'명부 전송 완료'):(en?'LIGHTKEEPER':'등대지기'),parts,done:a.sent,total:a.total,
+    count:`${a.sent}/${a.total} ${en?'sent':'전송'}`,note,tone,cleared:b.cleared};
+}
+export function bossEncounterModel(s,language='ko'){
+  return dredgerEncounterModel(s,language)||laterBossEncounterModel(s,language);
+}
+export function bossEncounterMarkup(m){
+  if(!m||!m.kind)return dredgerEncounterMarkup(m);
+  return `<section class="boss-encounter" data-kind="${m.kind}" data-tone="${m.tone}" aria-label="${escape(m.title+' · '+m.count)}"><header><b class="be-title">${escape(m.title)}</b><span class="be-count">${escape(m.count)}</span></header><div class="be-parts">${m.parts.map(p=>`<div class="be-part" data-part="${p.index}" data-state="${p.state}"><span class="be-label">${escape(p.shortName)}<i aria-hidden="true">${p.mark}</i></span><div class="be-meter" role="progressbar" aria-label="${escape(p.name+' · '+p.status)}" aria-valuemin="0" aria-valuemax="${p.max}" aria-valuenow="${p.value}"><svg viewBox="0 0 100 5" preserveAspectRatio="none" aria-hidden="true"><rect class="be-fill" width="${p.value/p.max*100}" height="5"/></svg></div></div>`).join('')}</div><p class="be-note">${escape(m.note)}</p></section>`;
+}
+
 export function rogueHudModel(s,language='ko'){
   const en=language==='en',tr=text=>rogueHudText(text,language),guide=objective(s),skill=skillStatus(s);
   const ashore=s.mode==='ashore',sailing=s.mode==='sailing';
@@ -338,14 +405,14 @@ export function rogueHudModel(s,language='ko'){
   const combatPriority=fighting&&!harborRoutePriority(s);
   const model={language,mode:s.mode,mission:tr(guide.text),fullObjective:tr(guide.text),
     region:`${s.depth+1}/3 · ${tr(DEPTHS[s.depth].name)} · ${CAPTAINS[s.captain].name}`,sky:s.daylight?daylight(s):null,
-    metrics:[],conditions:[],action:'',context:[],work:null,boss:null,
+    metrics:[],conditions:[],action:'',context:[],work:null,boss:null,encounter:bossEncounterModel(s,language),supply:rogueSupplyActions(s),
     motion:waterMotion(s)?shipMotionStatus(s).mode:'legacy',
     skill:{...skill,name:en?skillNames[s.captain]:skill.name,reason:tr(skill.reason),
       active:s.skill.left>0,remaining:s.skill.left,remainingCooldown:s.skill.cooldown,compact:!sailing,
       usable:skill.ready||sailing&&s.captain==='woo'&&s.skill.left>0}
   };
   if(guide.exploring)model.mission=model.fullObjective=s.boss.cleared?
-    (en?'Blockade open · follow the coast to find the exit':'봉쇄가 풀렸다 · 해안을 따라 출구 찾기'):
+    (usesDredger(s)?(en?'Dredger disabled · follow the coast to find the exit':'준설선 무력화 · 해안을 따라 출구 찾기'):(en?'Blockade open · follow the coast to find the exit':'봉쇄가 풀렸다 · 해안을 따라 출구 찾기')):
     (en?'Follow the coast · discovered quays stay on your chart':'해안을 따라 탐색 · 발견한 부두는 해도에 기록');
   const metric=(id,label,value,max,raw=value,marks=[])=>model.metrics.push({id,label,value,max,gauge:max===undefined?null:gauge(raw,max,label,marks)});
   const condition=(id,text,tone='normal',extra={})=>model.conditions.push({id,text,tone,...extra});
@@ -515,7 +582,7 @@ export function rogueHudModel(s,language='ko'){
   if(s.build==='bilge'){
     const label=en?'Flood':'침수',valve=s.valve?(en?'Valve open':'밸브 열림'):(en?'Valve shut':'밸브 닫힘');
     condition('build',`${sailing?'B · ':''}${valve} · ${label} ${Math.floor(s.flood)}% · ${sailing?(en?'100% sinks':'100% 침몰'):(en?'Moored: held':'계류 중 유지')}`,s.valve&&sailing?'warning':'normal',{gauge:gauge(s.flood,100,label)});
-  }else if(s.build==='winch'&&sailing&&!(s.salvage?.rank>0&&s.boss.hook<0)){
+  }else if(s.build==='winch'&&sailing&&!s.boss.cleared&&!(s.salvage?.rank>0&&s.boss.hook<0)){
     const ready=lighthouse?lighthouse.canBurst:sluice?sluice.canBurst&&sluice.exposed:s.charge>=35&&s.boss.hook>=0&&s.boss.phase==='recover'&&s.boss.tension>.1;
     const hint=lighthouse?(ready?(en?'B Escape launch · fuel 3':'B 회피 발진 · 연료 3'):
       !lighthouse.linked?(en?'E Connect to relay':'E 중계기 접속'):
@@ -620,15 +687,18 @@ export function rogueHudModel(s,language='ko'){
   return model;
 }
 export function rogueHudMarkup(model){
+  const supply=model.supply,en=model.language==='en';
+  const supplyMarkup=supply?`<div class="rogue-supply" role="group" aria-label="${escape(en?supply.titleEn:supply.titleKo)}"><strong>${escape(en?supply.titleEn:supply.titleKo)}</strong><small>${escape(en?supply.rewardEn:supply.rewardKo)}</small><p>${escape(en?supply.hintEn:supply.hintKo)}</p><div>${supply.actions.map(a=>`<button type="button" data-supply-action="${a.id}" ${a.enabled?'':'disabled'}><kbd>${a.code.slice(3)}</kbd> ${escape(en?a.labelEn:a.labelKo)}</button>`).join('')}</div></div>`:'';
+
   const hint=model.rigHint,receipt=model.rigControl;
   const rigIcon={water:'M12 2S5 10 5 15a7 7 0 0 0 14 0c0-5-7-13-7-13Z',winch:'M5 4h14v16H5zM8 7h8M8 11h8M8 15h8M2 12h3m14 0h3',boost:'m14 2-9 12h6l-1 8 9-12h-6l1-8Z'};
   const rigHint=hint?`<span class="rogue-rig-control" data-rig-control="${hint.code}"${receipt?` data-rig-control-id="${receipt.id}"`:''}><kbd>${hint.code==='KeyB'?'B':'Shift'}</kbd><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${rigIcon[hint.icon]}"/></svg><span>${escape(receipt?.shortText||hint.text)}</span></span>`:'';
   const dockChecks=model.docking?`<span class="rogue-dock-checks" data-dock-kind="${model.docking.kind}" data-dock-optional="${!!model.docking.optional}" aria-label="${escape(model.docking.title)}">${model.docking.checks.map(c=>`<span data-dock-check="${c.id}" data-ok="${c.ok}" data-active="${c.active}"><i aria-hidden="true">${c.ok?'✓':'○'}</i> ${escape(c.label)}<span class="rogue-sr-only"> · ${model.language==='en'?(c.ok?'ready':'not ready'):(c.ok?'충족':'미충족')}</span></span>`).join('')}</span>`:'';
   return {
-    mission:`<small>${escape(model.region)}${model.sky?` <span class="rogue-clock" data-period="${model.sky.period}" aria-label="${model.language==='en'?{day:'Day',dusk:'Dusk',night:'Night',dawn:'Dawn'}[model.sky.period]:{day:'낮',dusk:'저녁',night:'밤',dawn:'새벽'}[model.sky.period]} ${model.sky.clock}">${model.sky.night?'☾':'☀'} ${model.sky.clock}</span>`:''}</small><strong>${escape(model.mission)}</strong>${model.plan?`<div class="rogue-plan-summary">${escape(model.plan)}</div>`:''}${model.boss?`<div class="rogue-boss-state">${escape(model.boss)}</div>`:''}`,
+    mission:`<small>${escape(model.region)}${model.sky?` <span class="rogue-clock" data-period="${model.sky.period}" aria-label="${model.language==='en'?{day:'Day',dusk:'Dusk',night:'Night',dawn:'Dawn'}[model.sky.period]:{day:'낮',dusk:'저녁',night:'밤',dawn:'새벽'}[model.sky.period]} ${model.sky.clock}">${model.sky.night?'☾':'☀'} ${model.sky.clock}</span>`:''}</small><strong>${escape(model.mission)}</strong>${model.plan?`<div class="rogue-plan-summary">${escape(model.plan)}</div>`:''}${model.encounter?bossEncounterMarkup(model.encounter):model.boss?`<div class="rogue-boss-state">${escape(model.boss)}</div>`:''}`,
     readings:model.metrics.map(m=>`<span data-rogue-metric="${m.id}"${m.impact?' data-impact="true"':''}${m.gauge?' class="rogue-instrument"':''}><span>${escape(m.label)}</span><b>${escape(m.value)}</b>${m.max!==undefined?`<span class="rogue-maximum">/${m.max}</span>`:''}${instrument(m.gauge)}</span>`).join(''),
     conditions:(model.impact?`<span class="rogue-impact" data-impact-id="${model.impact.id}" data-impact-target="${model.impact.target}" data-impact-source="${model.impact.source}"><span>${escape(model.impact.cause)}</span><strong>${escape(model.impact.loss)}</strong></span>`:'<span class="rogue-impact" aria-hidden="true"></span>')+model.conditions.map(c=>`<span data-rogue-condition="${c.id}" data-tone="${c.tone}"${c.gauge?' class="rogue-instrument"':''}>${c.emphasis?`<strong>${escape(c.text)}</strong>`:escape(c.text)}${instrument(c.gauge)}</span>`).join(''),
-    controls:`${model.docking?.optional?'':dockChecks}<span data-rogue-action="primary" data-tone="${model.actionTone||'normal'}"${model.rigAction?` data-rig-action-id="${model.rigAction.id}"`: ""}>${escape(model.rigAction?.text||model.action)}</span>${model.context.map(c=>`<span data-rogue-context="${c.id}" data-tone="${c.tone}">${escape(c.text)}</span>${c.id==='docking'?dockChecks:''}`).join('')}${model.work?`<label class="rogue-work">${escape(model.work.label)}<progress max="${model.work.max}" value="${model.work.value}" aria-label="${escape(model.work.label)}"></progress></label>`:''}${rigHint}`,
+    controls:`${supplyMarkup}${model.docking?.optional?'':dockChecks}<span data-rogue-action="primary" data-tone="${model.actionTone||'normal'}"${model.rigAction?` data-rig-action-id="${model.rigAction.id}"`: ""}>${escape(model.rigAction?.text||model.action)}</span>${model.context.map(c=>`<span data-rogue-context="${c.id}" data-tone="${c.tone}">${escape(c.text)}</span>${c.id==='docking'?dockChecks:''}`).join('')}${model.work?`<label class="rogue-work">${escape(model.work.label)}<progress max="${model.work.max}" value="${model.work.value}" aria-label="${escape(model.work.label)}"></progress></label>`:''}${rigHint}`,
     skill:`<kbd>G</kbd><span><b>${escape(model.skill.name)}</b><small>${escape(model.skill.reason)}${model.skill.active?' · '+model.skill.remaining.toFixed(1)+(model.language==='en'?'s':'초'):''}</small>${model.skill.ready?`<small>${model.language==='en'?'Boost':'부스터'} ${model.skill.boost} · ${model.language==='en'?'fuel':'연료'} ${model.skill.fuel}</small>`:''}</span>${!model.skill.compact?`<progress aria-label="${model.language==='ko'?'기술 재사용 준비':'Skill cooldown'}" max="${model.skill.cooldown}" value="${model.skill.cooldown-model.skill.remainingCooldown}"></progress>`:''}`
   };
 }

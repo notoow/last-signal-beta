@@ -30,6 +30,24 @@
 @media(max-height:740px){#rogue .rogue-workshop-return{padding:10px 24px;gap:14px}}
 @media(max-width:700px){#rogue .rogue-workshop-return{align-items:flex-start;flex-direction:column;padding:16px 20px}#rogue .rogue-workshop-actions{flex-direction:column;width:100%}#rogue #rogueWorkshopReturn{width:100%}}
 #rogue .rogue-plan-summary{margin-top:7px;color:#b9c1c8;font-size:14px;line-height:1.4}
+/* Encounter instrument: the two real drives, without a fictitious body HP. */
+.boss-encounter{position:fixed;top:14px;left:50%;transform:translateX(-50%);width:clamp(196px,32vw,420px);height:76px;padding:5px 10px;pointer-events:none;text-align:center;color:#efe6cc;font:500 13px/1.25 Pretendard,sans-serif;background:linear-gradient(90deg,transparent,#07151cbb 20%,#07151cbb 80%,transparent);text-shadow:0 1px 3px #000}
+.boss-encounter header{display:flex;align-items:center;justify-content:center;gap:12px;min-height:20px}
+.boss-encounter .be-title{font-size:17px;font-weight:750;letter-spacing:.03em;white-space:nowrap}
+.boss-encounter .be-count{font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap;color:#e5ac7b}
+.boss-encounter .be-parts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px}
+.boss-encounter .be-label{display:flex;justify-content:space-between;gap:6px;font-size:11px;line-height:14px}
+.boss-encounter .be-label i{font-style:normal;font-variant-numeric:tabular-nums}
+.boss-encounter .be-meter{height:5px;margin-top:2px;background:#18232c;box-shadow:0 0 0 1px #cbb57f66}
+.boss-encounter .be-meter>svg{display:block;width:100%!important;height:100%!important;filter:none!important}
+.boss-encounter .be-fill{fill:#e9b876;stroke:none}
+.boss-encounter .be-note{padding:0;margin:6px 0 0;font-size:12px;line-height:15px;color:#d4bf8f;white-space:nowrap}
+.boss-encounter[data-tone=danger] .be-note{color:#ff9c88}
+.boss-encounter[data-tone=exposed] .be-note{color:#efd593}
+.boss-encounter[data-tone=cleared] .be-title,.boss-encounter[data-tone=cleared] .be-count,.boss-encounter[data-tone=cleared] .be-note{color:#a9d9c1}
+.boss-encounter .be-part[data-state=destroyed]{color:#92b4a6}
+.boss-encounter .be-part[data-state=destroyed] .be-meter{box-shadow:0 0 0 1px #72978a55}
+#rogueMission:has(.boss-encounter){max-width:calc((100vw - clamp(196px,32vw,420px))/2 - 36px)}
 #rogue[data-hud=compact] .rogue-top-stack{width:320px;gap:8px}
 #rogue[data-hud=compact] #rogueMission{padding:10px 14px;font-size:16px;line-height:1.35}
 #rogue[data-hud=compact] #rogueMission small{font-size:14px;margin-bottom:4px}
@@ -61,6 +79,14 @@
 #rogue[data-hud=compact] [data-rogue-context=docking]{flex-basis:100%;color:#b9c1c8}
 #rogue[data-hud=compact] .rogue-controls [data-tone=warning]{color:#ffbe78}
 #rogue[data-hud=compact] [data-rogue-context=search]{font-weight:600}
+#rogue .rogue-supply{flex-basis:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;padding:8px 12px;border-left:2px solid #e4c282;background:#0b202be8;pointer-events:auto}
+#rogue .rogue-supply strong{font-size:13px;color:#ffe0a1}
+#rogue .rogue-supply small{grid-column:1;color:#c3d6d9;font-size:12px}
+#rogue .rogue-supply p{grid-column:1;margin:4px 0;font-size:12px}
+#rogue .rogue-supply>div{grid-column:2;grid-row:1/4;align-self:center;display:flex;gap:8px}
+#rogue .rogue-supply button{min-height:44px;min-width:145px;padding:6px 12px;border:1px solid #cbb27e;border-radius:8px;background:#17313b;color:#fff0cb;font-size:13px}
+#rogue .rogue-supply button:disabled{opacity:.5}
+html[data-mobile-ui=true] #rogue .rogue-supply{display:none}
 #rogue .rogue-sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 /* A fixed-width key hint changes ink only when a real rig action resolves. */
 #rogue .rogue-rig-control{display:inline-flex;align-items:center;gap:6px;width:194px;height:22px;flex:none;white-space:nowrap;font-size:12px;color:#b9c1c8;pointer-events:none}
@@ -218,3 +244,10 @@ html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result .res
 html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result .result-insight .insight-detail{grid-column:1;font-size:11px;line-height:15px}
 html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result .result-insight .insight-open{top:16px}
 html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result .rogue-retry-note{font-size:12px;line-height:16px;margin:5px 0 8px}
+
+/* Discrete gates and real relay progress share the existing encounter footprint. */
+.boss-encounter[data-kind] .be-parts{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.boss-encounter[data-kind] .be-label{gap:3px;white-space:nowrap}
+.boss-encounter[data-kind] .be-fill{fill:#b4d8c4}
+.boss-encounter[data-kind] .be-part[data-state=complete]{color:#b4d8c4}
+.boss-encounter[data-kind] .be-part[data-state=selected] .be-meter{box-shadow:0 0 0 1px #edc987}

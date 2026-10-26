@@ -47,7 +47,7 @@ export function resultMarkup({outcome='success',title,kicker='',summary='',facts
 export function pauseMarkup({kicker='',saved=true,error='',actions='',details='',menuDetails='',facts=[],language='ko',saveId='sessionSaveStatus'}){
   const t=sessionText(language);
   const back=language==='en'?'Back to menu':'메뉴로 돌아가기';
-  const records=menuDetails||(details?'<details class="rp-page mobile-notes"><summary>'+t.records+'</summary><div class="rp-detail-content">'+details+'</div></details>':'');
+  const records=menuDetails+(details?'<details class="rp-page mobile-notes"><summary>'+t.records+'</summary><div class="rp-detail-content">'+details+'</div></details>':'');
   return '<section class="session-pause rp-view"><header><p class="rp-brand">LAST SIGNAL</p><h2>'+t.paused+'</h2>'+
     '<p id="'+saveId+'" class="session-save" role="status" data-save-state="'+(saved?'saved':'failed')+'">'+escapeUi(saved?t.saved:error||t.saveFailed)+'</p></header>'+
     '<div class="rp-menu"><nav class="session-pause-actions">'+actions+'</nav><div class="session-body">'+records.replaceAll('<div class="rp-detail-content">','<div class="rp-detail-content"><button type="button" class="rp-close">← '+back+'</button>')+'</div></div>'+

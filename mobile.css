@@ -15,7 +15,7 @@ html,body { width:100%; height:100%; overscroll-behavior:none; }
 #mobileControls:not(.expanded) .mobile-extra { display:none; }
 #mobileRotate { display:none; }
 @media(orientation:portrait) {
-  #mobileRotate { position:fixed; inset:0; z-index:999; display:grid; place-items:center; padding:32px; text-align:center; color:#fff; background:#102b35; }
+  #mobileRotate { position:fixed; inset:0; z-index:999; display:grid; place-items:center; padding:32px; text-align:center; color:#f4ead4; background:#0b1920; }
 }
 
 @media(max-height:600px) {
@@ -134,9 +134,11 @@ html,body{height:var(--mobile-height,100dvh);overflow:hidden}
 #mobileControls.expanded{align-items:end}
 #mobileControls.expanded #mobileActions button{min-height:48px}
 .rotate-card{max-width:440px}
+.rotate-brand{font:500 10px/1.5 Pretendard,sans-serif;letter-spacing:.3em;color:#b5c8ca}
 .rotate-card h1{font:600 24px/1.4 Pretendard,sans-serif}
 .rotate-card p{font:14px/1.7 Pretendard,sans-serif;color:#b7cbd2}
-.rotate-card button{padding:14px 24px;background:#f3a343;border:0;border-radius:12px;color:#111a20;font:600 16px Pretendard,sans-serif}
+.rotate-card p{word-break:keep-all}
+.rotate-card button{padding:12px 24px;background:transparent;border:1px solid #d8bc8380;border-radius:3px;color:#e4cc98;font:600 15px Pretendard,sans-serif}
 .rotate-phone{margin:28px auto 40px;width:58px;height:96px;border:3px solid #d5e4e8;border-radius:12px;display:grid;place-items:center;font-size:32px;color:#f3a343;animation:rotate-phone 2.8s ease-in-out infinite}
 @keyframes rotate-phone{0%,15%{transform:rotate(0)}55%,85%{transform:rotate(-90deg)}100%{transform:rotate(0)}}
 @media(prefers-reduced-motion:reduce){.rotate-phone{animation:none;transform:rotate(-90deg)}}
@@ -224,6 +226,11 @@ html,body{height:var(--mobile-height,100dvh);overflow:hidden}
 .mobile-voyage-intro button{min-height:46px;padding:10px 22px;font-size:15px;border:1px solid #d8bc83;border-radius:5px}
 #rogueIntroSail{background:#d8bc83;color:#12282f}#rogueIntroSkip{background:transparent;color:#ccd5cb}
 .embark .mobile-captain-details,.embark .mobile-build-details{border:0;border-top:1px solid #bdcdb22b;margin-top:8px;padding:0}
+/* Source replaces these children on selection; never paint the unwrapped details. */
+#departureProfile>.embark-stats,#departureProfile>.embark-skill,#departureBuild>.embark-build-risk,#departureBuild>.embark-key{display:none!important}
+.embark-roster button{border:1px solid transparent}
+.embark-roster button[aria-pressed=true]{border-color:#d8c699;background:#d8c6990c}
+.embark-roster button[aria-pressed=true]:focus-visible{outline:none}
 .embark .mobile-captain-details>summary,.embark .mobile-build-details>summary{display:flex;align-items:center;min-height:44px;font-size:12px;color:#c6cabd;cursor:pointer;list-style:none}
 .embark .mobile-captain-details>summary::before,.embark .mobile-build-details>summary::before{content:'＋';margin-right:6px;color:#debf7d}
 .embark details[open]>summary::before{content:'−'}
@@ -313,6 +320,7 @@ html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result>.ses
 .cabin-screen .scene-radio{right:18px;bottom:18px;opacity:.8;font-size:10px}.cabin-screen .scene-subtitle{bottom:68px;left:auto;right:20px;transform:none;width:40vw;font-size:11px}
 /* A complete captain silhouette is part of choosing a captain at every size. */
 @media(orientation:landscape){
+ .embark-crew,.embark-vessel{min-height:0!important;max-height:calc(var(--mobile-height,100dvh) - 134px)!important;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
  .rogue-modal:has(.embark){padding:10px 14px!important}
  .embark{grid-template-columns:minmax(108px,.85fr) minmax(128px,1.15fr) minmax(198px,1.5fr)!important;grid-template-rows:42px minmax(0,1fr) 52px!important;gap:6px 10px!important;min-height:calc(var(--mobile-height,100dvh) - 20px)!important}
  .embark-person{display:flex!important;justify-content:center;align-items:end;grid-column:2!important;grid-row:2!important;height:calc(var(--mobile-height,100dvh) - 126px)!important;max-height:390px!important;width:100%!important;max-width:none!important;align-self:center;overflow:visible}
@@ -342,6 +350,19 @@ html[data-mobile-ui=true] #rogue[data-surface=result] .rogue-debrief-result>.ses
 .mobile-playing #rogueHud,.mobile-playing #hud{display:none!important}
 #mobileFlightHud{position:fixed;inset:0;z-index:80;pointer-events:none;color:#f0f3ed;font:500 13px/1.35 Pretendard,sans-serif;text-shadow:0 1px 3px #00121f,0 0 8px #00121f}
 #mobileFlightHud[hidden],#mobileFlightHud [hidden]{display:none!important}
+#mobileFlightHud{--encounter-width:clamp(196px,32vw,360px)}
+#mobileBossEncounter{position:absolute;left:50%;top:max(8px,env(safe-area-inset-top));transform:translateX(-50%);width:var(--encounter-width);height:68px}
+#mobileBossEncounter .boss-encounter{position:static;transform:none;width:100%;height:68px;padding:3px 7px}
+#mobileBossEncounter .be-title{font-size:14px;letter-spacing:0}
+#mobileBossEncounter .be-count{font-size:10px}
+#mobileBossEncounter header{gap:8px;min-height:18px}
+#mobileBossEncounter .be-parts{gap:10px;margin-top:2px}
+#mobileBossEncounter .be-label{font-size:10px;line-height:12px}
+#mobileBossEncounter .be-note{font-size:11px;line-height:14px;margin-top:5px}
+#mobileFlightHud[data-boss-encounter] #mobileObjective{max-width:calc((100vw - var(--encounter-width))/2 - 28px)}
+#mobileFlightHud[data-boss-encounter] #mobileNotice{top:84px}
+html[lang=en] #mobileBossEncounter .be-title{font-size:11px}
+html[lang=en] #mobileBossEncounter .be-note{font-size:10px}
 /* Gate the first frame from the actual game surface, before observer delivery. */
 html[data-mobile-ui=true]:has(#rogueModal:not([hidden])) :is(#mobileControls,#mobileFlightHud),
 html[data-mobile-ui=true]:not(:has(#rogue)):has(#panel:not(.playing)) :is(#mobileControls,#mobileFlightHud){display:none!important;pointer-events:none!important}
@@ -500,6 +521,14 @@ html[data-mobile-ui=true]:has(#rogueQuayAssets[data-mobile-row=below]:not([hidde
 /* Situational transit sits above Work without shifting the fixed thumb grid. */
 #mobileTransit{position:absolute;right:0;bottom:calc(100% + 8px);display:flex;justify-content:flex-end;gap:8px;pointer-events:none}
 #mobileTransit[hidden]{display:none}
+#mobileSupply{position:fixed;top:58px;left:12px;width:220px;box-sizing:border-box;padding:6px;border:1px solid #cbb27e88;border-radius:10px;background:#0b202bf2;color:#edf1e5;display:grid;grid-template-columns:1fr 1fr;gap:4px 6px;pointer-events:auto}
+#mobileSupply strong,#mobileSupply small,#mobileSupply p{grid-column:1/-1;margin:0;line-height:1.3}
+#mobileSupply strong{font-size:12px;color:#ffe0a1}
+#mobileSupply small,#mobileSupply p{font-size:10px}
+#mobileControls #mobileSupply>button{width:100%;height:44px;min-height:44px;padding:5px;border-radius:8px;border:1px solid #cbb27e;background:#17313b;color:#fff0cb;font-size:12px;pointer-events:auto}
+#mobileSupply button:disabled{opacity:.5}
+html[data-mobile-move-side=right] #mobileSupply{left:auto;right:150px}
+#mobileControls.expanded #mobileSupply{visibility:hidden}
 #mobileControls #mobileTransit>button{position:relative;display:flex;flex-direction:row;align-items:center;justify-content:center;gap:5px;min-width:96px;width:auto;height:44px;min-height:44px;padding:6px 8px;border:1px solid #b9d8d477;border-radius:22px;background:#0b2834df;color:#edf1e5;pointer-events:auto;white-space:nowrap}
 #mobileControls #mobileTransit>button[hidden]{display:none}
 #mobileTransit button>svg{width:20px;height:20px;flex:none}
@@ -616,3 +645,13 @@ html[data-mobile-move-side=right] #mobileTransit{right:auto;left:0;justify-conte
 /* Local contrast, preserving minimap geometry and locked button semantics. */
 #mobileMinimap{border-color:#b6cbc699;background:#07151cf2}
 #mobileControls #mobileActions>.mobile-captain-skill[data-state=locked]{opacity:1;background:#081b26e6;border-color:#8fa5ac99;color:#aebfc4}
+/* Keep optional transport above the movement hand, clear of the minimap and
+   the fixed brake/boost/boarding cluster, even on a 568 x 320 viewport. */
+@media(max-width:600px){html[data-mobile-move-side=right] #mobileControls #mobileSupply{right:124px;width:210px}}
+
+#mobileBossEncounter .boss-encounter[data-kind] .be-parts{gap:6px}
+/* The same phase line is now above the three gates; keep alignment and receipts. */
+#mobileFlightHud[data-boss-kind=sluice] #mobileNotice .sluice-phase{display:none}
+#mobileFlightHud[data-boss-kind=sluice] .sluice-speed{position:fixed;left:14px;top:96px}
+#mobileFlightHud[data-boss-kind=lighthouse] [data-resource=signal-speed]{position:fixed;left:14px;top:96px}
+#mobileFlightHud[data-boss-kind=lighthouse] [data-resource=tension]{position:fixed;left:14px;top:124px}

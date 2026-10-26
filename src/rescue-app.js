@@ -32,6 +32,7 @@ import {missionGuidance} from './mission-guidance.js';
 import {memories,earnedMemories,createRewardTracker,collectVoyageRewards} from './rewards.js';
 import {MenuScene} from './menu-scene.js';
 import {HarborAudio} from './harbor-audio.js';
+import {AUDIO_KEY,readAudio,audioMarkup,bindAudio} from './audio-settings.js';
 const $=id=>document.getElementById(id),panel=$('panel'),hud=$('hud'),view=new HarborRenderer($('space')),towView=new TowRenderer($('space')),sound=new HarborAudio(),keys=new Set();
 const playHudProbe=hudProbe($('space'),'#hud .play-top,#hud .play-console,#voyageStatus,#interiorToggle,#playPause,#storyChart:not(.expanded),#voyageStatus .sea-instruments,#rewardNotice.show,#toast.show');
 const storyChart=document.createElement('button');storyChart.id='storyChart';storyChart.hidden=true;
@@ -56,6 +57,9 @@ try{
  if(data){campaign=data.campaign;saved=data.run;}
  if(loaded.readOnly||loaded.recovered||loaded.corrupt)setTimeout(()=>toast(loaded.readOnly?l().saveNewerVersion:loaded.recovered?l().backupRecovered:l().corrupt),200);
 }catch{setTimeout(()=>toast(l().corrupt),200);}
+Object.assign(settings,readAudio(localStorage,settings));
+let storyMusicUntil=0,storyMusicMission='rescue';
+function changeAudio(key,value){settings[key]=value;unlock();apply();try{localStorage.setItem(AUDIO_KEY,JSON.stringify({master:settings.master,volume:settings.volume,music:settings.music}));return true;}catch{return false;}}
 let state=null,screen='cabin',selected='engineer',last=0,hudClock=0,saveClock=0,ended=false,toastTimer,radio=null,radioQueue=[],radioTime=0;
 let lastStoryMapFrame=-Infinity;
 const chartOpen=()=>state?.kind==='tow'?towView.mapOpen:view.mapOpen;
@@ -72,7 +76,7 @@ const detours=new WeakSet(),receipts=new WeakMap();
 const presentation=(at=screen)=>missionGuidance({state,campaign,screen:at,language:settings.language,detour:!!state&&detours.has(state),precision:keys.has('KeyC')});
 const l=()=>textFor(settings.language),clock=n=>Math.floor(n/60).toString().padStart(2,'0')+':'+Math.floor(n%60).toString().padStart(2,'0');
 function unlock(){sound.unlock();}
-function apply(){document.documentElement.classList.toggle('reduce-motion',!settings.shake);sound.setLevels(settings.volume,settings.music);view.reduce=!settings.shake;towView.reduce=!settings.shake;document.documentElement.lang=settings.language;}
+function apply(){document.documentElement.classList.toggle('reduce-motion',!settings.shake);sound.setLevels(settings.volume,settings.music,settings.master);view.reduce=!settings.shake;towView.reduce=!settings.shake;document.documentElement.lang=settings.language;}
 function save(){
   try{
     const data={version:1,settings,campaign,run:state&&state.status==='playing'?serialize(state):saved?serialize(saved):null};
@@ -107,7 +111,7 @@ function cabin(){
   const choices=panel.querySelector('.title-choices'),ko=settings.language==='ko';
   choices.insertAdjacentHTML('afterbegin',button('roguelike',ko?'새 항해':'New voyage')+(hasRogueSave()?button('rogueResume',ko?'항해 이어가기':'Continue voyage'):''));
   $('start').textContent=ko?'구조 이야기': 'Rescue story';
-  const enterRogue=resume=>{screen='rogue';releaseControls();releaseModal(panel);openRogue({resume,language:settings.language,paint:campaign.paint,reduced:!settings.shake||motionPreference.matches,onClose:cabin,onPaint:value=>{campaign.paint=value;save();},onSound:id=>sound.event(id)});};
+  const enterRogue=resume=>{screen='rogue';releaseControls();releaseModal(panel);openRogue({resume,language:settings.language,paint:campaign.paint,reduced:!settings.shake||motionPreference.matches,onClose:cabin,onPaint:value=>{campaign.paint=value;save();},onSound:id=>sound.event(id),onMusic:id=>sound.setMusic(id),audioSettings:()=>settings,onAudioChange:changeAudio});};
   bind('roguelike',()=>enterRogue(false));bind('rogueResume',()=>enterRogue(true));
 }
 
@@ -142,7 +146,7 @@ function storyArchive(from,id=null){
  id=id||(paused?(state?.kind==='tow'?state.missionId:'rescue'):'rescue');
  const ids=paused?[id]:['rescue',...availableTowMissions(campaign)];
  storyReturn=()=>from==='pause'?pause():from==='missions'?missionBoard(id):from==='towBrief'?towBrief():from==='brief'?brief():cabin();
- screen='story';releaseControls();
+ screen='story';storyMusicMission=id;releaseControls();
  const g=missionGuidance({campaign:{...campaign,selectedMissionId:id},screen:id==='rescue'?'brief':'towBrief',language:settings.language});
  const routes=(g.routeOptions||[]).map(r=>'<article><h4>'+r.title+'</h4><p>'+r.body+'</p>'+(r.note?'<small>'+r.note+'</small>':'')+'</article>').join('');
  shell('<section class="dialog story-archive" aria-labelledby="storyTitle"><header><h2 id="storyTitle">'+t.storyArchive+'</h2>'+button('back',from==='cabin'?t.back:from==='pause'?(settings.language==='ko'?'일시정지 메뉴로':'Back to pause menu'):from==='missions'?(settings.language==='ko'?'출항 임무판으로':'Back to dispatch board'):(settings.language==='ko'?'출항 준비로':'Back to departure'))+'</header>'+(ids.length>1?'<nav aria-label="'+t.storyArchive+'">'+ids.map(key=>'<button data-story="'+key+'" aria-pressed="'+(key===id)+'">'+(key==='rescue'?t.missionTitle:t[getTowMission(key).textKeys.title])+'</button>').join('')+'</nav>':'')+'<article class="story-reading"><h3>'+g.title+'</h3><p>'+g.summary.join(' ')+'</p>'+(g.story?'<img src="'+g.story.image+'" alt="'+t.landingStoryAlt+'"><p>'+g.story.body+'</p><small>'+g.story.note+'</small>':'')+'<h3>'+t.storyOperations+'</h3>'+g.body.map(p=>'<p>'+p+'</p>').join('')+'<div class="story-routes">'+routes+'</div></article></section>','overlay');
@@ -192,8 +196,8 @@ function pause(){
   if(!state||state.status!=='playing')return;if(screen==='play')detailInput={...liveInput};screen='pause';releaseControls();const ok=save(),t=l();
   shell(pauseMarkup({kicker:'HAEMUN 09 · '+clock(state.time),saved:ok,error:saveReadOnly?t.saveNewerVersion:t.saveError,
    actions:button('continue',t.resume,'primary')+button('story',t.storyArchive)+button('manual',t.manual)+button('settings',t.settings)+button('saveQuit',t.saveQuit,'secondary'),
-   details:voyageDetails()+(state.voyage?'<details><summary>'+sessionText(settings.language).records+'</summary>'+voyageCodeMarkup(state.voyage,settings.language)+'</details>':''),language:settings.language}),'session-scrim');
-  bind('story',()=>storyArchive('pause'));bind('continue',goPlay);bind('manual',()=>manual('pause'));bind('settings',()=>settingsScreen('pause'));bind('saveQuit',()=>{if(!save()){pause();return;}saved=state;cabin();});panel.querySelector('button')?.focus();
+   menuDetails:audioMarkup(settings,settings.language),details:voyageDetails()+(state.voyage?'<details><summary>'+sessionText(settings.language).records+'</summary>'+voyageCodeMarkup(state.voyage,settings.language)+'</details>':''),language:settings.language}),'session-scrim');
+  bindAudio(panel,changeAudio,settings.language);bind('story',()=>storyArchive('pause'));bind('continue',goPlay);bind('manual',()=>manual('pause'));bind('settings',()=>settingsScreen('pause'));bind('saveQuit',()=>{if(!save()){pause();return;}saved=state;cabin();});panel.querySelector('button')?.focus();
 }
 function settingsScreen(from){
   screen='settings';const t=l();
@@ -201,10 +205,11 @@ function settingsScreen(from){
   $('language').addEventListener('change',e=>{settings.language=e.target.value;apply();save();settingsScreen(from);});
   cameraPreferences=readCamera();
   const ko=settings.language==='ko';
+  panel.querySelector('#volume').closest('label').insertAdjacentHTML('beforebegin','<label class="setting">'+(ko?'전체 소리':'Master volume')+'<input id="master" type="range" min="0" max="100" value="'+Math.round(settings.master*100)+'"></label>');
   panel.querySelector('.stack').insertAdjacentHTML('beforebegin','<label class="setting">'+(ko?'자동 카메라 배율':'Automatic camera zoom')+'<input id="cameraAutoZoom" type="checkbox" '+(cameraPreferences.autoZoom?'checked':'')+'></label><label class="setting">'+(ko?'운항 화면 배율':'Sailing zoom')+'<input id="cameraZoom" type="range" min="60" max="180" step="5" value="'+Math.round(cameraPreferences.zoom*100)+'"></label><p class="micro">'+(ko?'견인 중 거리 맞춤 · 로그 항해 상륙 확대<br>휠 / +− / 두 손가락 · M 전체 해도':'Fit a connected tow; zoom in ashore in a rogue run.<br>Wheel / +− / pinch · M harbor chart')+'</p>');
   $('cameraAutoZoom').addEventListener('change',e=>{cameraPreferences.autoZoom=e.target.checked;saveCamera();});
   $('cameraZoom').addEventListener('input',e=>zoomCamera(Number(e.target.value)/100));
-  for(const k of ['volume','music']){$(k).addEventListener('input',e=>{settings[k]=Number(e.target.value)/100;unlock();apply();save();});$(k).addEventListener('change',()=>{if(k==='volume')sound.event('anchor');});}
+  for(const k of ['master','volume','music']){$(k).addEventListener('input',e=>{changeAudio(k,Number(e.target.value)/100);save();});$(k).addEventListener('change',()=>{if(k==='volume')sound.event('anchor');});}
   $('shake').addEventListener('change',e=>{settings.shake=e.target.checked;apply();save();});bind('back',()=>from==='pause'?pause():cabin());bind('fullscreen',()=>{if(window.desktop)window.desktop.fullscreen();else if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});else document.documentElement.requestFullscreen().catch(()=>{});});
 }
 function manual(from){
@@ -285,7 +290,7 @@ function frame(now){
     if(target&&Math.hypot(state.player.x-target.x,state.player.y-target.y)<390&&!state.mission.radioLog.some(e=>e.id===target.id+'Call'))queueRadio(target.id+'Call',true);
     for(const e of state.events){
       if(e.type==='radio')queueRadio(e.id,e.id.endsWith('Rescued')||e.id==='engineerReady');
-      sound.gameEvent(e,state);
+      sound.gameEvent(e,state);if(e.type==='lift'||['engineerRescued','operatorRescued'].includes(e.id))storyMusicUntil=performance.now()+18000;
       if(e.type==='expeditionStorm')toast(expeditionText(settings.language).stormRadio);if(e.type==='expeditionPatched')toast(fieldWorkFeedback(e,settings.language));if(e.type==='expeditionSalvage')toast(fieldWorkFeedback(e,settings.language));if(e.type==='expeditionStart')toast(expeditionText(settings.language)[e.contract+'Note']);
       if(e.type==='winchRelease'){sound.event('anchor');toast(settings.language==='ko'?'축력 방출 · 선체 당김 · 연료 −'+e.fuel:'Stored pull released · hull hauled · fuel −'+e.fuel);}if(e.type==='bilgeValve')toast(settings.language==='ko'?(e.open?'흡수 밸브 열림 · 침수 증가 +2/초 · B로 닫기':'흡수 밸브 닫힘 · 배수로 충전'):(e.open?'Inlet OPEN · flooding +2/sec · B to close':'Inlet CLOSED · pump water for charge'));if(e.type==='voyageFuelWarning')toast(voyageText(settings.language).fuelWarning);if(e.type==='voyageRepair')toast(repairFeedback(e,settings.language));if(e.type==='voyageFloodWarning')toast(settings.language==='ko'?'침수 60% · I 키로 배수 담당을 배치하세요':'Flooding at 60% · press I to assign pumping');
       if(['lowEnergy','tooClose','tooSmall','expired','needsEngineer','routeCleared','towTooFar','moored','unmoored','moorFast','moorHeading','moorBow','cargoSecured'].includes(e.type))toast(l()[e.type]);
@@ -301,6 +306,11 @@ function frame(now){
     }
     if(state.status==='won'||state.status==='lost')endMission();
     saveClock+=dt;if(saveClock>=5){saveClock=0;save();}
+  }
+  if(!['pause','settings','manual','interior'].includes(screen)){
+    const mission=screen==='story'?storyMusicMission:state?.missionId||campaign.selectedMissionId;
+    const region=mission==='sluice'?'region1':mission==='landing'?'region2':'region0';
+    sound.setMusic(screen==='cabin'?'title':state?.status==='won'?'home':performance.now()<storyMusicUntil?'companion':['opening','story','brief','towBrief','missions'].includes(screen)?region:screen==='play'?'sailing':'title');
   }
   sound.tick({playing:screen==='play',boosting:!!state?.voyage?.situation?.boosting,moving:Math.hypot(controls.x,controls.y)>0,tension:state?.kind==='tow'&&state.connected?state.ropeTension:0});
   if(state?.voyage&&screen==='play')$('interiorToggle').textContent=voyageText(settings.language).inside;

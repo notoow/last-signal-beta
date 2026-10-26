@@ -195,7 +195,7 @@ export function objective(s){
       return {text:docking.near?dockHint(docking):shoreSiteName(s,planned.point)+' · 선택한 목적지',target:planned.point,planSite:planned.id};
     }
     const docking=berthReadiness(s,s.map.exit);
-    if(!surveyedAt(s,s.map.exit)&&!visibleAt(s,s.map.exit))return {text:'봉쇄가 풀렸다 · 해안을 따라 출구 찾기',target:null,exploring:true};
+    if(!surveyedAt(s,s.map.exit)&&!visibleAt(s,s.map.exit))return {text:usesDredger(s)?'준설선 무력화 · 해안을 따라 출구 찾기':'봉쇄가 풀렸다 · 해안을 따라 출구 찾기',target:null,exploring:true};
     return {text:docking.near?dockHint(docking,'ko',true):usesLighthouse(s)?'명부 확인 완료 · 등대 부두에 접안해 최종 전송 · E':'탈출 부두 가까이 접근 · 방향 자유',target:s.map.exit};
   }
   if(s.boss.active&&!harborRoutePriority(s)){

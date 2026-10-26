@@ -1,5 +1,6 @@
 import {touchText} from './mobile-touch-text.js';
 import {mobileLabelFits} from './mobile-presentation.js';
+import {voyageLight} from './voyage-light-view.js';
 import {identitySurvey} from './cliff-view.js';
 import {shoreSiteName} from './shore-sites.js';
 import {harborLandmark} from './rogue-landmarks.js';
@@ -20,14 +21,14 @@ import {drawSurvey,visibleAt,surveyedAt} from './rogue-vision.js';
 import {playCamera,edgeMarker} from './rogue-camera.js';
 import {quayCamera} from './quay-camera.js';
 import {supplyBoatLayout} from './supply-fleet.js';
-import {drawQuay,prepareQuayArt} from './quay-view.js';
+import {drawQuay,prepareQuayArt,hideGpuQuay} from './shore-gpu-adapter.js';
 import {IDENTITY_PROJECTION,project as projectWorld} from './world-projection.js';
 import {shoreScale,shoreRanges,WORLD_UNITS_PER_METRE as M} from './shore-scale.js';
 import {waterMotion,waterVelocity} from './ship-motion.js';
 import {towBow,tugStern} from './rogue-tow.js';
 import {floatPose,drawWake} from './sea-surface.js';
 import {quaySprite} from './quay-details.js';
-import {usesDredger,CRANE,craneLockTime} from './dredger-counterplay.js';
+import {usesDredger,CRANE,craneLockTime,recentDredgerBreaks} from './dredger-counterplay.js';
 import {dredgerAttention} from './dredger-target.js';
 import {dredgerReadability,dredgerBreakMotion} from './dredger-readability.js';
 import {rigActionPresentation} from './rig-feedback-ui.js';
@@ -39,6 +40,7 @@ import {harborPlan} from './harbor-plan.js';
 import {rescueStatus} from './shore-rescue.js';
 import {daylight,campStatus} from './voyage-daylight.js';
 const load=file=>{const img=new Image();img.src='assets/art/'+file;return img;};
+const defeatedDredger=load('dredger-defeated-v1.png');
 const bosses=load('rogue-bosses-v1.png');
 const shoreProps=load('rogue-shore-props-v1.png');
 const dredgerArt=Object.fromEntries(['bucket-raised','bucket-falling','bucket-impact','winch-intact','winch-damaged','winch-destroyed','impact-fx-1','impact-fx-2','impact-fx-3'].map(id=>[id,load('dredger-'+id+'-v1.png')]));
@@ -57,24 +59,6 @@ function canvasLabel(c,text,x,y,color='#f1e6c4',size=15){
   c.strokeText(text,x,y);c.fillStyle=color;c.fillText(text,x,y);return true;
 }
 function ring(c,p,r,color){c.strokeStyle=color;c.lineWidth=2;c.beginPath();c.arc(p.x,p.y,r,0,Math.PI*2);c.stroke();}
-// Bounded screen tint preserves silhouettes and warning readability. The
-// planning chart keeps its instrument colors; the stove glows only while the
-// authoritative camp timer is running, at the moored boat's cabin.
-function voyageLight(c,s,frame,reduced,mapOpen){
-  if(!s.daylight||mapOpen)return;
-  const sky=daylight(s),alpha=(1-sky.light)*.26,dpr=renderDpr();
-  frame.daylight={...sky,tintAlpha:alpha,stove:null};
-  c.save();c.setTransform(dpr,0,0,dpr,0,0);
-  if(alpha>0){c.fillStyle=`rgba(5,14,35,${alpha})`;c.fillRect(0,0,frame.width,frame.height);}
-  if(campStatus(s)?.reason==='resting'){
-    const bounds=frame.quay?.boat?.bounds,p=bounds?{x:bounds.x+bounds.w*.62,y:bounds.y+bounds.h*.4}:projectWorld(frame,s.boat);
-    const radius=22*(reduced?1:1+Math.sin(s.time*4)*.03),glow=c.createRadialGradient(p.x,p.y,1,p.x,p.y,radius);
-    glow.addColorStop(0,'#ffe0a4a0');glow.addColorStop(.25,'#ffa7486b');glow.addColorStop(1,'#e6853100');
-    c.fillStyle=glow;c.beginPath();c.arc(p.x,p.y,radius,0,Math.PI*2);c.fill();
-    c.fillStyle='#ffd394';c.fillRect(p.x-2,p.y-3,4,6);frame.daylight.stove={...p,radius};
-  }
-  c.restore();
-}
 function gullScrapMarkers(c,s,frame,language){
   frame.scrapMarkers=[];const dpr=renderDpr();
   c.save();c.setTransform(dpr,0,0,dpr,0,0);
@@ -310,19 +294,27 @@ function clearDredgerMotion(e,frame){
   const base=bounds(sweeps[0]),inside=r=>r.x>=0&&r.y>=0&&r.x+r.w<=width&&r.y+r.h<=height;
   // A wreck may already touch the reserved receipt row. A pull away from it
   // must not be cancelled merely because the unanimated baseline overlaps.
-  if(sweeps.map(bounds).some(r=>!inside(r)||occupied.some(b=>overlap(r,b)>overlap(base,b)+.5)))return null;
+  if(sweeps.map(bounds).some(r=>!inside(r)||occupied.some(b=>overlap(r,b)>overlap(base,b)+.5))){
+    // Preserve the in-place compression when rotation/translation would enter
+    // the HUD. Its rectangle is contained by the baseline; no new overlap.
+    return inside(base)?{...e,x:0,y:0,angle:0,cable:0}:null;
+  }
   const tail=bounds([20,20+28*e.pixel].map(d=>({x:(e.point.x+e.vector.x*d)*scale+ox,y:(e.point.y+e.vector.y*d+6*e.pixel)*scale+oy})));
   const cable=inside(tail)&&!occupied.some(b=>dockOverlap(tail,b));
   return cable?e:{...e,cable:0};
 }
-function craneWarning(c,s){
-  const b=s.boss,a=b.crane,t=a.target;if(!t||!['warn','attack'].includes(b.phase))return;
-  const locked=a.locked,color=locked?'#f39668':'#e5c87f';
-  c.save();c.fillStyle=locked?'#bd513426':'#d9b44b14';c.strokeStyle=color;c.lineWidth=locked?3:2;
+function craneWarning(c,s,reduced=false,language='ko'){
+  const b=s.boss,a=b.crane,t=a.target;if(b.cleared||!t||!['warn','attack'].includes(b.phase))return;
+  const locked=a.locked,color='#f16b65';
+  const pulse=reduced?.4:.4+.15*Math.sin(s.time*Math.PI*3),alpha=locked?pulse:pulse*.55;
+  c.save();const gradient=c.createRadialGradient(t.x,t.y,0,t.x,t.y,CRANE.radius);
+  gradient.addColorStop(0,`rgba(185,25,31,${alpha})`);gradient.addColorStop(.72,`rgba(205,35,40,${alpha*.65})`);gradient.addColorStop(1,'rgba(205,35,40,0)');
+  c.fillStyle=gradient;c.strokeStyle=color;c.lineWidth=locked?3:2;
   c.setLineDash(locked?[]:[7,7]);c.beginPath();c.arc(t.x,t.y,CRANE.radius,0,Math.PI*2);c.fill();c.stroke();
   c.setLineDash([]);c.lineWidth=2;
   // The shrinking outer arc is time to impact, never a second damage radius.
   if(b.phase==='warn'&&locked){c.beginPath();c.arc(t.x,t.y,CRANE.radius+6,-Math.PI/2,-Math.PI/2+Math.PI*2*Math.max(0,b.timer)/craneLockTime(s));c.stroke();}
+  canvasLabel(c,language==='en'?'FALLING CRANE · MOVE OUT':'낙하 위험 · 원 밖으로',t.x,t.y-CRANE.radius-20,'#ffada7',13);
   c.restore();
 }
 function craneBucket(c,s,reduced){
@@ -350,10 +342,11 @@ export function rogueCamera(canvas,s,mapOpen=false,options={},previous=null,dt=0
 }
 const frames=new WeakMap();
 export const lastRogueCamera=canvas=>frames.get(canvas)?.frame;
-export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,camera:settings={},occupied=null,language='ko',sluiceHud=null}={}){
+export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,camera:settings={},occupied=null,language='ko',sluiceHud=null,signal}={}){
   // The compact planning chart has accessible DOM pins; world-size action
   // captions would obscure entire quays at this scale.
   const label=chartPins?()=>{}:canvasLabel;
+  if(mapOpen||!['moored','ashore'].includes(s.mode))hideGpuQuay(canvas);
   const task=objective(s),driveView=dredgerReadability(s,language),driveTarget=driveView?.target;
   const target=driveTarget?.point||(driveView?.threat&&!task.planSite&&!task.planBoss?null:task.target);
   const rigReceipt=mapOpen?null:rigActionPresentation(s,language);
@@ -376,8 +369,8 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   const c=canvas.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,width,height);
   if(frame.projectionId==='quay-v1'){
     exitFrames.delete(canvas);canvas.dataset.dockPanel='false';
-    frame.quay=drawQuay(c,s,frame,{reduced,language,task:objective(s),search:shoreSearchStatus(s)});
-    voyageLight(c,s,frame,reduced,mapOpen);gullScrapMarkers(c,s,frame,language);
+    frame.quay=drawQuay(c,s,frame,{reduced,language,task:objective(s),search:shoreSearchStatus(s),signal});
+    voyageLight(c,s,frame,reduced,mapOpen,renderDpr());gullScrapMarkers(c,s,frame,language);
     const impact=impactPresentation(recentImpact(s),language);
     if(impact)impactFrames.set(canvas,{impact,tag:impactTag(c,impact,frame,s,null)});else impactFrames.delete(canvas);
     return frame;
@@ -404,6 +397,7 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   const exitKnown=surveyedAt(s,s.map.exit);
   const exitScene=exitKnown?drawExitQuay(c,s):null;
   if(exitScene)exitFrames.set(canvas,exitScene);else exitFrames.delete(canvas);
+  const discoveredBerthLabels=[];
   for(const berth of s.map.berths){
     const selected=berth.id===s.mooring,docking=berthReadiness(s,berth),ok=docking.ready;
     const aligning=alignment&&!alignment.exit&&alignment.berth.id===berth.id;
@@ -413,7 +407,9 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
     const shoreUnit=shoreScale(s);
     workSprite(c,'cleat',berth.landing.x,berth.landing.y+13*shoreUnit,20*shoreUnit,16*shoreUnit);
     if(!aligning)label(c,selected?(language==='en'?'Moored':'계류 중'):dockHint(docking,language),berth.x,berth.y+48);
-    if(s.combat)label(c,shoreSiteName(s,berth),berth.landing.x,berth.landing.y-30,'#c4cbb8',15);
+    // A known name is interface information, not terrain to clip with fog.
+    // Use the same berth discovery anchor as the chart; never reveal a new site.
+    if(s.combat&&!mapOpen&&surveyedAt(s,berth))discoveredBerthLabels.push(berth);
     if(!s.claimed.includes(berth.id)&&visibleAt(s,berth.loot)){
       const l=berth.loot;prop(c,'chest',l.x,l.y+9*shoreUnit,28*shoreUnit,21*shoreUnit);
       const island=s.map.islands[berth.island],counter=s.combat&&berth.id===toolBerth(s).id&&!hasTool(s,FLOOR_TOOLS[s.depth].id);
@@ -441,13 +437,22 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   const lighthouse=usesLighthouse(s);
   if(sluice)drawSluice(c,s,{label,reduced,language,overview:mapOpen||chartPins,frame,hud:sluiceHud});
   const connectionMarker=lighthouse?drawLighthouse(c,s,{label,reduced,language,task}):null;
-  if(dredger&&boss.active&&!boss.cleared)craneWarning(c,s);
+  if(dredger&&boss.active&&!boss.cleared)craneWarning(c,s,reduced,language);
   if(!dredger&&!sluice&&!lighthouse&&boss.active&&!boss.cleared&&(boss.phase==='warn'||boss.phase==='attack')){
     c.fillStyle=boss.phase==='attack'?'#c44e3a70':'#e3ad3d35';c.strokeStyle=boss.phase==='attack'?'#ed7459':'#e4c682';c.lineWidth=2;
     if(s.depth===1){const y=p.y+Math.sin(boss.aim)*220;c.fillRect(2220,y-70,1180,140);c.strokeRect(2220,y-70,1180,140);}
     else{const spread=s.depth===0?.46:.23,r=s.depth===0?360:620;c.beginPath();c.moveTo(p.x,p.y);c.arc(p.x,p.y,r,boss.aim-spread,boss.aim+spread);c.closePath();c.fill();c.stroke();}
   }
-  if(!sluice&&!lighthouse&&ready(bosses)){
+  if(dredger&&boss.cleared&&ready(defeatedDredger)){
+    c.drawImage(defeatedDredger,p.x-170,p.y-340*308/1230/2,340,340*308/1230);
+    // Only an actual last-part break supplies this transient event. Restored
+    // cleared saves show the wreck directly without replaying destruction.
+    const last=recentDredgerBreaks(s).at(-1);
+    if(last&&last.age<.45&&!reduced){
+      c.save();c.globalAlpha=1-last.age/.45;
+      dredgerSprite(c,last.age<.1?'impact-fx-1':last.age<.24?'impact-fx-2':'impact-fx-3',p.x-20,p.y+10);c.restore();
+    }
+  }else if(!sluice&&!lighthouse&&ready(bosses)){
     const frames=[[12,80,1230,308],[12,500,1230,296],[12,840,1230,350]],f=frames[s.depth],h=340*f[3]/f[2];
     c.save();c.globalAlpha=boss.cleared?.52:1;c.drawImage(bosses,...f,p.x-170,p.y-h/2,340,h);c.restore();
   }else if(!sluice&&!lighthouse)gameArt.boat(c,{...p,angle:0,length:340,width:140},'inspection');
@@ -455,6 +460,11 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
     const name=boss.cleared?(language==='en'?['Stopped dredger','Stopped sluice warden','Restored lighthouse']:['멈춘 준설선','멈춘 수문지기','복구된 등대'])[s.depth]:
       language==='en'?['Runaway dredger','Sluice warden','Lighthouse warden'][s.depth]:DEPTHS[s.depth].boss;
     label(c,name,p.x,p.y-100,boss.cleared?'#8ab4a0':'#f1e6c4',22);
+    if(driveView?.completion){
+      const t=c.getTransform(),screenScale=Math.hypot(t.a,t.b)/renderDpr();
+      label(c,driveView.completion.title,p.x,p.y-70/screenScale,'#afdcaf',15);
+      label(c,driveView.completion.action,p.x,p.y-48/screenScale,'#f1e6c4',13);
+    }
   }
   if(!sluice&&!lighthouse&&(!boss.cleared||dredger))boss.parts.forEach((hp,i)=>{
     const part=partPosition(s,i);
@@ -507,7 +517,7 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   }
   drawWake(c,s.boat,s.time,reduced);
   drawCaptainBoat(c,floatPose(s.boat,reduced?0:s.time,s.mode!=='sailing'),s.captain,s.paint);
-  if(dredger&&boss.active&&(!boss.cleared||s.time-boss.crane.impactAt<.31))craneBucket(c,s,reduced);
+  if(dredger&&boss.active&&!boss.cleared)craneBucket(c,s,reduced);
   if(s.skill.left>0&&s.captain==='woo'){
     const b=s.boat;workRope(c,b,{x:b.x-42,y:b.y+29},.55,2.4);quaySprite(c,'anchor',b.x-49,b.y+20,15,28);
     label(c,language==='en'?'Emergency brace · damage −75%':'비상 버팀 · 피해 −75%',b.x,b.y-45,'#d0dac5',13);
@@ -526,9 +536,10 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
     if(ready(sprite)){const w=37*f[2]/f[3];c.drawImage(sprite,...f,s.person.x-w/2,s.person.y-33,w,37);}
     label(c,s.captain[0].toUpperCase()+s.captain.slice(1),s.person.x,s.person.y-38,'#f1e6c4',12);
   }
-  voyageLight(c,s,frame,reduced,mapOpen);
+  voyageLight(c,s,frame,reduced,mapOpen,renderDpr());
   if(!mapOpen)gullScrapMarkers(c,s,frame,language);
   if(s.map.cliffs)identitySurvey(c,s);else drawSurvey(c,s);
+  for(const berth of discoveredBerthLabels)label(c,shoreSiteName(s,berth,language),berth.landing.x,berth.landing.y-30,'#c4cbb8',15);
   if(mapOpen&&s.survey&&!chartPins){
     const plan=harborPlan(s);
     for(const b of s.map.berths){
@@ -557,7 +568,16 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
     if(s.tow?.connected&&!s.person)points.push({p:s.tow,text:language==='en'?'Supply tow':'견인선',color:'#adc8c3'});
     if(!dredger&&!sluice&&!lighthouse&&s.boss.active&&!s.boss.cleared)points.push({p:s.map.boss,text:boss.phase==='warn'?'보스 · 공격 예고':'보스',color:boss.phase==='warn'?'#f4ad7d':'#e4ca9b'});
     for(const {p,text,color} of points){
-      const mark=edgeMarker(frame,p);if(!mark)continue;
+      const mark=edgeMarker(frame,p);
+      if(!mark){
+        // An on-screen target can still lose its name behind the mobile HUD.
+        // Relocate only the caption; do not invent an off-screen direction arrow.
+        if(driveTarget&&p===target&&!namedDriveTarget){
+          const point=projectWorld(frame,p),caption=relayEdgeLabel(c,text,point,frame);
+          label(c,text,caption.x,caption.y,color,12);
+        }
+        continue;
+      }
       const relayDirection=connectionMarker&&p===target;
       let captionText=text;
       if(relayDirection){

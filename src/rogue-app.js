@@ -1,3 +1,6 @@
+import {VoyageScore} from './soundtrack.js';
+import {audioMarkup,bindAudio} from './audio-settings.js';
+import {visibleAt} from './rogue-vision.js';
 import {steeringInput} from './steering-input.js';
 import {drawNavigationMap,navigationViewport} from './navigation-map.js';
 import {createRun,tickRun,interact,resolveGear,resolveSalvage,returnFromWorkshop,cacheSelectionToken,resolveCacheSelection,planHarbor,encodeRun,restoreRun,SAVE_KEY,RUN_VERSION,CAPTAINS,BUILDS,GEAR,maxHp,maxFuel} from './rogue-core.js';
@@ -22,7 +25,8 @@ import {sluiceImpactSequence,sluiceImpactCue} from './sluice-counterplay.js';
 import {rogueContextActions,rogueMinimap} from './rogue-context.js';
 const esc=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function hasRogueSave(){try{return !!restoreRun(localStorage.getItem(SAVE_KEY));}catch{return false;}}
-export function openRogue({resume=false,language='ko',paint='harbor',reduced=false,onClose=()=>{},onPaint=()=>{},onSound=()=>{}}={}){
+export function openRogue({resume=false,language='ko',paint='harbor',reduced=false,onClose=()=>{},onPaint=()=>{},onSound=()=>{},onMusic=()=>{},audioSettings=()=>({master:1,volume:.38,music:.22}),onAudioChange=()=>true}={}){
+  const score=new VoyageScore();
   const root=document.createElement('section');root.className='rogue-shell';root.id='rogue';root.dataset.hud='compact';
   root.innerHTML='<canvas id="rogueSea" aria-label="세 해역 항해"></canvas><div class="rogue-top" id="rogueHud"><div class="rogue-top-stack"><div id="rogueMission"></div><div class="rogue-radio" id="rogueRadio" aria-live="polite"></div></div><div class="rogue-console"><div class="rogue-readings" id="rogueReadings"></div><div class="rogue-conditions" id="rogueConditions"></div><div class="rogue-controls" id="rogueControls"></div></div></div><button id="roguePause" class="play-pause" hidden></button><button id="rogueSkill" class="rogue-skill" hidden></button><div class="rogue-modal" id="rogueModal"></div>';
   document.body.append(root);
@@ -341,10 +345,10 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     modalSurface('pause',pauseMarkup({kicker:CAPTAINS[state.captain].name+' · '+(state.depth+1)+' / 3 · '+(en?'Voyage no. ':'항해 번호 ')+state.seed,saved,saveId:'rogueSaveStatus',language,
       facts:[{label:en?'Hull':'선체',value:state.hp,max:maxHp(state)},{label:en?'Fuel':'연료',value:state.fuel,max:maxFuel(state)}],
       actions:'<button id="rogueContinue" class="primary">'+ui.resume+'</button><button id="rogueHome" class="secondary">'+ui.home+'</button>',
-      menuDetails:'<details class="rp-page mobile-notes"><summary>'+ui.records+'</summary><div class="rp-detail-content">'+rogueDetailsMarkup(state,language)+salvageDetailsMarkup(state,language)+'<details><summary>'+ui.radio+'</summary>'+state.log.map(l=>'<p>'+esc(rogueHudText(l.text,language))+'</p>').join('')+'</details></div></details>'+
+      menuDetails:audioMarkup(audioSettings(),language)+'<details class="rp-page mobile-notes"><summary>'+ui.records+'</summary><div class="rp-detail-content">'+rogueDetailsMarkup(state,language)+salvageDetailsMarkup(state,language)+'<details><summary>'+ui.radio+'</summary>'+state.log.map(l=>'<p>'+esc(rogueHudText(l.text,language))+'</p>').join('')+'</details></div></details>'+
         '<details class="rp-page rp-controls"><summary>'+ui.controls+'</summary><div class="rp-detail-content"><p>'+controls+'</p><p>'+(en?'Anchor the supply boat separately before leaving your tug. Deliver it to the exit for +20 fuel and crew health.':'하선 전 보급정 닻을 따로 내려주세요. 탈출 부두에 데려오면 연료·선원 체력 +20.')+'</p></div></details>'+
         '<details class="rp-page"><summary>'+ui.camera+'</summary><div class="rp-detail-content">'+cameraMarkup()+'</div></details>'}));
-    bindCamera();bind('rogueHome',close);bind('rogueContinue',play);
+    bindAudio($('rogueModal'),onAudioChange,language);bindCamera();bind('rogueHome',close);bind('rogueContinue',play);
   }
   function end(){
     paused=true;preparationReturn=null;releaseControls();save();const won=state.status==='won';
@@ -385,8 +389,10 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     if(e.target===$('rogueQuayRetry')&&['Enter','NumpadEnter','Space'].includes(e.code)){
       e.preventDefault();keys.delete(e.code);if(down&&!e.repeat)void retryHarborArt();return;
     }
+    if(e.code==='Tab'&&!paused&&rogueContextActions(state).supply)return;
     if(e.code==='Tab'&&!paused&&!$('rogueQuayAssets').hidden&&!$('rogueQuayRetry').hidden)return;
     if(!down){keys.delete(e.code);return;}
+    if(e.target.closest?.('[data-supply-action]')&&['Tab','Enter','NumpadEnter','Space'].includes(e.code))return;
     if(e.code==='Escape'&&!e.repeat&&root.dataset.surface==='preparation'&&preparationReturn){e.preventDefault();end();return;}
     if(['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName))return;
     if(root.dataset.surface==='chart'&&['Escape','KeyM'].includes(e.code)){
@@ -408,6 +414,12 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
       if(!mapOpen&&['Equal','NumpadAdd','Minus','NumpadSubtract'].includes(e.code))changeZoom(camera.zoom*(['Equal','NumpadAdd'].includes(e.code)?1.1:1/1.1));
     }
   }
+  $('rogueControls').addEventListener('click',e=>{
+    const button=e.target.closest('[data-supply-action]');
+    if(!button||paused||mapOpen)return;
+    const a=rogueContextActions(state).supply?.actions.find(a=>a.id===button.dataset.supplyAction);
+    if(a?.enabled){interact(state,a.id,direction());save();}
+  },options);
   window.addEventListener('keydown',e=>key(e,true),{...options,capture:true});
   window.addEventListener('keyup',e=>key(e,false),{...options,capture:true});
   window.addEventListener('blur',()=>{if(state?.status==='playing'&&!paused)pause();},options);
@@ -474,7 +486,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
         });
       }else{
         const sluiceHud=!paused&&!mapOpen&&hud.sluice&&document.documentElement.dataset.mobileUi==='true'?{bounds:sluiceLabelProbe.read(now)}:null;
-        const view=drawRogue($('rogueSea'),resultView||state,{reduced,mapOpen,camera,occupied:hudRects,language,sluiceHud});
+        const view=drawRogue($('rogueSea'),resultView||state,{reduced,mapOpen,camera,occupied:hudRects,language,sluiceHud,signal:controller.signal});
         refreshQuayAssets(view);
       }
       if(now-lastMobileFrame>=100){
@@ -485,6 +497,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
         else if(!paused)drawNavigationMap($('rogueMinimap'),minimap);
       }
     }
+    onMusic(score.select(state,root.dataset.surface,visibleAt));
     frameId=requestAnimationFrame(frame);
   }
   if(resume){try{state=restoreRun(localStorage.getItem(SAVE_KEY));}catch{}}
