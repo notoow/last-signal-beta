@@ -1,3 +1,4 @@
+function registeredField(source){const c=document.createElement('canvas');c.width=1024;c.height=768;c.getContext('2d').drawImage(source,0,0,1024,768);return c;}
 // Cached painted material response. Adapted from the approved pass09 renderer.
 // Geometry and lamp positions are supplied by the actual generated harbor.
 function groundField(source,wearArea,variant){
@@ -23,8 +24,8 @@ function groundField(source,wearArea,variant){
     c.drawImage(tile,col*strideX-width*.15,row*strideY-height*.15,width,height);
   }return field;
 }
-export function bakeQuayMaterial(source,wearArea,groundLights,variant=0){
-  const image=groundField(source,wearArea,variant);
+export function bakeQuayMaterial(source,wearArea,groundLights,variant=0,macro=null){
+  const image=macro?registeredField(macro.diffuse):groundField(source,wearArea,variant); const mask=macro?registeredField(macro.wetness).getContext("2d").getImageData(0,0,1024,768).data:null;
   const surface=document.createElement('canvas'),sky=document.createElement('canvas'),warm=document.createElement('canvas'),sheen=document.createElement('canvas'),environment=document.createElement('canvas');
   surface.width=sky.width=warm.width=sheen.width=environment.width=image.width;surface.height=sky.height=warm.height=sheen.height=environment.height=image.height;
   const c=surface.getContext('2d',{willReadFrequently:true}),sc=sky.getContext('2d'),wc=warm.getContext('2d'),hc=sheen.getContext('2d'),ec=environment.getContext('2d');c.drawImage(image,0,0);
@@ -32,11 +33,11 @@ export function bakeQuayMaterial(source,wearArea,groundLights,variant=0){
   // preserving its irregular shapes and dark breaks rather than adding noise.
   const pixels=c.getImageData(0,0,image.width,image.height),data=pixels.data,amber=wc.createImageData(image.width,image.height),body=c.getImageData(0,0,image.width,image.height),gloss=hc.createImageData(image.width,image.height),ambient=ec.createImageData(image.width,image.height);
   const luminance=new Float32Array(image.width*image.height),wetness=new Float32Array(image.width*image.height);
-  for(let p=0;p<luminance.length;p++){luminance[p]=(data[p*4]+data[p*4+1]+data[p*4+2])/3;wetness[p]=Math.max(0,Math.min(1,(data[p*4+2]-data[p*4]+3)/20));}
+  for(let p=0;p<luminance.length;p++){luminance[p]=(data[p*4]+data[p*4+1]+data[p*4+2])/3;wetness[p]=mask?mask[p*4]/255:Math.max(0,Math.min(1,(data[p*4+2]-data[p*4]+3)/20));}
   const sample=(x,y)=>luminance[Math.max(0,Math.min(image.height-1,y))*image.width+Math.max(0,Math.min(image.width-1,x))];
   const sampleWet=(x,y)=>wetness[Math.max(0,Math.min(image.height-1,y))*image.width+Math.max(0,Math.min(image.width-1,x))];
   for(let i=0;i<data.length;i+=4){
-    const wet=Math.pow(Math.max(0,Math.min(1,(data[i+2]-data[i]-1)/18)),.7);
+    const wet=mask?wetness[i/4]:Math.pow(Math.max(0,Math.min(1,(data[i+2]-data[i]-1)/18)),.7);
     const detail=Math.max(0,Math.min(1,((data[i]+data[i+1]+data[i+2])/3-45)/85));
     const x=wearArea.x+(i/4%image.width)/image.width*wearArea.w,y=wearArea.y+Math.floor(i/4/image.width)/image.height*wearArea.h;
     // Painted material supplies both large wet regions and fine roughness. A

@@ -16,7 +16,7 @@ import {drawCaptainOcclusion,drawCaptainVisible} from './shore-occlusion-outline
 
 const load=(file,retry=0)=>{const im=new Image();im.src='assets/art/'+file+(retry?'?quayRetry='+retry:'');return im;};
 let art=null,loadStarted=0,retryAttempt=0;
-const files={workshop:'quay-landing-workshop-v1.png',warehouse:'quay-landing-warehouse-v1.png',
+const files={serviceGround:'quay-service-diffuse-v1.png',serviceWetness:'quay-service-wetness-v1.png',workshop:'quay-landing-workshop-v1.png',warehouse:'quay-landing-warehouse-v1.png',
   ground:'quay-landing-ground-v2.png',wall:'quay-landing-wall-v1.png',wet:'quay-landing-wet-material-v4.png',
   gold:'quay-landing-ground-gold-v3.png',patch:'quay-landing-wet-patch-v1.png',props:'quay-landing-props-v1.png',
   supplies:'quay-landing-supplies-v1.png',reflection:'quay-landing-water-reflection-v1.png',
@@ -79,7 +79,7 @@ function material(s,yard){
   const buildings=shoreBuildings(yard).filter(b=>b.visual==='warehouse'||b.visual==='workshop');
   const area={x:yard.x,y:yard.y,w:yard.w,h:yard.h};
   const lights=buildings.flatMap(buildingLights).map(l=>({...l,x:(l.x-area.x)/M,y:(l.y-area.y)/M}));
-  const paint=bakeQuayMaterial(art.wet,{x:0,y:0,w:area.w/M,h:area.h/M},lights,Math.imul(yard.x,73856093)^Math.imul(yard.y,19349663));
+  const paint=bakeQuayMaterial(art.wet,{x:0,y:0,w:area.w/M,h:area.h/M},lights,Math.imul(yard.x,73856093)^Math.imul(yard.y,19349663),s.map.berths.find(b=>b.island===s.map.islands.indexOf(yard))?.layout==='service'?{diffuse:art.serviceGround,wetness:art.serviceWetness}:null);
   // Source-over layers have no animation. Composite once instead of scaling
   // five translucent yard-sized images through the land clip every frame.
   const surface=document.createElement('canvas');surface.width=paint.surface.width;surface.height=paint.surface.height;

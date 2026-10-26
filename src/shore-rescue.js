@@ -1,3 +1,5 @@
+import {aroundCaptain} from './shore-rescue-route.js';
+import {boardingSlot,boardingTogether} from './shore-boarding.js';
 const followSlots=new WeakMap();
 import {shoreScale,crewRadius,shoreRanges} from './shore-scale.js';
 import {walkableAt} from './rogue-map.js';
@@ -58,7 +60,7 @@ export function rescueStatus(s){
   const boarding=ground&&s.mode==='ashore'&&!!s.person&&!!home&&distance(s.person,home.landing)<shoreRanges(s).boarding;
   return {active:ground,site:r.site,stage:r.stage,discovered:r.discovered,point:r,blocked:r.blocked,
     near:ground&&s.mode==='ashore'&&!!s.person&&distance(s.person,r)<=rescueRanges(s).order&&sightLine(s.map,s.person,r),
-    boarding,ready:boarding&&distance(r,home.landing)<=rescueRanges(s).ladder&&shoreSegment(s.map,r,home.landing,crewRadius(s)),
+    boarding,ready:boarding&&(()=>{const slot=s.generator>=4?boardingSlot(s,home):null;return r.stage==='following'&&slot?boardingTogether(s):distance(r,home.landing)<=rescueRanges(s).ladder||(slot&&distance(r,slot)<=.3);})()&&shoreSegment(s.map,r,home.landing,crewRadius(s)),
     distance:distance(s.person||s.boat,r)};
 }
 export function orderRescue(s){
@@ -92,6 +94,7 @@ export function tickRescue(s,dt){
   // outside boarding range while both actors stand still.
   const home=s.map.berths.find(b=>b.id===s.mooring),atLadder=home&&distance(s.person,home.landing)<shoreRanges(s).boarding;
   let target=atLadder?home.landing:s.person,gap=atLadder?12*shoreScale(s):rescueRanges(s).follow;
+  if(atLadder&&s.generator>=4){const slot=boardingSlot(s,home,true);if(slot){target=slot;gap=.2;}}
   if(!atLadder&&s.generator>=4){
     // Fixed world-side preference avoids switching shoulders whenever facing changes.
     // Screen-horizontal ground vector for the authored harbor projection.
@@ -119,7 +122,7 @@ export function tickRescue(s,dt){
   }
   const remaining=distance(r,target);
   if(remaining<=gap)return;
-  const p=shoreWaypoint(s.map,r,target,crewRadius(s),s.time);
+  const p=atLadder&&s.generator>=4?aroundCaptain(s,target):shoreWaypoint(s.map,r,target,crewRadius(s),s.time);
   if(!p){r.blocked='route';return;}
   const reach=distance(r,p);if(reach<.01)return;
   const step=Math.min(reach,Math.max(0,remaining-gap),rescueRanges(s).speed*dt);
