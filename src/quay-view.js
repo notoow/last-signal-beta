@@ -390,13 +390,24 @@ export function drawQuaySearchLabels(c,s,f,language='ko'){
       label(c,language==='en'?'Search':'수색',{x:p.x,y:p.y-Math.max(1.2*f.pixelsPerMetre,CREW_HEIGHT*humanVisualScale(s)*f.scale+8)});
   }
 }
+const waterFields=new WeakMap();
+function drawWaterField(c,s,f,reduced){
+ const unit=f.pixelsPerMetre,dpr=c.getTransform().a,margin=128,motion=reduced?0:s.time;
+ const x=f.ox+Math.sin(motion*.14)*unit*.055,y=f.oy+Math.sin(motion*.11)*unit*.025;
+ let e=waterFields.get(c);
+ if(!e||e.source!==art.water||e.unit!==unit||e.dpr!==dpr||e.width!==f.width||e.height!==f.height||Math.abs(x-e.x)>margin-2||Math.abs(y-e.y)>margin-2){
+  const surface=document.createElement('canvas');surface.width=Math.ceil((f.width+margin*2)*dpr);surface.height=Math.ceil((f.height+margin*2)*dpr);
+  const p=surface.getContext('2d',{willReadFrequently:true}),pattern=p.createPattern(art.water,'repeat');
+  p.setTransform(dpr,0,0,dpr,0,0);pattern.setTransform(new DOMMatrix().translate(x+margin,y+margin).scale(18*unit/art.water.width));p.fillStyle=pattern;p.fillRect(0,0,surface.width/dpr,surface.height/dpr);p.getImageData(0,0,surface.width,surface.height);
+  e={surface,source:art.water,unit,dpr,width:f.width,height:f.height,x,y};waterFields.set(c,e);
+ }
+ c.save();c.globalAlpha=.68;c.drawImage(e.surface,0,0,e.surface.width,e.surface.height,-margin+x-e.x,-margin+y-e.y,e.surface.width/dpr,e.surface.height/dpr);c.restore();
+}
 export function drawQuay(c,s,f,{reduced=false,language='ko',task=null,search=null,cacheTerrain=true}={}){
   if(prepareQuayArt().status!=='ready'||s.map.cliffs&&!h12Ready())return {ready:false};
   const unit=f.pixelsPerMetre,tiles=visibleTiles(s,f);
   c.fillStyle='#092d38';c.fillRect(0,0,f.width,f.height);
-  const texture=c.createPattern(art.water,'repeat'),motion=reduced?0:s.time;
-  texture.setTransform(new DOMMatrix().translate(f.ox+Math.sin(motion*.14)*unit*.055,f.oy+Math.sin(motion*.11)*unit*.025).scale(18*unit/art.water.width));
-  c.save();c.globalAlpha=.68;c.fillStyle=texture;c.fillRect(0,0,f.width,f.height);c.restore();
+  drawWaterField(c,s,f,reduced);
   const groundTiles=s.map.cliffs?tiles.filter(t=>!isCliff(s,t)):tiles;
   const edgeCount=cacheTerrain?cachedTerrain(c,s,f,groundTiles):terrain(c,s,f,groundTiles).length;
   const props=scenery(c,s,f,tiles);
