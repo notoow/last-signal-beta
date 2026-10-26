@@ -7,7 +7,13 @@ import {drawCrewRig} from './shore-rig.js';
 export {crewPose} from './shore-pose.js';
 const load=file=>{const i=new Image();i.src='assets/art/'+file;return i;};
 const fauna=load('shore-fauna-v2.png');
-const crew=Object.fromEntries(['woo','park','han','jeong'].map(id=>[id,load('crew-sd-'+id+(id==='jeong'?'-v2.png':'-v1.png'))]));
+const crew=Object.fromEntries(['woo','park','han','jeong'].map(id=>[id,load('crew-sd-'+id+(id==='park'?'-v1.png':'-v2.png'))]));
+// Rear-only revisions preserve all existing frame rectangles and feet anchors.
+// Load an older atlas only on failure, avoiding two decoded atlases per captain.
+for(const id of ['woo','han']){
+  const revised=crew[id];
+  revised.addEventListener('error',()=>{crew[id]=load('crew-sd-'+id+'-v1.png');},{once:true});
+}
 const originalJeong=load('crew-sd-jeong-v1.png');
 const jeongStrike=load('crew-sd-jeong-strike-v2.png');
 const idleSheet=load('crew-sd-idle-v2.png'),originalIdleSheet=load('crew-sd-idle-v1.png');

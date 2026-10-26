@@ -17,6 +17,7 @@ import {drawCaptainOcclusion,drawCaptainVisible} from './shore-occlusion-outline
 
 const load=(file,retry=0)=>{const im=new Image();im.src='assets/art/'+file+(retry?'?quayRetry='+retry:'');return im;};
 let art=null,loadStarted=0,retryAttempt=0;
+let shelterArt=null;
 let chestSource=null,chestCrop=null;
 function chestRaster(){
   if(chestSource!==art.chest){
@@ -37,7 +38,7 @@ const files={warehouseFloor:'quay-warehouse-foundation-v1.png',workshopFloor:'qu
   water:'harbor-water-v1.png',chest:'rogue-shore-props-v1.png'};
 const ready=im=>im.complete&&im.naturalWidth>0;
 export function prepareQuayArt(){
-  if(!art){art=Object.fromEntries(Object.entries(files).map(([id,file])=>[id,load(file)]));loadStarted=performance.now();}
+  if(!art){art=Object.fromEntries(Object.entries(files).map(([id,file])=>[id,load(file)]));shelterArt=load('quay-shelter-v1.png');loadStarted=performance.now();}
   const images=[...Object.values(art),prepareDockedFleet(),...prepareSupplyFleet()],loaded=images.filter(ready).length;
   if(loaded===images.length)chestRaster();
   return {status:loaded===images.length?'ready':images.some(im=>im.complete&&!im.naturalWidth)||performance.now()-loadStarted>15000?'error':'loading',loaded,total:images.length};
@@ -209,13 +210,14 @@ function architectureReflection(image){
 }
 export function quayScenerySprites(s,f,{cull=true}={}){
   const records=[],unit=f.pixelsPerMetre;
+  const shelters=new Set(s.map.berths.filter(b=>b.layout==='shelter').flatMap(b=>shoreBuildings(s.map.islands[b.island])));
   const boxes=[...s.map.islands.flatMap(shoreBuildings),...s.map.props];
   for(const b of boxes){
     if(!b.visual)continue;
     if(s.survey&&![{x:b.x,y:b.y},{x:b.x+b.w,y:b.y+b.h},{x:b.x,y:b.y+b.h}].some(p=>
       sceneryKnown(s,p)))continue;
     const p=project(f,{x:b.x+b.w/2,y:b.y+b.h});
-    const supply=b.visual==='supplies',im=supply?art.supplies:art[b.visual];if(!im)continue;
+    const supply=b.visual==='supplies',im=supply?art.supplies:b.visual==='workshop'&&shelters.has(b)&&shelterArt&&ready(shelterArt)?shelterArt:art[b.visual];if(!im)continue;
     const scale=supply?2*unit/996:unit/98.5,rect=supply?[284,92,996,809]:[0,0,1536,1024],pivot=supply?[498,809]:[704,858];
     const bounds={x:p.x-pivot[0]*scale,y:p.y-pivot[1]*scale,w:rect[2]*scale,h:rect[3]*scale};
     if(cull&&!overlap(bounds,{x:0,y:0,w:f.width,h:f.height}))continue;
