@@ -1,3 +1,4 @@
+const followSlots=new WeakMap();
 import {shoreScale,crewRadius,shoreRanges} from './shore-scale.js';
 import {walkableAt} from './rogue-map.js';
 import {toolBerth,sightLine} from './shore-encounters.js';
@@ -5,7 +6,7 @@ import {shoreRoute,shoreWaypoint,shoreSegment} from './shore-navigation.js';
 import {visibleAt} from './rogue-vision.js';
 import {recordVoyage} from './rogue-voyage-record.js';
 
-export const rescueRanges=s=>Object.fromEntries(Object.entries(RESCUE).map(([k,v])=>[k,['order','ladder','follow','speed','notice','leash'].includes(k)?v*shoreScale(s):v]));
+export const rescueRanges=s=>Object.fromEntries(Object.entries(RESCUE).map(([k,v])=>[k,['order','ladder','follow','speed','notice','leash'].includes(k)?(s.generator>=4&&k==='order'?84:v)*shoreScale(s):v]));
 export const RESCUE=Object.freeze({order:44,ladder:24,follow:40,speed:48,notice:90,leash:180,hp:24,crew:20,ammo:4});
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const active=s=>s.depth===0&&['waiting','following'].includes(s.rescue?.stage);
@@ -87,7 +88,33 @@ export function tickRescue(s,dt){
   // ladder itself. A following gap must not leave someone permanently just
   // outside boarding range while both actors stand still.
   const home=s.map.berths.find(b=>b.id===s.mooring),atLadder=home&&distance(s.person,home.landing)<shoreRanges(s).boarding;
-  const target=atLadder?home.landing:s.person,gap=atLadder?12*shoreScale(s):rescueRanges(s).follow,remaining=distance(r,target);
+  let target=atLadder?home.landing:s.person,gap=atLadder?12*shoreScale(s):rescueRanges(s).follow;
+  if(!atLadder&&s.generator>=4){
+    // Fixed world-side preference avoids switching shoulders whenever facing changes.
+    // Screen-horizontal ground vector for the authored harbor projection.
+    const side=(s.seed%2?1:-1),ax=.9071*side,ay=-.4209*side;
+    const currentHeading=s.person.angle??r.angle;
+    let state=followSlots.get(r);
+    if(!state){state={heading:currentHeading,clear:0,side:false};followSlots.set(r,state);}
+    const turn=Math.atan2(Math.sin(currentHeading-state.heading),Math.cos(currentHeading-state.heading));
+    if(Math.abs(turn)>.35)state.heading=currentHeading;
+    const heading=state.heading,back=3.2,lateral=7.2;
+    const slot={x:s.person.x-Math.cos(heading)*back+ax*lateral,y:s.person.y-Math.sin(heading)*back+ay*lateral};
+    const radius=crewRadius(s);
+    // Both the destination and captain-to-slot corridor must fit real ground.
+    const safe=walkableAt(s.map,slot,radius*2)&&shoreSegment(s.map,s.person,slot,radius*2);
+    if(!safe){state.side=false;state.clear=0;}
+    else if(!state.side){
+      // Wider re-entry margin and continuous clearance prevent boundary chatter.
+      const reentry=walkableAt(s.map,slot,radius*2.4)&&shoreSegment(s.map,s.person,slot,radius*2.4);
+      state.clear=reentry?state.clear+dt:0;
+      if(state.clear>=.35)state.side=true;
+    }
+    if(state.side&&safe){
+      target=slot;gap=1.2;
+    }
+  }
+  const remaining=distance(r,target);
   if(remaining<=gap)return;
   const p=shoreWaypoint(s.map,r,target,crewRadius(s),s.time);
   if(!p){r.blocked='route';return;}

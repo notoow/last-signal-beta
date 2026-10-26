@@ -43,12 +43,13 @@ export function harborPlan(s){
   const intel=s.harborIntel,tool=toolBerth(s),missing=!hasTool(s,FLOOR_TOOLS[s.depth].id),rigBerth=rigRecoveryBerth(s);
   const enabled=s.status==='playing'&&!s.pendingCache&&!s.pendingGear&&!s.salvage?.pending;
   return {target:intel.target,sites:s.map.berths.map(berth=>{
-    const record=intel.sites.find(x=>x.id===berth.id),known=!!record,radio=known&&missing&&berth.id===tool.id;
-    const claimed=s.claimed.includes(berth.id),offer=known?cacheOffer(s,berth.id):null;
-    const gear=offer?.gear[0]??null;
     const rescue=s.rescue?.discovered&&rescueBerth(s)?.id===berth.id?s.rescue.stage:null;
+    // A discovered person remembers their pickup quay, not its unseen supplies.
+    const record=intel.sites.find(x=>x.id===berth.id),known=!!record||!!rescue,radio=!!record&&missing&&berth.id===tool.id;
+    const claimed=s.claimed.includes(berth.id),offer=record?cacheOffer(s,berth.id):null;
+    const gear=offer?.gear[0]??null;
     return {id:berth.id,island:berth.island,known,radio,claimed,rescue,selectable:enabled&&(!claimed||rescuePendingAt(s,berth.id))&&(known||!!rescue),
-      gear,supply:offer?.supply??null,threats:record?[...record.threats]:[],rig:known&&berth.id===rigBerth?.id?s.build:null,
+      gear,supply:offer?.supply??null,threats:record?[...record.threats]:[],rig:record&&berth.id===rigBerth?.id?s.build:null,
       stack:gear?s.equipment.filter(id=>id===gear).length:0,tool:radio?FLOOR_TOOLS[s.depth].id:null,selected:intel.target===berth.id};
   }),boss:{id:'boss',known:knownBlockade(s),selectable:enabled&&knownBlockade(s)&&!s.boss.cleared,selected:intel.target==='boss'&&knownBlockade(s)||s.boss.active&&!s.boss.cleared&&intel.target===null,toolMissing:missing}};
 }
