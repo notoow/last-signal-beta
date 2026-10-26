@@ -66,10 +66,20 @@ export class ShoreGpuScene{
   atlas(id,source,{revision=0,nearest=false,mipmaps=true,repeat=false}={}){
     this.assertLive();const old=this.textures.get(id);
     const w=source.naturalWidth||source.width,h=source.naturalHeight||source.height,pot=n=>n>0&&(n&(n-1))===0;
-    if(repeat&&!this.webgl2&&(!pot(w)||!pot(h)))throw Error('Repeating NPOT shore texture requires WebGL2');
     if(old&&old.source===source&&old.revision===revision&&old.nearest===nearest&&old.mipmaps===mipmaps&&old.repeat===repeat)return;
+    let uploadSource=source;
+    if(repeat&&!this.webgl2&&(!pot(w)||!pot(h))){
+      // WebGL1 requires power-of-two repeat textures. Normalize once per
+      // source revision; UVs still describe the complete original image.
+      const limit=2**Math.floor(Math.log2(this.gl.getParameter(this.gl.MAX_TEXTURE_SIZE)));
+      uploadSource=document.createElement('canvas');
+      uploadSource.width=Math.min(limit,2**Math.ceil(Math.log2(w)));
+      uploadSource.height=Math.min(limit,2**Math.ceil(Math.log2(h)));
+      const c=uploadSource.getContext('2d');c.imageSmoothingEnabled=!nearest;
+      c.drawImage(source,0,0,uploadSource.width,uploadSource.height);
+    }
     if(old?.handle&&!this.lost)this.gl.deleteTexture(old.handle);
-    this.textures.set(id,{source,revision,nearest,mipmaps,repeat,handle:null});
+    this.textures.set(id,{source,uploadSource,revision,nearest,mipmaps,repeat,handle:null});
   }
   // Small premultiplied RGBA masks (fog/discovery), not framebuffer readbacks. Keep a CPU
   // copy so a restored GPU receives the current explored state, not old pixels.
@@ -155,8 +165,8 @@ export class ShoreGpuScene{
         g.texParameteri(g.TEXTURE_2D,g.TEXTURE_WRAP_S,wrap);g.texParameteri(g.TEXTURE_2D,g.TEXTURE_WRAP_T,wrap);
         if(texture.rgba){
           g.texImage2D(g.TEXTURE_2D,0,g.RGBA,texture.width,texture.height,0,g.RGBA,g.UNSIGNED_BYTE,texture.rgba);texture.patches.length=0;
-        }else g.texImage2D(g.TEXTURE_2D,0,g.RGBA,g.RGBA,g.UNSIGNED_BYTE,texture.source);
-        const width=texture.source?.naturalWidth||texture.source?.width,height=texture.source?.naturalHeight||texture.source?.height;
+        }else g.texImage2D(g.TEXTURE_2D,0,g.RGBA,g.RGBA,g.UNSIGNED_BYTE,texture.uploadSource);
+        const width=texture.uploadSource?.naturalWidth||texture.uploadSource?.width,height=texture.uploadSource?.naturalHeight||texture.uploadSource?.height;
         const powerOfTwo=n=>n>0&&(n&(n-1))===0;
         // Large authored images need minification filtering. WebGL2 supports
         // NPOT atlases such as the 2048x768 wall without rescaling the source.

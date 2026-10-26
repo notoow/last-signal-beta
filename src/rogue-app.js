@@ -38,6 +38,9 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   const ui=sessionText(language),en=language==='en';
   const t=(ko,english)=>en?english:ko;
   const hudMarkup=new Map();
+  const attr=(el,name,value)=>{if(el.getAttribute(name)!==value)el.setAttribute(name,value);};
+  const hidden=(el,value)=>{if(el.hidden!==value)el.hidden=value;};
+  const text=(el,value)=>{if(el.textContent!==value)el.textContent=value;};
   const setHud=(id,html)=>{if(hudMarkup.get(id)!==html){$(id).innerHTML=html;hudMarkup.set(id,html);}};
   const probe=hudProbe($('rogueSea'),'#rogue .rogue-top-stack,#rogue .rogue-console,#rogueSkill,#roguePause,#rogueChart,#rogueQuayAssets,#rogue[data-shore-profile=metre] #rogueReadings,#rogue[data-shore-profile=metre] #rogueControls,#rogue[data-shore-profile=metre] #rogueConditions');
   const sluiceLabelProbe=hudProbe($('rogueSea'),'.sluice-speed,#mobileNotice,#mobileObjective,#mobileResources,#mobileVitals,#mobileMinimap,#mobileActions button,#mobileTools,#mobileStick');
@@ -461,19 +464,19 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
         else if(state.salvage?.pending)salvageChoice();
       }
       const hud=rogueHudModel(state,language),markup=rogueHudMarkup(hud);
-      $('rogueSkill').hidden=paused;
-      $('roguePause').hidden=paused;
-      $('rogueChart').hidden=paused;
-      $('rogueSkill').dataset.compact=String(hud.skill.compact);
-      $('rogueSkill').setAttribute('aria-disabled',String(!hud.skill.usable));
-      $('rogueSkill').setAttribute('aria-label',hud.skill.name+' · '+hud.skill.reason);
-      $('rogueSkill').title=hud.skill.name+' · '+hud.skill.reason;
+      hidden($('rogueSkill'),paused);
+      hidden($('roguePause'),paused);
+      hidden($('rogueChart'),paused);
+      attr($('rogueSkill'),'data-compact',String(hud.skill.compact));
+      attr($('rogueSkill'),'aria-disabled',String(!hud.skill.usable));
+      attr($('rogueSkill'),'aria-label',hud.skill.name+' · '+hud.skill.reason);
+      attr($('rogueSkill'),'title',hud.skill.name+' · '+hud.skill.reason);
       setHud('rogueSkill',markup.skill);
       setHud('rogueMission',markup.mission);
       setHud('rogueReadings',markup.readings);
       setHud('rogueConditions',markup.conditions);
-      if(!saveError)$('rogueRadio').textContent=state.radio?.left>0?rogueHudText(state.radio.text,language):'';
-      $('rogueControls').dataset.motion=hud.motion;
+      if(!saveError)text($('rogueRadio'),state.radio?.left>0?rogueHudText(state.radio.text,language):'');
+      attr($('rogueControls'),'data-motion',hud.motion);
       setHud('rogueControls',markup.controls);
       refreshQuayAssets(lastRogueCamera($('rogueSea')));
       if(!paused)hudRects=probe.read(now);
