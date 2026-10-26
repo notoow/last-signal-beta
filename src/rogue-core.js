@@ -1,3 +1,4 @@
+import {shoreSiteName} from './shore-sites.js';
 import {harborLandmark,harborArenaX} from './rogue-landmarks.js';
 import {generateHarbor,GENERATOR_VERSION,DEPTHS,inside,waterAt,shoreBuildings,walkableAt} from './rogue-map.js';
 import {newSkillState,activateCaptainSkill,advanceSkill,validateSkill} from './captain-skills.js';
@@ -73,7 +74,7 @@ function floor(s){
   if(s.depth===0&&s.rescue!==null)s.rescue=newShoreRescue(s);
   say(s,'arrival-'+s.depth,DEPTHS[s.depth].arrival);
   updateSurvey(s);
-  if(s.combat)say(s,'counter-clue-'+s.depth,'Park: '+SHORE_SITES[toolBerth(s).island]+'에 '+
+  if(s.combat)say(s,'counter-clue-'+s.depth,'Park: '+shoreSiteName(s,toolBerth(s))+'에 '+
     (usesLighthouse(s)?'차광 신호기가 있어. 탐조등에 발각되기까지 시간을 더 벌 수 있어.':FLOOR_TOOLS[s.depth].clue));
 }
 export function createRun(seed,captain='woo',build='standard',paint='harbor',generator=GENERATOR_VERSION){
@@ -180,7 +181,7 @@ export function objective(s){
     const planned=harborDestination(s);
     if(planned){
       const docking=berthReadiness(s,planned.point);
-      return {text:docking.near?dockHint(docking):SHORE_SITES[planned.point.island]+' · 선택한 목적지',target:planned.point,planSite:planned.id};
+      return {text:docking.near?dockHint(docking):shoreSiteName(s,planned.point)+' · 선택한 목적지',target:planned.point,planSite:planned.id};
     }
     const docking=berthReadiness(s,s.map.exit);
     if(!surveyedAt(s,s.map.exit)&&!visibleAt(s,s.map.exit))return {text:'봉쇄가 풀렸다 · 해안을 따라 출구 찾기',target:null,exploring:true};
@@ -213,13 +214,13 @@ export function objective(s){
   if(planned){
     if(planned.id==='boss')return {text:'기계선으로 · 바깥 해역 입구',target:planned.point,planBoss:true};
     const docking=berthReadiness(s,planned.point);
-    return {text:docking.near?dockHint(docking):SHORE_SITES[planned.point.island]+' · 선택한 목적지',target:planned.point,planSite:planned.id};
+    return {text:docking.near?dockHint(docking):shoreSiteName(s,planned.point)+' · 선택한 목적지',target:planned.point,planSite:planned.id};
   }
   const nearby=s.map.berths.find(b=>(!s.claimed.includes(b.id)||rescuePendingAt(s,b.id))&&distance(s.boat,b)<130&&visibleAt(s,b));
   if(nearby)return {text:dockHint(berthReadiness(s,nearby)),target:nearby};
   const special=s.combat&&!hasTool(s,FLOOR_TOOLS[s.depth].id)?toolBerth(s):null;
   const berth=special&&knownBerth(s,special)?special:s.map.berths.find(b=>!s.claimed.includes(b.id)&&knownBerth(s,b));
-  if(special&&berth===special)return {text:SHORE_SITES[special.island]+' 수색 · '+FLOOR_TOOLS[s.depth].name+' 확보 / 기존 장비로 돌파도 가능',target:special};
+  if(special&&berth===special)return {text:shoreSiteName(s,special)+' 수색 · '+FLOOR_TOOLS[s.depth].name+' 확보 / 기존 장비로 돌파도 가능',target:special};
   if(berth)return {text:'부두 가까이 감속 · 방향 자유 · E 계류 / 장비 없이 보스 진입도 가능',target:berth};
   if(knownBlockade(s))return {text:'바깥 해역의 기계선을 정지시켜 탈출로 열기',target:bossApproach(s)};
   return {text:'해안을 따라 탐색 · 발견한 부두는 해도에 기록',target:null,exploring:true};
@@ -618,8 +619,8 @@ export function tickRun(s,input,elapsed){
   updateSurvey(s);
   refreshHarborIntel(s);
   if(s.harborIntel&&s.status==='playing'&&s.mode==='sailing'&&(!s.boss.active||s.boss.cleared||harborRoutePriority(s))&&!(s.radio?.left>0)){
-    const site=harborPlan(s).sites.find(b=>b.known&&!b.claimed&&!s.log.some(l=>l.id==='scout-'+s.depth+'-'+b.id));
-    if(site)say(s,'scout-'+s.depth+'-'+site.id,'Park: '+SHORE_SITES[site.island]+' 표식에 '+GEAR[site.gear]+'가 있어. M 해도에 남겨둘게.');
+    const site=harborPlan(s).sites.find(b=>b.known&&b.gear&&!b.claimed&&!s.log.some(l=>l.id==='scout-'+s.depth+'-'+b.id));
+    if(site)say(s,'scout-'+s.depth+'-'+site.id,'Park: '+shoreSiteName(s,site)+' 표식에 '+GEAR[site.gear]+'가 있어. M 해도에 남겨둘게.');
   }
 }
 function step(s,input,dt){
@@ -745,7 +746,7 @@ export function restoreRun(raw){
   try{
     if(typeof raw!=='string'||raw.length>160000)return null;
     const s=JSON.parse(raw),finite=(v,min,max)=>Number.isFinite(v)&&v>=min&&v<=max;
-    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,RUN_VERSION].includes(s.version)||![1,2,3,4,5,6,7,8].includes(s.generator)||!Number.isInteger(s.seed)||!finite(s.seed,0,0xffffffff)||!Number.isInteger(s.depth)||!finite(s.depth,0,2))return null;
+    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,RUN_VERSION].includes(s.version)||![1,2,3,4,5,6,7,8,9].includes(s.generator)||!Number.isInteger(s.seed)||!finite(s.seed,0,0xffffffff)||!Number.isInteger(s.depth)||!finite(s.depth,0,2))return null;
     if(s.version<18){s.daylight=newDaylight();if(s.combat?.enemies)for(const e of s.combat.enemies)e.stash=0;}
     if(!validDaylight(s))return null;
     if(s.version<17)s.crewUpgrades=null;

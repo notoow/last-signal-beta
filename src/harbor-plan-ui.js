@@ -1,3 +1,4 @@
+import {shoreSiteName} from './shore-sites.js';
 import {harborPlan} from './harbor-plan.js';
 import {maxFuel,maxHp} from './rogue-core.js';
 import {cacheGearName,rigRecoveryCopy} from './rogue-cache-ui.js';
@@ -7,16 +8,14 @@ import {rescueBerth} from './shore-rescue.js';
 
 const esc=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const number=n=>n>0&&n<.1?'<0.1':String(Number(n.toFixed(1)));
-const siteNames=['Salvage yard','Fuel wharf','Fish-market landing'];
 const toolNames=['Anti-reverse ratchet','Flow baffle','Light shutter'];
 const threatNames={ko:{rat:'시궁쥐',dog:'들개',crab:'대왕 게',gull:'갈매기'},en:{rat:'Rats',dog:'Dogs',crab:'Crabs',gull:'Gulls'}};
-const siteName=(site,en)=>en?siteNames[site.island]:SHORE_SITES[site.island];
 // A remembered quay, never the actor's live offscreen position or condition.
 export function pendingRescueDestination(s,language='ko'){
   const r=s.rescue;
   if(s.status!=='playing'||s.depth!==0||!r?.discovered||!['waiting','following'].includes(r.stage))return null;
   const berth=rescueBerth(s);
-  return berth?{id:berth.id,name:siteName(berth,language==='en')}:null;
+  return berth?{id:berth.id,name:shoreSiteName(s,berth,language)}:null;
 }
 function supplyCopy(s,supply,en,actual=false){
   if(!supply)return '';
@@ -34,7 +33,7 @@ export function harborPlanModel(s,language='ko'){
     sites:plan.sites.map(site=>{
       const known=site.known;
       const supply=known?supplyCopy(s,site.supply,en):'',actual=known?supplyCopy(s,site.supply,en,true):'';
-      return {...site,rigCopy:known?rigRecoveryCopy(site.rig,language):null,name:known?siteName(site,en):'',
+      return {...site,rigCopy:known?rigRecoveryCopy(site.rig,language):null,name:known?shoreSiteName(s,site,language):'',
         status:known?(site.claimed?(en?'Searched':'수색 완료'):(en?'Discovered':'발견')):'',
         gearText:known&&site.gear?cacheGearName(site.gear,language):'',supplyText:supply,actualSupplyText:actual,
         limited:supply!==actual,

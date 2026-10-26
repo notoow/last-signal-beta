@@ -1,4 +1,5 @@
 import {touchText} from './mobile-touch-text.js';
+import {shoreSiteName,ALL_SHORE_NAMES,SHORE_NAME_TRANSLATIONS} from './shore-sites.js';
 import {objective,berthAlignment,shoreSearchStatus,CAPTAINS,BUILDS,GEAR,maxHp,maxFuel} from './rogue-core.js';
 import {dockAlignmentHint} from './docking-readiness.js';
 import {DEPTHS} from './rogue-map.js';
@@ -201,13 +202,14 @@ const toolClues=[
   'While braking: suction/discharge force −75% and machine damage −40%',
   'The lighthouse locks its aim at the start of its warning'
 ];
-for(const site of SHORE_SITES)for(const [i,tool] of FLOOR_TOOLS.entries()){
+Object.assign(translations,SHORE_NAME_TRANSLATIONS);
+for(const site of ALL_SHORE_NAMES)for(const [i,tool] of FLOOR_TOOLS.entries()){
   translations['Park: '+site+'에 '+tool.clue]='Park: '+translations[site]+'. '+toolClues[i];
   translations['Park: '+tool.name+' 찾았어. '+tool.effect+'. 다음 층에도 가져갈 수 있어.']='Park: Found the '+translations[tool.name]+'. '+toolEffects[i]+'. We can carry it into the next region.';
 }
 for(const name of Object.values(GEAR))translations['Woo: '+name+' 회수. 같은 장비도 중첩해서 실을 수 있어.']='Woo: Recovered '+translations[name]+'. Multiple copies stack.';
-for(const site of SHORE_SITES)for(const name of Object.values(GEAR))translations['Park: '+site+' 표식에 '+name+'가 있어. M 해도에 남겨둘게.']='Park: '+translations[site]+' lists a '+translations[name]+'. Marked on the M chart.';
-for(const site of SHORE_SITES)translations['Park: '+site+'에 차광 신호기가 있어. 탐조등에 발각되기까지 시간을 더 벌 수 있어.']='Park: '+translations[site]+'. A light shutter is there. It gives us more time before searchlight detection.';
+for(const site of ALL_SHORE_NAMES)for(const name of Object.values(GEAR))translations['Park: '+site+' 표식에 '+name+'가 있어. M 해도에 남겨둘게.']='Park: '+translations[site]+' lists a '+translations[name]+'. Marked on the M chart.';
+for(const site of ALL_SHORE_NAMES)translations['Park: '+site+'에 차광 신호기가 있어. 탐조등에 발각되기까지 시간을 더 벌 수 있어.']='Park: '+translations[site]+'. A light shutter is there. It gives us more time before searchlight detection.';
 const replacements=Object.entries(translations).sort((a,b)=>b[0].length-a[0].length);
 export function rogueHudText(value,language='ko'){
   if(language!=='en')return value;
@@ -359,8 +361,8 @@ export function rogueHudModel(s,language='ko'){
     if(s.combat)metric('ammo',en?'Scrap':'고철',s.combat.ammo,12);
     model.action=s.mode==='moored'?tr(guide.text):
       waterMotion(s)?motionLabel(s,language):en?'Underway':'운항 중';
-    if(!s.boss.active&&!s.boss.cleared&&SHORE_SITES.some(site=>guide.text.startsWith(site))){
-      const site=SHORE_SITES.find(site=>guide.text.startsWith(site));
+    if(!s.boss.active&&!s.boss.cleared&&ALL_SHORE_NAMES.some(site=>guide.text.startsWith(site))){
+      const site=ALL_SHORE_NAMES.find(site=>guide.text.startsWith(site));
       model.mission=tr(site)+(en?' · Search':' 수색');
     }else if(guide.text.includes('장비 없이 보스')){
       model.mission=en?'Explore the harbor':'항구 탐색';
@@ -570,13 +572,13 @@ export function rogueHudModel(s,language='ko'){
     const target=destination?.point||(s.boss.cleared?s.map.exit:guide.target);
     const arriving=target?.x===alignment.berth.x&&target?.y===alignment.berth.y;
     if(model.docking.optional){
-      const name=alignment.exit?(en?'Exit berth':'탈출 부두'):tr(SHORE_SITES[berth.island]);
+      const name=alignment.exit?(en?'Exit berth':'탈출 부두'):shoreSiteName(s,berth,language);
       // Keep the real local E/steering opportunity, explicitly subordinate to
       // the chosen route. Its instructions must not replace the primary action.
       model.context.push({id:'docking',tone:'normal',text:(en?'Optional stop':'주변 접안(선택)')+' · '+name+' · '+model.docking.hint});
     }else{
       if(arriving)model.mission=alignment.exit?(en?'Exit berth · Docking':'탈출 부두 · 접안'):
-        (berth?tr(SHORE_SITES[berth.island])+' · ':'')+(en?'Docking':'접안');
+        (berth?shoreSiteName(s,berth,language)+' · ':'')+(en?'Docking':'접안');
       model.fullObjective=model.mission+' · '+model.docking.hint;
       model.action=model.docking.hint;model.actionTone=model.docking.tone;
     }
@@ -605,7 +607,7 @@ export function rogueHudModel(s,language='ko'){
   }
   if(s.mode==='moored'){
     const berth=s.map.berths.find(b=>b.id===s.mooring);
-    model.mission=(berth?tr(SHORE_SITES[berth.island])+' · ':'')+(en?'Moored':'계류 중');
+    model.mission=(berth?shoreSiteName(s,berth,language)+' · ':'')+(en?'Moored':'계류 중');
     model.fullObjective=model.mission;model.action=en?'E · Go ashore   Q · Cast off':'E · 하선   Q · 출항';
     const camp=campStatus(s);
     if(camp?.night){

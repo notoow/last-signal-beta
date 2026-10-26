@@ -1,5 +1,6 @@
 import {touchText} from './mobile-touch-text.js';
 import {mobileLabelFits} from './mobile-presentation.js';
+import {shoreSiteName} from './shore-sites.js';
 import {harborLandmark} from './rogue-landmarks.js';
 import {gameArt} from './game-art.js';
 import {DEPTHS,waterAt} from './rogue-map.js';
@@ -388,7 +389,7 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
     const shoreUnit=shoreScale(s);
     workSprite(c,'cleat',berth.landing.x,berth.landing.y+13*shoreUnit,20*shoreUnit,16*shoreUnit);
     if(!aligning)label(c,selected?(language==='en'?'Moored':'계류 중'):dockHint(docking,language),berth.x,berth.y+48);
-    if(s.combat)label(c,SHORE_SITES[berth.island],berth.landing.x,berth.landing.y-30,'#c4cbb8',15);
+    if(s.combat)label(c,shoreSiteName(s,berth),berth.landing.x,berth.landing.y-30,'#c4cbb8',15);
     if(!s.claimed.includes(berth.id)&&visibleAt(s,berth.loot)){
       const l=berth.loot;prop(c,'chest',l.x,l.y+9*shoreUnit,28*shoreUnit,21*shoreUnit);
       const island=s.map.islands[berth.island],counter=s.combat&&berth.id===toolBerth(s).id&&!hasTool(s,FLOOR_TOOLS[s.depth].id);
@@ -504,11 +505,11 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   if(!mapOpen)gullScrapMarkers(c,s,frame,language);
   drawSurvey(c,s);
   if(mapOpen&&s.survey&&!chartPins){
-    const plan=harborPlan(s),siteNames=language==='en'?['Shipbreaking yard','Fuel quay','Fish-market jetty']:SHORE_SITES;
+    const plan=harborPlan(s);
     for(const b of s.map.berths){
       const site=plan?.sites.find(x=>x.id===b.id);
       if(plan&&!site.known)continue;
-      label(c,(site?.selected?'◆ ':site?.claimed?'✓ ':'')+siteNames[b.island],b.x,b.y+48,site?.selected?'#f0d98f':'#b6bda9',20);
+      label(c,(site?.selected?'◆ ':site?.claimed?'✓ ':'')+shoreSiteName(s,b,language),b.x,b.y+48,site?.selected?'#f0d98f':'#b6bda9',20);
     }
     if(surveyedAt(s,s.map.exit))label(c,language==='en'?'Exit berth':'탈출 부두',s.map.exit.x-100,s.map.exit.y+75,'#c9c2a7',20);
     ring(c,s.person||s.boat,20,'#f0d98f');

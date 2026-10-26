@@ -22,6 +22,9 @@ export function newShoreRescue(s){
   const first=(s.seed>>>1)%candidates.length;
   for(let n=0;n<candidates.length;n++){
     const berth=candidates[(first+n)%candidates.length];
+    const authored=berth.rescuePoint;
+    if(s.generator>=9&&authored&&walkableAt(s.map,authored,crewRadius(s))&&shoreRoute(s.map,authored,berth.landing,crewRadius(s)))
+      return {...authored,site:berth.island,quay:berth.island,stage:'waiting',angle:Math.PI/2,stride:0,moving:false,discovered:false,blocked:null};
     for(let radius=36*shoreScale(s);radius<=120*shoreScale(s);radius+=12*shoreScale(s))for(let i=0;i<12;i++){
       const p={x:berth.loot.x+Math.cos(i*Math.PI/6)*radius,y:berth.loot.y+Math.sin(i*Math.PI/6)*radius};
       if(distance(p,berth.landing)<70*shoreScale(s)||!walkableAt(s.map,p,crewRadius(s))||!shoreRoute(s.map,p,berth.landing,crewRadius(s)))continue;

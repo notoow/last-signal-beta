@@ -9,7 +9,9 @@ import {branchGraph} from './harbor-branch-graph.js';
 import {placeShoreSearch} from './shore-search-layout.js';
 import {compactHarbor} from './compact-harbor.js';
 import {shoreRoute} from './shore-navigation.js';
-export const GENERATOR_VERSION=8;
+import {applyLayout} from './shore-layouts.js';
+import {layoutOrder} from './shore-sites.js';
+export const GENERATOR_VERSION=9;
 export const TILE=40;
 export const LAND={water:0,quay:1,brick:2,deck:3,rock:4};
 export const shoreBuildings=r=>r.buildings||[{kind:'hut',x:r.x+r.w-130,y:r.y+20,w:112,h:125}];
@@ -244,6 +246,14 @@ export function validateMap(map){
 }
 export function generateHarbor(seed,depth=0,version=GENERATOR_VERSION){
   if(!Number.isInteger(seed)||seed<0||seed>0xffffffff||!Number.isInteger(depth)||depth<0||depth>2)throw Error('Invalid harbor seed/depth/version');
+  if(version===9){
+    const map=generateHarbor(seed,depth,8),order=layoutOrder(seed,depth);
+    map.berths.forEach((b,i)=>{b.layout=order[i];b.rescuePoint=applyLayout(map,b,order[i]).rescue;});
+    map.version=9;
+    const check=validateMap(map);
+    if(!check.ok)throw Error('Varied shore failed validation: '+check.errors.join(', '));
+    return map;
+  }
   if(version===8){
     const map=compactHarbor(generateHarbor(seed,depth,7),seed);
     const check=validateMap(map);

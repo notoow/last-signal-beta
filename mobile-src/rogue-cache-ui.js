@@ -1,3 +1,4 @@
+import {shoreSiteName} from './shore-sites.js';
 import {GEAR,maxHp,maxFuel,cacheSupplyPreview} from './rogue-core.js';
 import {cacheOffer,gearEffect} from './rogue-cache.js';
 import {FLOOR_TOOLS,SHORE_SITES,toolBerth,hasTool} from './shore-encounters.js';
@@ -80,7 +81,7 @@ export function cacheChoiceModel(s,language='ko'){
   }
   const crew=offer.crew?{id:offer.crew,rank:crewRank(s,offer.crew),...CREW_UPGRADES[offer.crew]}:null;
   return {full:s.equipment.length>=6,slots:s.equipment.length,crew,rig,commonItems,
-    site:en?['Salvage yard','Fuel wharf','Fish-market landing'][berth.island]:SHORE_SITES[berth.island],
+    site:shoreSiteName(s,berth,language),
     gear:offer.gear.map(id=>cacheGearModel(s,id,language)),supply,offered:offer.supply,siteRole:offer.siteRole,common:commonItems.map(x=>x.text)};
 }
 
