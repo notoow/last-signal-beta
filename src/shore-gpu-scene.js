@@ -63,10 +63,17 @@ export class ShoreGpuScene{
   assertLive(){if(this.disposed)throw Error('Shore GPU scene disposed');}
   // Source canvas/image remains authoritative for context restoration. Mutating
   // a canvas requires an explicit new revision; animation UV changes do not.
+  releaseTexture(id){
+    const texture=this.textures.get(id);this.textures.delete(id);
+    if(texture?.handle&&!this.lost&&![...this.textures.values()].includes(texture))this.gl.deleteTexture(texture.handle);
+  }
   atlas(id,source,{revision=0,nearest=false,mipmaps=true,repeat=false}={}){
     this.assertLive();const old=this.textures.get(id);
     const w=source.naturalWidth||source.width,h=source.naturalHeight||source.height,pot=n=>n>0&&(n&(n-1))===0;
     if(old&&old.source===source&&old.revision===revision&&old.nearest===nearest&&old.mipmaps===mipmaps&&old.repeat===repeat)return;
+    // Share only immutable image assets, not mutable canvas upload sources.
+    const shared=source.naturalWidth&&typeof source.src==='string'?[...this.textures.values()].find(t=>t.source===source&&t.revision===revision&&t.nearest===nearest&&t.mipmaps===mipmaps&&t.repeat===repeat):null;
+    if(shared){this.releaseTexture(id);this.textures.set(id,shared);return;}
     let uploadSource=source;
     if(repeat&&!this.webgl2&&(!pot(w)||!pot(h))){
       // WebGL1 requires power-of-two repeat textures. Normalize once per
@@ -78,7 +85,7 @@ export class ShoreGpuScene{
       const c=uploadSource.getContext('2d');c.imageSmoothingEnabled=!nearest;
       c.drawImage(source,0,0,uploadSource.width,uploadSource.height);
     }
-    if(old?.handle&&!this.lost)this.gl.deleteTexture(old.handle);
+    this.releaseTexture(id);
     this.textures.set(id,{source,uploadSource,revision,nearest,mipmaps,repeat,handle:null});
   }
   // Small premultiplied RGBA masks (fog/discovery), not framebuffer readbacks. Keep a CPU
@@ -86,7 +93,7 @@ export class ShoreGpuScene{
   pixels(id,width,height,rgba){
     this.assertLive();
     if(!Number.isInteger(width)||!Number.isInteger(height)||width<1||height<1||rgba.length!==width*height*4)throw Error('Invalid shore mask');
-    const old=this.textures.get(id);if(old?.handle&&!this.lost)this.gl.deleteTexture(old.handle);
+    this.releaseTexture(id);
     this.textures.set(id,{width,height,rgba:new Uint8Array(rgba),nearest:true,handle:null,patches:[]});
   }
   patchPixels(id,x,y,width,height,rgba){
@@ -112,7 +119,7 @@ export class ShoreGpuScene{
   }
   removeAtlas(id){
     if([...this.layers.values()].some(layer=>layer.atlas===id))throw Error('Shore atlas still in use');
-    const texture=this.textures.get(id);if(texture?.handle&&!this.lost)this.gl.deleteTexture(texture.handle);this.textures.delete(id);
+    this.releaseTexture(id);
   }
   target(id,width,height){
     this.assertLive();if(!Number.isInteger(width)||!Number.isInteger(height)||width<1||height<1)throw Error('Invalid shore target size');
