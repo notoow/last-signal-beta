@@ -25,7 +25,7 @@ const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const diff=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b));
 export const toolBerth=s=>s.map.berths[((s.seed^Math.imul(s.depth+1,2654435761))>>>0)%s.map.berths.length];
 export const hasTool=(s,id)=>s.tools?.includes(id);
-export function sightLine(map,a,b,{revealTerrainFace=false}={}){
+export function sightLine(map,a,b,{revealTerrainFace=false,visionOnly=false}={}){
   if(!cliffRayClear(map,a,b,{revealFace:revealTerrainFace}))return false;
   const length=dist(a,b),n=Math.max(1,Math.ceil(length/(map.version>=4?1:8))),pad=map.version>=4?.25:2;
   let candidates=null;
@@ -34,7 +34,7 @@ export function sightLine(map,a,b,{revealTerrainFace=false}={}){
     // solids whose padded bounds cannot meet this ray. Without this broad
     // phase, surveying open sea repeats every distant building at every metre.
     const left=Math.min(a.x,b.x),right=Math.max(a.x,b.x),top=Math.min(a.y,b.y),bottom=Math.max(a.y,b.y);
-    candidates=[...(map.props||[]),...map.islands.flatMap(shoreBuildings)].filter(r=>{
+    candidates=[...(map.props||[]),...map.islands.flatMap(shoreBuildings)].filter(r=>!visionOnly||(r.blocksSight??r.visual!=='supplies')).filter(r=>{
       const minX=r.footprint?Math.min(...r.footprint.map(p=>p.x)):r.x,maxX=r.footprint?Math.max(...r.footprint.map(p=>p.x)):r.x+r.w;
       const minY=r.footprint?Math.min(...r.footprint.map(p=>p.y)):r.y,maxY=r.footprint?Math.max(...r.footprint.map(p=>p.y)):r.y+r.h;
       return maxX+pad>=left&&minX-pad<=right&&maxY+pad>=top&&minY-pad<=bottom;
@@ -220,6 +220,25 @@ function enemyHit(s,e){
   }
   effect(s,p.x,p.y,'hurt');
 }
+// Projectiles sweep the whole segment, including its endpoints. Sight rays
+// intentionally omit endpoints to expose near wall faces; that is unsafe for
+// sub-unit projectile steps, which otherwise have no interior sample at all.
+export function shotPathClear(map,a,b){
+  if(!cliffRayClear(map,a,b))return false;
+  const cross=(p,q,r)=>(q.x-p.x)*(r.y-p.y)-(q.y-p.y)*(r.x-p.x);
+  const overlap=(a,b,c,d)=>Math.max(Math.min(a,b),Math.min(c,d))<=Math.min(Math.max(a,b),Math.max(c,d))+1e-9;
+  for(const box of [...(map.props||[]),...map.islands.flatMap(shoreBuildings)]){
+    if(shoreSolid(a,box,0)||shoreSolid(b,box,0))return false;
+    const points=box.footprint??[{x:box.x,y:box.y},{x:box.x+box.w,y:box.y},{x:box.x+box.w,y:box.y+box.h},{x:box.x,y:box.y+box.h}];
+    for(let i=0;i<points.length;i++){
+      const p=points[i],q=points[(i+1)%points.length];
+      if(!overlap(a.x,b.x,p.x,q.x)||!overlap(a.y,b.y,p.y,q.y))continue;
+      const u=cross(a,b,p),v=cross(a,b,q),w=cross(p,q,a),z=cross(p,q,b);
+      if(((u<=1e-9&&v>=-1e-9)||(v<=1e-9&&u>=-1e-9))&&((w<=1e-9&&z>=-1e-9)||(z<=1e-9&&w>=-1e-9)))return false;
+    }
+  }
+  return true;
+}
 export function tickEncounter(s,input,dt){
   const c=s.combat;if(!c)return;const unit=shoreScale(s);
   c.cooldown=Math.max(0,c.cooldown-dt);c.hit=Math.max(0,c.hit-dt);
@@ -236,7 +255,7 @@ export function tickEncounter(s,input,dt){
   }
   for(const shot of c.shots){
     const old={x:shot.x,y:shot.y};shot.x+=shot.vx*dt;shot.y+=shot.vy*dt;shot.left-=dt;
-    if(!sightLine(s.map,old,shot)){shot.left=0;effect(s,shot.x,shot.y,'shell');continue;}
+    if(!shotPathClear(s.map,old,shot)){shot.left=0;effect(s,shot.x,shot.y,'shell');continue;}
     const e=c.enemies.find(e=>e.hp>0&&dist(e,shot)<fauna(s,e.kind).radius+5*unit);
     if(e){hurtEnemy(s,e,20,Math.atan2(shot.vy,shot.vx));shot.left=0;}
   }

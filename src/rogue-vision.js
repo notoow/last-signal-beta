@@ -63,7 +63,7 @@ export const sightRadius=s=>(s.generator===12&&s.depth===0?(s.person?120:s.boss.
 export function visibleAt(s,p){
   if(!s.survey)return true;
   const origin=s.person||s.boat;
-  return Math.hypot(origin.x-p.x,origin.y-p.y)<=sightRadius(s)&&sightLine(s.map,origin,p,{revealTerrainFace:true});
+  return Math.hypot(origin.x-p.x,origin.y-p.y)<=sightRadius(s)&&sightLine(s.map,origin,p,{revealTerrainFace:true,visionOnly:true});
 }
 export function newSurvey(map){const {cols,rows}=surveyGrid(map);return Array(cols*rows).fill(0);}
 // Read-only current sight for charts. Never commit exploration while rendering.
