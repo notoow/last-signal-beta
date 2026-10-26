@@ -1,6 +1,15 @@
 import {walkableAt} from './rogue-map.js';
-import {crewRadius} from './shore-scale.js';
+import {crewRadius,shoreRanges} from './shore-scale.js';
 import {shoreSegment} from './shore-navigation.js';
+// Jeong's wheelhouse projects over the ladder centre. Keep the physical berth
+// and interaction radius; stand on the adjacent visible quay when it is clear.
+export function shoreStandingPoint(s,berth){
+ const home=berth.landing;
+ if(s.captain!=='jeong'||s.generator<4)return home;
+ const p={x:home.x+.9071*6,y:home.y-.4209*6},radius=crewRadius(s);
+ return Math.hypot(p.x-home.x,p.y-home.y)<shoreRanges(s).boarding&&
+  walkableAt(s.map,p,radius)&&shoreSegment(s.map,home,p,radius)?p:home;
+}
 export function boardingSlot(s,home){
  // Prefer the worker's existing screen side; do not cross a ready pair.
  const origin=home.rescuePoint||home.landing;

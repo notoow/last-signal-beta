@@ -1,3 +1,4 @@
+import {shoreStandingPoint} from './shore-boarding.js';
 import {shoreSiteName} from './shore-sites.js';
 import {harborLandmark,harborArenaX} from './rogue-landmarks.js';
 import {generateHarbor,GENERATOR_VERSION,DEPTHS,inside,waterAt,shoreBuildings,walkableAt} from './rogue-map.js';
@@ -158,11 +159,11 @@ export function objective(s){
       const action=ladder?(rescue.ready?'E · 정비공과 함께 승선':'E · 혼자 승선 · 정비공은 부두에 남음'):
         rescue.near?(rescue.stage==='following'?'E · 정비공 기다리기':'E · 정비공 따라오기'):null;
       if(ladder&&(rescue.ready||rescue.stage==='following'||rescueBerth(s)?.id===home.id))return {text:rescue.ready?'정비공 도착 · 함께 승선':
-        rescue.stage==='following'?'정비공이 사다리에 올 때까지 기다리기':'정비공은 부두에서 기다리는 중',target:home.landing,action,rescue:true};
+        rescue.stage==='following'?'정비공이 사다리에 올 때까지 기다리기':'정비공은 부두에서 기다리는 중',target:shoreStandingPoint(s,home),action,rescue:true};
       if(rescue.stage==='following'&&!visibleAt(s,rescue.point))return {text:'정비공이 보이는 곳으로 돌아가기',target:null,action:'Q 유인 · Space 근접 · V 투척',rescue:true};
       if(rescue.stage==='following')return {text:rescue.blocked==='threat'?'정비공이 멈췄다 · 짐승을 유인하거나 물리치기':
         rescue.blocked==='distant'?'정비공에게 돌아가기 · 너무 멀어졌다':rescue.blocked==='route'?'정비공이 지나올 길 확보':
-        rescue.ready?'정비공 도착 · 함께 승선':ladder?'정비공이 사다리에 올 때까지 기다리기':'정비공을 배까지 호위',target:rescue.blocked?rescue.point:home.landing,action:action||'Q 유인 · Space 근접 · V 투척',rescue:true};
+        rescue.ready?'정비공 도착 · 함께 승선':ladder?'정비공이 사다리에 올 때까지 기다리기':'정비공을 배까지 호위',target:rescue.blocked?rescue.point:shoreStandingPoint(s,home),action:action||'Q 유인 · Space 근접 · V 투척',rescue:true};
       if(rescue.near||s.claimed.includes(b.id)&&rescueBerth(s)?.id===home.id)return {
         text:ladder&&rescue.ready?'정비공 도착 · 함께 승선':'고립된 정비공 · 가까이 가서 E',target:rescue.point,action:action||'E · 가까이서 따라오기',rescue:true};
     }
@@ -172,7 +173,7 @@ export function objective(s){
       action=s.cacheModel===CACHE_MODEL?'F / R 수색 · 길게 누른 뒤 장비 또는 보급 선택':island.role==='equipment'?'F / R '+gear+' 회수 · 길게 누르기':
         'F '+(island.role==='fuel'?'연료 보충':'선체 수리')+' · R '+gear+' 회수 · 길게 누르기';
     }else if(distance(s.person,home.landing)<shoreRanges(s).boarding)action='E 재승선';
-    return s.claimed.includes(b.id)?{text:'배로 돌아가기',target:b.landing,action}:{text:'부두 수색',target:surveyedAt(s,b.loot)||visibleAt(s,b.loot)?b.loot:null,action};
+    return s.claimed.includes(b.id)?{text:'배로 돌아가기',target:shoreStandingPoint(s,b),action}:{text:'부두 수색',target:surveyedAt(s,b.loot)||visibleAt(s,b.loot)?b.loot:null,action};
   }
   if(s.mode==='moored')return {text:'E · 하선 / Q · 계류 해제',target:s.map.berths.find(b=>b.id===s.mooring)};
   if(s.boss.cleared){
@@ -296,7 +297,7 @@ export function interact(s,action,input={}){
   }
   if(s.mode==='moored'){
     if(s.daylight)s.daylight.rest=null;
-    const berth=s.map.berths.find(x=>x.id===s.mooring);s.person={...berth.landing,angle:-Math.PI/2};s.mode='ashore';
+    const berth=s.map.berths.find(x=>x.id===s.mooring);s.person={...shoreStandingPoint(s,berth),angle:-Math.PI/2};s.mode='ashore';
     say(s,'shore-'+s.depth,s.combat?'Park: Space로 갈고리를 휘두르고, V나 클릭으로 고철을 던져. 게가 집게를 들면 뒤로 빠져. Q 깡통으로 짐승을 유인할 수도 있어.':'Park: 상자를 확인해. 발소리가 크면 들개가 따라올 거야. Q로 빈 깡통을 던져 시선을 돌릴 수 있어.','Park: 상자를 확인해. 짐승이 몰려오면 배로 돌아와.');
     if(s.tow?.connected&&!s.tow.anchor)s.radio={text:'Park: 보급정 닻을 안 내렸어. 우리 배만 계류돼 있어. 떠밀리기 전에 다시 타서 H로 닻을 내려.',left:7};
     return true;

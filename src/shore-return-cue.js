@@ -1,3 +1,4 @@
+import {shoreStandingPoint} from './shore-boarding.js';
 import {project} from './world-projection.js';
 import {shoreRanges,WORLD_UNITS_PER_METRE as M,CREW_HEIGHT} from './shore-scale.js';
 import {surveyedAt} from './rogue-vision.js';
@@ -7,7 +8,7 @@ const overlap=(a,b,pad=0)=>a.x<b.x+b.w+pad&&a.x+a.w>b.x-pad&&a.y<b.y+b.h+pad&&a.
 const valid=r=>r&&[r.x,r.y,r.w,r.h].every(Number.isFinite)&&r.w>0&&r.h>0;
 export function isOwnReturnTarget(s,target){
  const b=s.map?.berths?.find(b=>b.id===s.mooring);
- return !!(s.person&&b&&target&&Math.hypot(target.x-b.landing.x,target.y-b.landing.y)<.01);
+ return !!(s.person&&b&&target&&[b.landing,shoreStandingPoint(s,b)].some(p=>Math.hypot(target.x-p.x,target.y-p.y)<.01));
 }
 // Read-only. Only the player's already discovered, current boarding point is
 // eligible. No other quay, exit, actor, path or survey cell is exposed here.
@@ -18,12 +19,12 @@ export function returnLandingCue(s,f,boatBounds=null,previous=null){
  if(!b||!knownBerth(s,b)||!surveyedAt(s,b.landing))return hidden('unknown-own-landing');
  const distance=Math.hypot(s.person.x-b.landing.x,s.person.y-b.landing.y);
  if(distance<shoreRanges(s).boarding)return hidden('boarding-control-near');
- const q=project(f,b.landing),foot=project(f,s.person),h=CREW_HEIGHT*f.scale;
+ const standing=shoreStandingPoint(s,b),q=project(f,standing),foot=project(f,s.person),h=CREW_HEIGHT*f.scale;
  const hud=(f.occupied||[]).filter(valid),actor={x:foot.x-h*.4,y:foot.y-h-4,w:h*.8,h:h+8};
  const safe=r=>r.x>=6&&r.y>=6&&r.x+r.w<=f.width-6&&r.y+r.h<=f.height-6&&!hud.some(b=>overlap(r,b,6))&&!overlap(r,actor,4);
  const boatVisible=valid(boatBounds)&&boatBounds.x>=0&&boatBounds.y>=0&&boatBounds.x+boatBounds.w<=f.width&&boatBounds.y+boatBounds.h<=f.height&&!hud.some(b=>overlap(boatBounds,b,2));
  const type=boatVisible?'ground':'landing',bounds=boatVisible?{x:q.x-11,y:q.y-6,w:22,h:13}:{x:q.x-12,y:q.y-33,w:24,h:40};
- const common={targetId:b.id,target:{...b.landing},projectedTarget:q,metres:Math.ceil(distance/M),boatVisible};
+ const common={targetId:b.id,target:{...standing},projectedTarget:q,metres:Math.ceil(distance/M),boatVisible};
  if(safe(bounds))return {...common,kind:type,point:q,bounds};
  // Do not send a player to the screen edge for a landing next to their feet.
  // A nearby captain can cover this passive glyph before the Board button
