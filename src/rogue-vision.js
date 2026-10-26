@@ -4,6 +4,53 @@ export const SURVEY_CELL=80,SURVEY_COLS=43,SURVEY_ROWS=23;
 const legacyGrid=Object.freeze({cell:SURVEY_CELL,cols:SURVEY_COLS,rows:SURVEY_ROWS});
 export const surveyGrid=map=>map?.cliffs?{cell:40,cols:map.cols,rows:map.rows}:legacyGrid;
 const views=new WeakMap();
+const fineViews=new WeakMap();
+const fogViews=new WeakMap();
+const legacyFogViews=new WeakMap();
+export function fogState(s){
+  const grid=surveyGrid(s.map),fine=fineSight(s);
+  if(!fine){
+    const p=s.person||s.boat,old=legacyFogViews.get(s);if(reusable(s,old,p))return old.result;
+    const visible=visibleSurvey(s),result={...grid,alpha:Uint8Array.from({length:grid.cols*grid.rows},(_,i)=>!s.survey||visible?.[i]?0:s.survey[i]?179:255)};
+    legacyFogViews.set(s,{map:s.map,cliffs:s.map.cliffs,survey:s.survey,x:p.x,y:p.y,mode:s.mode,time:s.time,radius:sightRadius(s),result});return result;
+  }
+  const old=fogViews.get(s),memory=s.fineSurvey?.cols===grid.cols&&s.fineSurvey?.rows===grid.rows?s.fineSurvey:null;
+  if(old?.sight===fine&&old.memory===memory)return old.result;
+  const cols=grid.cols*4,rows=grid.rows*4,alpha=new Uint8Array(cols*rows);
+  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+    const i=Math.floor(y/4)*grid.cols+Math.floor(x/4),bit=1<<((y%4)*4+x%4);
+    alpha[y*cols+x]=fine[i]&bit?0:(memory?.bits[i]??(s.survey.length===grid.cols*grid.rows&&s.survey[i]?65535:0))&bit?179:255;
+  }
+  const result={cols,rows,cell:grid.cell/4,alpha};fogViews.set(s,{sight:fine,memory,result});return result;
+}
+export function newFineSurvey(map,survey){
+  if(!map?.cliffs||!survey)return null;
+  const {cols,rows}=surveyGrid(map);
+  return {version:1,cols,rows,bits:Array.from({length:cols*rows},(_,i)=>survey[i]===1?65535:0)};
+}
+export function validFineSurvey(memory,map,survey){
+  if(!map?.cliffs||!survey)return memory===null;
+  const {cols,rows}=surveyGrid(map);
+  return memory?.version===1&&memory.cols===cols&&memory.rows===rows&&Array.isArray(memory.bits)&&memory.bits.length===cols*rows&&memory.bits.every(v=>Number.isInteger(v)&&v>=0&&v<=65535);
+}
+// A cell retains sixteen independently observed pieces. Charts and objective
+// pins continue to use the coarse survey; drawing cannot grant discoveries.
+export function fineSight(s){
+  if(!s.map?.cliffs||!s.survey)return null;
+  const p=s.person||s.boat,last=fineViews.get(s);
+  if(reusable(s,last,p))return last.bits;
+  const {cell,cols,rows}=surveyGrid(s.map),coarse=visibleSurvey(s),bits=new Uint16Array(cols*rows),radius=sightRadius(s);
+  for(let y=Math.max(0,Math.floor((p.y-radius-cell)/cell));y<Math.min(rows,Math.ceil((p.y+radius+cell)/cell));y++)
+    for(let x=Math.max(0,Math.floor((p.x-radius-cell)/cell));x<Math.min(cols,Math.ceil((p.x+radius+cell)/cell));x++){
+      const i=y*cols+x;if(coarse[i]){bits[i]=65535;continue;}
+      let boundary=false;
+      for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)if(x+dx>=0&&x+dx<cols&&y+dy>=0&&y+dy<rows&&coarse[(y+dy)*cols+x+dx])boundary=true;
+      if(!boundary)continue;
+      for(let sy=0;sy<4;sy++)for(let sx=0;sx<4;sx++)if(visibleAt(s,{x:(x+(sx+.5)/4)*cell,y:(y+(sy+.5)/4)*cell}))bits[i]|=1<<(sy*4+sx);
+    }
+  fineViews.set(s,{map:s.map,cliffs:s.map.cliffs,survey:s.survey,x:p.x,y:p.y,mode:s.mode,time:s.time,radius,bits});
+  return bits;
+}
 export function surveyedAt(s,p){
   if(!s.survey)return true;
   const {cell,cols,rows}=surveyGrid(s.map);
@@ -36,26 +83,29 @@ export function updateSurvey(s){
   const {cols,rows}=surveyGrid(s.map);
   // An explicitly replaced terrain profile cannot reinterpret coarse old bits
   // as fine-grid discoveries. Generated maps initialize with their own grid.
-  if(s.map.cliffs&&s.survey.length!==cols*rows)s.survey=newSurvey(s.map);
+  if(s.map.cliffs&&s.survey.length!==cols*rows){s.survey=newSurvey(s.map);s.fineSurvey=newFineSurvey(s.map,s.survey);}
   const p=s.person||s.boat,last=views.get(s);
   if(reusable(s,last,p))return;
+  if(s.map.cliffs){
+    if(!validFineSurvey(s.fineSurvey,s.map,s.survey))s.fineSurvey=newFineSurvey(s.map,s.survey);
+    const sight=fineSight(s);
+    for(let i=0;i<sight.length;i++)s.fineSurvey.bits[i]|=sight[i];
+  }
   const visible=new Set();
   for(const [k,value] of visibleSurvey(s).entries())if(value){visible.add(k);s.survey[k]=1;}
   views.set(s,{map:s.map,cliffs:s.map.cliffs,survey:s.survey,x:p.x,y:p.y,mode:s.mode,time:s.time,radius:sightRadius(s),visible,mask:null});
 }
+const fogCanvases=new WeakMap();
 export function drawSurvey(c,s){
   if(!s.survey)return;
-  const {cell,cols,rows}=surveyGrid(s.map),old=views.get(s),origin=s.person||s.boat;
-  const remembered=s.survey.length===cols*rows?s.survey:null;
-  const view=reusable(s,old,origin)?old:{visible:new Set(visibleSurvey(s).flatMap((v,i)=>v?[i]:[])),mask:null};
-  if(!view.mask){
-    view.mask=document.createElement('canvas');view.mask.width=cols;view.mask.height=rows;
-    const m=view.mask.getContext('2d');m.fillStyle='#000';
-    for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
-      const k=y*cols+x;if(view.visible.has(k))continue;
-      m.globalAlpha=remembered?.[k]?.7:1;m.fillRect(x,y,1,1);
-    }
+  const {cols,rows,cell,alpha}=fogState(s);
+  let mask=fogCanvases.get(alpha);
+  if(!mask){
+    mask=document.createElement('canvas');mask.width=cols;mask.height=rows;
+    const m=mask.getContext('2d'),pixels=m.createImageData(cols,rows);
+    for(let i=0;i<alpha.length;i++)pixels.data[i*4+3]=alpha[i];
+    m.putImageData(pixels,0,0);fogCanvases.set(alpha,mask);
   }
-  c.save();c.imageSmoothingEnabled=!s.map.cliffs;c.drawImage(view.mask,0,0,cols*cell,rows*cell);c.restore();
+  c.save();c.imageSmoothingEnabled=!s.map.cliffs;c.drawImage(mask,0,0,cols*cell,rows*cell);c.restore();
 }
 export function validSurvey(v,map){const {cols,rows}=surveyGrid(map);return v===null||Array.isArray(v)&&v.length===cols*rows&&v.every(x=>x===0||x===1);}

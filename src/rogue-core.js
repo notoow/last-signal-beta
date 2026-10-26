@@ -5,7 +5,7 @@ import {generateHarbor,GENERATOR_VERSION,DEPTHS,inside,waterAt,shoreBuildings,wa
 import {newSkillState,activateCaptainSkill,advanceSkill,validateSkill} from './captain-skills.js';
 import {CAPTAIN_VESSELS,CAPTAINS} from './captain-vessels.js';
 import {newEncounter,tickEncounter,shoreAttack,validateEncounter,toolBerth,FLOOR_TOOLS,SHORE_SITES,hasTool,startleGulls,recoverGullScrap} from './shore-encounters.js';
-import {newSurvey,updateSurvey,validSurvey,visibleAt,surveyedAt} from './rogue-vision.js';
+import {newSurvey,updateSurvey,validSurvey,visibleAt,surveyedAt,newFineSurvey,validFineSurvey} from './rogue-vision.js';
 import {newRogueTow,towControl,tickRogueTow,deliverRogueTow,canDeliverRogueTow,validRogueTow} from './rogue-tow.js';
 import {WATER_PROFILE,waterMotion,stepShipMotion,releaseShipAssist} from './ship-motion.js';
 import {terrainTurnPose} from './ship-contact.js';
@@ -23,7 +23,7 @@ import {newShoreRescue,rescueStatus,rescueBerth,rescuePendingAt,orderRescue,tick
 import {publishRigAction} from './rig-feedback.js';
 import {newDaylight,startCamp,tickDaylight,validDaylight} from './voyage-daylight.js';
 export {planHarbor};
-export const RUN_VERSION=18;
+export const RUN_VERSION=19;
 export const SUPPLY_MODEL='carried-v1';
 export {CAPTAINS};
 export const BUILDS={standard:'표준선',bilge:'침수 발전선',winch:'축력 윈치선'};
@@ -66,6 +66,7 @@ function floor(s){
   });
   if(s.combat!==null)s.combat=newEncounter(s,s.combat?.ammo??12);
   s.survey=s.combat?newSurvey(s.map):null;
+  s.fineSurvey=newFineSurvey(s.map,s.survey);
   s.tow=s.combat&&s.generator>=2?newRogueTow(s):null;
   // Begin alongside the first quay: both hulls share the landscape viewport.
   // Keep the supply boat anchored until the player deliberately takes it along.
@@ -757,7 +758,7 @@ export function restoreRun(raw){
   try{
     if(typeof raw!=='string'||raw.length>160000)return null;
     const s=JSON.parse(raw),finite=(v,min,max)=>Number.isFinite(v)&&v>=min&&v<=max;
-    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,RUN_VERSION].includes(s.version)||![1,2,3,4,5,6,7,8,9,10,11,12].includes(s.generator)||!Number.isInteger(s.seed)||!finite(s.seed,0,0xffffffff)||!Number.isInteger(s.depth)||!finite(s.depth,0,2))return null;
+    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,RUN_VERSION].includes(s.version)||![1,2,3,4,5,6,7,8,9,10,11,12].includes(s.generator)||!Number.isInteger(s.seed)||!finite(s.seed,0,0xffffffff)||!Number.isInteger(s.depth)||!finite(s.depth,0,2))return null;
     if(s.version<18){s.daylight=newDaylight();if(s.combat?.enemies)for(const e of s.combat.enemies)e.stash=0;}
     if(!validDaylight(s))return null;
     if(s.version<17)s.crewUpgrades=null;
@@ -786,6 +787,8 @@ export function restoreRun(raw){
     s.map=generateHarbor(s.seed,s.depth,s.generator);
     if(s.version===1)s.skill=newSkillState();
     if(s.version<4){s.combat=null;s.tools=[];s.survey=null;s.tow=null;}
+    if(s.version<19)s.fineSurvey=newFineSurvey(s.map,s.survey);
+    if(!validFineSurvey(s.fineSurvey,s.map,s.survey))return null;
     s.version=RUN_VERSION;
     if(!validateEncounter(s,finite)||!validSurvey(s.survey,s.map)||!validRogueTow(s.tow,finite,s.map))return null;
     if(!validateSkill(s,finite))return null;

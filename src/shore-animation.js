@@ -17,6 +17,8 @@ const crewRows={woo:0,park:1,han:2,jeong:3},faunaRows={rat:0,dog:1,crab:2,gull:3
 const crewAnchors={woo:[422,815,1187,350],park:[425,795,1176,350],han:[416,817,1215,375],jeong:[415,815,1208,368]};
 // Original-atlas silhouettes measured by the art owner, 2026-10-27.
 const windupClips={woo:[[-8,24,268,150],[0,174,260,202]],park:[[-12,-8,288,68],[0,60,276,65],[0,125,264,55],[22,180,242,30],[28,210,236,155]],han:[[-5,24,267,375]],jeong:[[-8,-4,247,390]]};
+// Strike silhouettes cross the old cell boundary; retain the original 155px pivot.
+const strikeClips={woo:[[-38,44,348,326]],park:[[-10,49,320,32],[-31,81,341,32],[-40,113,350,10],[-46,123,356,22],[-47,145,357,32],[-40,177,350,32],[-26,209,336,32],[-26,241,336,32],[-27,273,337,32],[-32,305,342,32],[-29,337,339,20]],han:[[-6,56,316,326]],jeong:[[-60,53,370,335]]};
 const walkCycles=new WeakMap();
 function crewSprite(c,s,p,reduced,unit=1){
   const img=crew[s.captain],fight=s.combat;if(!img.complete||!img.naturalWidth)return;
@@ -55,6 +57,11 @@ function crewSprite(c,s,p,reduced,unit=1){
     }
     c.clip();
     c.drawImage(img,x-12,y-8,w+12,h+8,(-12-w*.5)*scale,(y-8-anchors[row])*scale,(w+12)*scale,(h+8)*scale);
+  }else if(strikeClips[s.captain]&&row===2&&col===3){
+    c.beginPath();
+    for(const [px,py,pw,ph] of strikeClips[s.captain])c.rect((px-w*.5)*scale,(y+py-anchors[row])*scale,pw*scale,ph*scale);
+    c.clip();
+    c.drawImage(img,x-64,y,w+64,h,(-64-w*.5)*scale,(y-anchors[row])*scale,(w+64)*scale,h*scale);
   }else c.drawImage(img,x,y,w,h,-w*.5*scale,(y-anchors[row])*scale,w*scale,h*scale);
   // Park's complete hook extends beyond the old side cell. Draw only those
   // original pixels, keeping the body sampling and its 156px foot pivot intact.

@@ -1,15 +1,11 @@
-import {surveyGrid,visibleSurvey} from './rogue-vision.js';
+import {fogState} from './rogue-vision.js';
 import {HARBOR_PROJECTION as P} from './world-projection.js';
 
 // Read-only rendering of the existing simulation's visibility. Rendering must
 // never discover map cells, even while scrolling or zooming an unexplored area.
 export function installShoreFog(scene,s,id='shore-fog'){
-  const map=s.map,{cols,rows,cell}=surveyGrid(map),rgba=new Uint8Array(cols*rows*4);
-  const alpha=state=>{
-    if(!state.survey)return new Uint8Array(cols*rows);
-    const visible=visibleSurvey(state),remembered=state.survey.length===cols*rows?state.survey:null;
-    return Uint8Array.from({length:cols*rows},(_,i)=>visible?.[i]?0:remembered?.[i]?179:255);
-  };
+  const map=s.map,{cols,rows,cell}=fogState(s),rgba=new Uint8Array(cols*rows*4);
+  const alpha=state=>fogState(state).alpha;
   let previous=alpha(s);
   for(let i=0;i<previous.length;i++)rgba[i*4+3]=previous[i];
   scene.pixels(id,cols,rows,rgba);
