@@ -1,5 +1,6 @@
 import {sightLine} from './shore-encounters.js';
 import {daylight} from './voyage-daylight.js';
+import {fogRenderField} from './fog-render-field.js';
 export const SURVEY_CELL=80,SURVEY_COLS=43,SURVEY_ROWS=23;
 const legacyGrid=Object.freeze({cell:SURVEY_CELL,cols:SURVEY_COLS,rows:SURVEY_ROWS});
 export const surveyGrid=map=>map?.cliffs?{cell:40,cols:map.cols,rows:map.rows}:legacyGrid;
@@ -116,13 +117,12 @@ export function fogRenderAlpha({cols,rows,alpha}){
 }
 export function drawSurvey(c,s){
   if(!s.survey)return;
-  const {cols,rows,cell,alpha}=fogState(s);
+  const {cols,rows,cell,alpha}=fogRenderField(fogState(s));
   let mask=fogCanvases.get(alpha);
   if(!mask){
     mask=document.createElement('canvas');mask.width=cols;mask.height=rows;
     const m=mask.getContext('2d'),pixels=m.createImageData(cols,rows);
-    const shaded=fogRenderAlpha({cols,rows,alpha});
-    for(let i=0;i<alpha.length;i++){pixels.data[i*4]=7;pixels.data[i*4+1]=20;pixels.data[i*4+2]=27;pixels.data[i*4+3]=shaded[i];}
+    for(let i=0;i<alpha.length;i++){pixels.data[i*4]=7;pixels.data[i*4+1]=20;pixels.data[i*4+2]=27;pixels.data[i*4+3]=alpha[i];}
     m.putImageData(pixels,0,0);fogCanvases.set(alpha,mask);
   }
   c.save();c.imageSmoothingEnabled=true;c.drawImage(mask,0,0,cols*cell,rows*cell);c.restore();

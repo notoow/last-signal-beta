@@ -16,7 +16,7 @@ import {SLUICE_MODEL,SLUICE,usesSluice,newSluice,beginSluice,trackSluice,sluiceG
 import {LIGHTHOUSE_MODEL,LIGHTHOUSE,usesLighthouse,newLighthouse,relayPosition,relayApproach,lighthouseStatus,tickLighthouse,lighthouseBlocked,validLighthouse} from './lighthouse-counterplay.js';
 import {CACHE_MODEL,cacheOffer,validCache} from './rogue-cache.js';
 import {CREW_UPGRADES,crewEffects,validCrewUpgrades} from './crew-upgrades.js';
-import {shoreScale,crewRadius,shoreRanges,crewSpeed,humanShore} from './shore-scale.js';
+import {shoreScale,crewRadius,shoreRanges,crewSpeed,crewEffort,humanShore} from './shore-scale.js';
 import {newHarborIntel,refreshHarborIntel,harborPlan,harborDestination,harborRoutePriority,planHarbor,validHarborIntel,knownBerth,knownBlockade,bossApproach} from './harbor-plan.js';
 import {newVoyageRecord,recordVoyage,recordHit,resourceSnapshot,resourceGains,validVoyageRecord} from './rogue-voyage-record.js';
 import {newShoreRescue,rescueStatus,rescueBerth,rescuePendingAt,orderRescue,tickRescue,boardRescue,leaveRescue,validRescue} from './shore-rescue.js';
@@ -476,7 +476,7 @@ function shore(s,input,dt){
   const p=s.person,berth=s.map.berths.find(b=>b.id===s.mooring),island=s.map.islands[berth.island];
   const old={...p},buildings=shoreBuildings(island);
   const mag=Math.hypot(input.x||0,input.y||0),fast=input.boost;
-  if(mag){p.angle=Math.atan2(input.y,input.x);const v=crewSpeed(s,fast)*crewEffects(s).speed*Math.min(1,mag)*(s.combat?.action?.kind==='melee'?(humanShore(s)?.8:.55):1);
+  if(mag){p.angle=Math.atan2(input.y,input.x);const v=crewSpeed(s,fast)*crewEffects(s).speed*crewEffort(s,mag)*(s.combat?.action?.kind==='melee'?(humanShore(s)?.8:.55):1);
     if(s.generator===1){
       p.x=clamp(p.x+input.x/mag*v*dt,island.x+12,island.x+island.w-12);
       p.y=clamp(p.y+input.y/mag*v*dt,island.y+12,island.y+island.h-12);
