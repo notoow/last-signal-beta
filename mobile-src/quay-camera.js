@@ -32,6 +32,69 @@ function fitPaintedPair(width,height,objects,occupied,desired){
   return best;
 }
 
+// Camera translations are actor top-left positions in screen space. Route
+// between clear pockets around HUD rectangles, so easing a valid start/end
+// cannot carry the controlled hull through a joystick or action button.
+export function cameraTranslationStep(from,to,actor,width,height,occupied,budget){
+  if(!(budget>0))return from;
+  let start={x:from.x+actor.x,y:from.y+actor.y};const goal={x:to.x+actor.x,y:to.y+actor.y};
+  const hud=occupied.filter(b=>b&&[b.x,b.y,b.w,b.h].every(Number.isFinite)&&b.w>0&&b.h>0),eps=1e-7;
+  // Fresh HUD/role layouts may leave a valid start with less than the preferred
+  // clearance. Do not misclassify it as blocked and cut straight through a
+  // control: retain its available gap while routing towards the padded goal.
+  let pad=10,edge=16;
+  for(const p of [start,goal]){
+    edge=Math.min(edge,p.x,p.y,width-p.x-actor.w,height-p.y-actor.h);
+    for(const b of hud)pad=Math.min(pad,Math.max(b.x-p.x-actor.w,p.x-b.x-b.w,b.y-p.y-actor.h,p.y-b.y-b.h));
+  }
+  pad=Math.max(0,pad);edge=Math.max(0,edge);
+  const right=width-edge-actor.w,bottom=height-edge-actor.h;
+  const blocks=hud.map(b=>({left:b.x-pad-actor.w,right:b.x+b.w+pad,top:b.y-pad-actor.h,bottom:b.y+b.h+pad}));
+  const clear=p=>p.x>=edge-eps&&p.x<=right+eps&&p.y>=edge-eps&&p.y<=bottom+eps&&!blocks.some(b=>p.x>b.left+eps&&p.x<b.right-eps&&p.y>b.top+eps&&p.y<b.bottom-eps);
+  const segment=(a,b)=>!blocks.some(r=>{
+    let lo=0,hi=1;
+    for(const [v,d,min,max]of [[a.x,b.x-a.x,r.left,r.right],[a.y,b.y-a.y,r.top,r.bottom]]){
+      if(Math.abs(d)<eps){if(v<=min+eps||v>=max-eps)return false;}
+      else{let t=(min-v)/d,u=(max-v)/d;if(t>u)[t,u]=[u,t];lo=Math.max(lo,t);hi=Math.min(hi,u);if(lo>=hi-eps)return false;}
+    }
+    return lo<hi-eps;
+  });
+  // A freshly measured HUD can appear over the previous frame's hull (for
+  // example, the health panel during first load). Leave that overlap by the
+  // shortest clear displacement before following the ordinary clear-space path.
+  if(!clear(start)&&clear(goal)){
+    const xs=[start.x,goal.x,edge,right],ys=[start.y,goal.y,edge,bottom];
+    for(const b of blocks){xs.push(b.left,b.right);ys.push(b.top,b.bottom);}
+    let escape=null,best=Infinity;
+    for(const x of xs)for(const y of ys){const p={x,y},d=Math.hypot(x-start.x,y-start.y);if(d<best&&clear(p)){escape=p;best=d;}}
+    if(escape){
+      if(best>budget)return {x:start.x+(escape.x-start.x)*budget/best-actor.x,y:start.y+(escape.y-start.y)*budget/best-actor.y};
+      start=escape;budget-=best;
+    }
+  }
+  let route=[goal];
+  if(clear(start)&&clear(goal)&&!segment(start,goal)){
+    const points=[start,goal];
+    for(const b of blocks)for(const x of [Math.max(edge,b.left),Math.min(right,b.right)])for(const y of [Math.max(edge,b.top),Math.min(bottom,b.bottom)]){
+      const p={x,y};if(clear(p)&&!points.some(q=>Math.abs(q.x-x)<eps&&Math.abs(q.y-y)<eps))points.push(p);
+    }
+    const cost=Array(points.length).fill(Infinity),parent=Array(points.length).fill(-1),visited=new Set();cost[0]=0;
+    while(true){
+      let next=-1;for(let i=0;i<points.length;i++)if(!visited.has(i)&&cost[i]<(next<0?Infinity:cost[next]))next=i;
+      if(next<0||next===1)break;visited.add(next);
+      for(let i=1;i<points.length;i++)if(!visited.has(i)){
+        const candidate=cost[next]+Math.hypot(points[i].x-points[next].x,points[i].y-points[next].y);
+        if(candidate<cost[i]&&segment(points[next],points[i])){cost[i]=candidate;parent[i]=next;}
+      }
+    }
+    if(parent[1]<0)return from;
+    route=[];for(let i=1;i!==0;i=parent[i])route.unshift(points[i]);
+  }
+  let position=start;
+  for(const point of route){const d=Math.hypot(point.x-position.x,point.y-position.y);if(d>budget){position={x:position.x+(point.x-position.x)*budget/d,y:position.y+(point.y-position.y)*budget/d};break;}position=point;budget-=d;}
+  return {x:position.x-actor.x,y:position.y-actor.y};
+}
+
 // An explicit docked scene uses one fixed physical lens for boat and person.
 // Landing, searching, attacks and radio messages never trigger a zoom. The
 // saved manual zoom remains the multiplier; auto-fit is not silently enabled.
@@ -62,10 +125,6 @@ export function quayCamera({width,height,focus,previous=null,options={},occupied
   const mid={x:viewport.x+viewport.w*.5,y:viewport.y+viewport.h*.58};
   const desired={x:mid.x-target.x,y:mid.y-target.y+CREW_HEIGHT*scale*.35};
   let ox=desired.x,oy=desired.y;
-  if(same&&previous.zoom===settings.zoom){
-    const blend=1-Math.exp(-9*Math.max(0,dt));
-    ox=previous.ox+(ox-previous.ox)*blend;oy=previous.oy+(oy-previous.oy)*blend;
-  }
   // Nearby attached cargo deserves space too, but must never shrink the lens
   // or displace the controlled actor. Use actual painted alpha, not its padded
   // image canvas. If the pair cannot fit, retain the controlled actor framing;
@@ -77,6 +136,15 @@ export function quayCamera({width,height,focus,previous=null,options={},occupied
   if(group!==actor&&!fits(group,viewport)){
     const pair=fitPaintedPair(width,height,[actor,companion],occupied,{x:ox,y:oy});
     if(pair){ox=pair.x;oy=pair.y;}
+  }
+  // Smooth the completed layout, not an intermediate target that the later
+  // HUD/pair clamps can overwrite. A change of clear-space pocket must not
+  // teleport the world underneath a continuously walking character.
+  if(same&&previous.scale===scale&&previous.width===width&&previous.height===height&&previous.zoom===settings.zoom){
+    const elapsed=Math.max(0,dt),blend=1-Math.exp(-9*elapsed);
+    const dx=(ox-previous.ox)*blend,dy=(oy-previous.oy)*blend,distance=Math.hypot(dx,dy),limit=base.pixelsPerMetre*30*elapsed;
+    const next=cameraTranslationStep({x:previous.ox,y:previous.oy},{x:ox,y:oy},actor,width,height,occupied,Math.min(distance,limit));
+    ox=next.x;oy=next.y;
   }
   const frame={...base,width,height,viewport,occupied,occlusionKnown:true,ox,oy,zoom:settings.zoom,overview:false,
     projectionId,worldUnitsPerMetre:M,pixelsPerMetre:scale*M};

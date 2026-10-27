@@ -1213,7 +1213,10 @@ try {
 }
 document.documentElement.dataset.mobileMoveSide = moveSide;
 window.addEventListener("lastsignal:mobile-frame", (event) => {
-  if (event.detail?.game === mode) mobileFrame = event.detail;
+  if (event.detail?.game === mode) {
+    mobileFrame = event.detail;
+    refresh();
+  }
 });
 function setMoveSide(side) {
   release();
@@ -1912,7 +1915,9 @@ new MutationObserver(() => {
 }).observe(document.body, { childList: true });
 mobileReady = true;
 watchSurfaces();
-setInterval(refresh, 100);
+setInterval(() => {
+  if (mode !== "rogue" || !playing) refresh();
+}, 100);
 refresh();
 window.addEventListener("blur", (event) => {
   if (event.target === window) release();
