@@ -276,7 +276,7 @@ export function shoreHudContext(s,language='ko'){
         search.blocked==='hit'?(en?'Taking a hit · search paused':'피격 중 · 수색 대기'):(en?'Attacking · search paused':'공격 중 · 수색 대기');tone='warning';
     }else if(search.available){
       text=cause?cause+(en?' · hold F / R again':' · F / R 다시 길게'):
-        search.choiceMode?(en?'Hold F / R · search crate':'F / R 길게 · 상자 수색'):(en?'Hold F / R · recover contents':'F / R 길게 · 물품 회수');
+        search.choiceMode?(en?'Hold F / R · open crate':'F / R 길게 · 상자 열기'):(en?'Hold F / R · recover contents':'F / R 길게 · 물품 회수');
       if(cause)tone='warning';
     }else if(cause){text=cause+(en?' · return to the crate to retry':' · 상자 가까이에서 재시도');tone='warning';}
     if(text)result.search={id:'search',text,tone,progress:search.progress,required:search.required};

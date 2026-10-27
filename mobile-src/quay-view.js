@@ -99,11 +99,11 @@ function material(s,yard){
   // Source-over layers have no animation. Composite once instead of scaling
   // five translucent yard-sized images through the land clip every frame.
   const surface=document.createElement('canvas');surface.width=paint.surface.width;surface.height=paint.surface.height;
-  const context=surface.getContext('2d');
+  const context=surface.getContext('2d',{willReadFrequently:true});
   for(const [layer,alpha]of [['surface',.96],['sheen',.55],['environment',.7],['sky',.65],['warm',.85]]){
     context.globalAlpha=alpha;context.drawImage(paint[layer],0,0);
   }
-  const result={area,surface};cache.set(yard.id,result);return result;
+  const pixels=context.getImageData(0,0,surface.width,surface.height),flat=document.createElement('canvas');flat.width=surface.width;flat.height=surface.height;flat.getContext('2d',{willReadFrequently:true}).putImageData(pixels,0,0);const result={area,surface:flat};cache.set(yard.id,result);return result;
 }
 // The GPU migration consumes the same authored textures and baked materials;
 // it must not substitute a separate, simplified set of terrain artwork.
@@ -154,31 +154,45 @@ function coping(c,f,edges){
 }
 function terrain(c,s,f,tiles){const edges=walls(c,s,f,tiles);ground(c,s,f,tiles);coping(c,f,edges);return edges;}
 function cachedTerrain(c,s,f,tiles){
-  // Only static floor/walls are cached. Fog, actors, building occlusion and
-  // water remain live. A padded raster follows camera translation cheaply;
-  // pinch reuses it briefly, then refreshes at the settled exact resolution.
-  const dpr=c.getTransform().a,now=performance.now();
-  let entry=terrainCache.get(s.map);
-  if(entry&&entry.requestScale!==f.scale){entry.requestScale=f.scale;entry.changedAt=now;}
-  const ratio=entry?f.scale/entry.scale:1;
-  const x=entry?f.ox-entry.ox*ratio:0,y=entry?f.oy-entry.oy*ratio:0;
-  const covered=entry&&x<=0&&y<=0&&x+entry.width*ratio>=f.width&&y+entry.height*ratio>=f.height;
-  if(!entry||!covered||entry.dpr!==dpr||entry.retry!==retryAttempt||ratio<.67||ratio>1.5||
-      Math.abs(ratio-1)>.001&&now-entry.changedAt>140){
-    const margin=192,width=Math.ceil(f.width+margin*2),height=Math.ceil(f.height+margin*2);
-    const canvas=document.createElement('canvas');canvas.width=Math.ceil(width*dpr);canvas.height=Math.ceil(height*dpr);
-    const ctx=canvas.getContext('2d'),view={...f,width,height,ox:f.ox+margin,oy:f.oy+margin};
-    const corners=[{x:0,y:0},{x:width,y:0},{x:width,y:height},{x:0,y:height}].map(p=>unproject(view,p));
-    const xs=corners.map(p=>p.x),ys=corners.map(p=>p.y);
-    view.bounds={x:Math.min(...xs),y:Math.min(...ys),w:Math.max(...xs)-Math.min(...xs),h:Math.max(...ys)-Math.min(...ys)};
-    ctx.setTransform(dpr,0,0,dpr,0,0);terrain(ctx,s,view,visibleTiles(s,view));
-    entry={canvas,width,height,ox:view.ox,oy:view.oy,scale:f.scale,requestScale:f.scale,changedAt:now,dpr,retry:retryAttempt};terrainCache.set(s.map,entry);
+ const dpr=c.getTransform().a,size=192,gutter=2,now=performance.now(),projection=JSON.stringify(f.projection);
+ const make=scale=>({scale,requestScale:f.scale,changedAt:now,dpr,retry:retryAttempt,projection,chunks:new Map(),pending:null});
+ let entry=terrainCache.get(s.map);
+ if(!entry||entry.dpr!==dpr||entry.retry!==retryAttempt||entry.projection!==projection){entry=make(f.scale);terrainCache.set(s.map,entry);}
+ if(entry.requestScale!==f.scale){entry.requestScale=f.scale;entry.changedAt=now;entry.pending=null;}
+ const range=e=>{const span=size*f.scale/e.scale;return {span,x0:Math.floor(-f.ox/span),x1:Math.floor((f.width-f.ox)/span),y0:Math.floor(-f.oy/span),y1:Math.floor((f.height-f.oy)/span)};};
+ const bake=(e,cx,cy)=>{
+  const width=size+gutter*2,height=width,canvas=document.createElement('canvas');
+  canvas.width=Math.ceil(width*dpr);canvas.height=Math.ceil(height*dpr);
+  const ctx=canvas.getContext('2d',{willReadFrequently:true}),view={...f,scale:e.scale,width,height,ox:-cx*size+gutter,oy:-cy*size+gutter};
+  const corners=[{x:0,y:0},{x:width,y:0},{x:width,y:height},{x:0,y:height}].map(p=>unproject(view,p));
+  const xs=corners.map(p=>p.x),ys=corners.map(p=>p.y);
+  view.bounds={x:Math.min(...xs),y:Math.min(...ys),w:Math.max(...xs)-Math.min(...xs),h:Math.max(...ys)-Math.min(...ys)};
+  ctx.setTransform(dpr,0,0,dpr,0,0);terrain(ctx,s,view,visibleTiles(s,view));ctx.getImageData(0,0,canvas.width,canvas.height);
+  e.chunks.set(cx+','+cy,canvas);
+  return canvas;
+ };
+ const trim=(e,r)=>{const limit=Math.max(48,(r.x1-r.x0+1)*(r.y1-r.y0+1)*2);while(e.chunks.size>limit)e.chunks.delete(e.chunks.keys().next().value);};
+ if(Math.abs(f.scale/entry.scale-1)>.001&&now-entry.changedAt>140){
+  entry.pending??=make(f.scale);const pending=entry.pending,r=range(pending);let created=false,complete=true;
+  for(let y=r.y0;y<=r.y1;y++)for(let x=r.x0;x<=r.x1;x++){
+   if(!pending.chunks.has(x+','+y)){if(!created){bake(pending,x,y);created=true;}else complete=false;}
   }
-  const scale=f.scale/entry.scale;
-  c.drawImage(entry.canvas,0,0,entry.canvas.width,entry.canvas.height,f.ox-entry.ox*scale,f.oy-entry.oy*scale,entry.width*scale,entry.height*scale);
-  // Metadata counts are based on the visible world, not the padded cache.
-  return tiles.reduce((count,t)=>count+[1,2,4,8].filter(bit=>t.mask&bit).length,0);
+  trim(pending,r);
+  if(complete){entry=pending;terrainCache.set(s.map,entry);}
+ }
+ const r=range(entry),factor=f.scale/entry.scale;
+ for(let cy=r.y0;cy<=r.y1;cy++)for(let cx=r.x0;cx<=r.x1;cx++){
+  const key=cx+','+cy,chunk=entry.chunks.get(key)||bake(entry,cx,cy);
+  entry.chunks.delete(key);entry.chunks.set(key,chunk);
+  const left=f.ox+cx*r.span,top=f.oy+cy*r.span;
+  const x0=Math.round(left*dpr)/dpr,y0=Math.round(top*dpr)/dpr,x1=Math.round((left+r.span)*dpr)/dpr,y1=Math.round((top+r.span)*dpr)/dpr;
+  c.save();c.beginPath();c.rect(x0,y0,x1-x0,y1-y0);c.clip();
+  c.drawImage(chunk,0,0,chunk.width,chunk.height,left-gutter*factor,top-gutter*factor,(size+gutter*2)*factor,(size+gutter*2)*factor);c.restore();
+ }
+ trim(entry,r);
+ return tiles.reduce((count,t)=>count+[1,2,4,8].filter(bit=>t.mask&bit).length,0);
 }
+
 function alphaCovers(im,bounds,foot,height){
   let mask=coverageCache.get(im);if(!mask){
     const canvas=document.createElement('canvas');canvas.width=384;canvas.height=256;const c=canvas.getContext('2d',{willReadFrequently:true});c.drawImage(im,0,0,384,256);
@@ -214,8 +228,7 @@ export function quayScenerySprites(s,f,{cull=true}={}){
   const boxes=[...s.map.islands.flatMap(shoreBuildings),...s.map.props];
   for(const b of boxes){
     if(!b.visual)continue;
-    if(s.survey&&![{x:b.x,y:b.y},{x:b.x+b.w,y:b.y+b.h},{x:b.x,y:b.y+b.h}].some(p=>
-      sceneryKnown(s,p)))continue;
+    if(s.survey&&!sceneryKnown(s,b))continue;
     const p=project(f,{x:b.x+b.w/2,y:b.y+b.h});
     const supply=b.visual==='supplies',im=supply?art.supplies:b.visual==='workshop'&&shelters.has(b)&&shelterArt&&ready(shelterArt)?shelterArt:art[b.visual];if(!im)continue;
     const scale=supply?2*unit/996:unit/98.5,rect=supply?[284,92,996,809]:[0,0,1536,1024],pivot=supply?[498,809]:[704,858];
@@ -353,7 +366,7 @@ function label(c,text,p){
 export function quayLootSprites(s,f){
   const records=[];
   for(const berth of s.map.berths){
-    if(!visibleAt(s,berth.searchPoint||berth.loot))continue;
+    if(!visibleAt(s,berth.loot))continue;
     const p=project(f,berth.loot),k=1.2*f.pixelsPerMetre/465;
     records.push({berth,p,image:chestRaster(),claimed:s.claimed.includes(berth.id),
       rect:[0,0,465,318],bounds:{x:p.x-465*k/2,y:p.y-318*k,w:465*k,h:318*k}});
@@ -386,25 +399,56 @@ export function drawQuaySearchRings(c,s,f){
     c.strokeStyle='#f3c477';c.lineWidth=1.25;c.beginPath();c.ellipse(p.x,p.y,f.pixelsPerMetre*.55,f.pixelsPerMetre*.18,.198,0,7);c.stroke();
   }
 }
+const cacheOcclusionScratch=new WeakMap();
+export function drawQuayCacheOcclusion(c,s,f){
+  if(!s.person)return 0;
+  const nearby=quayLootSprites(s,f).filter(r=>!r.claimed&&distance(s.person,r.berth.loot)<shoreRanges(s).search);
+  if(!nearby.length)return 0;
+  const scenery=quayScenerySprites(s,f);let count=0;
+  for(const r of nearby){
+    const roofs=scenery.filter(o=>!o.supply&&behind(f,r.berth.loot,o.b)&&overlap(r.bounds,o.bounds));
+    if(!roofs.length)continue;
+    let scratch=cacheOcclusionScratch.get(c);
+    if(!scratch){const tile=document.createElement('canvas'),mask=document.createElement('canvas');scratch={tile,mask,t:tile.getContext('2d'),m:mask.getContext('2d')};cacheOcclusionScratch.set(c,scratch);}
+    const {tile,mask,t,m}=scratch,pad=2,x=Math.floor(r.bounds.x)-pad,y=Math.floor(r.bounds.y)-pad,w=Math.ceil(r.bounds.w)+pad*2,h=Math.ceil(r.bounds.h)+pad*2;
+    for(const canvas of [tile,mask]){if(canvas.width!==w)canvas.width=w;if(canvas.height!==h)canvas.height=h;}
+    t.globalCompositeOperation='source-over';t.globalAlpha=1;t.clearRect(0,0,w,h);m.clearRect(0,0,w,h);
+    const sprite=(dx,dy)=>t.drawImage(r.image,...r.rect,r.bounds.x-x+dx,r.bounds.y-y+dy,r.bounds.w,r.bounds.h);
+    for(const [dx,dy]of [[-1,0],[1,0],[0,-1],[0,1]])sprite(dx,dy);
+    t.globalCompositeOperation='destination-out';sprite(0,0);t.globalCompositeOperation='source-in';t.fillStyle='#efc567';t.fillRect(0,0,w,h);
+    t.globalCompositeOperation='source-over';t.globalAlpha=.7;sprite(0,0);t.globalAlpha=1;
+    for(const o of roofs)m.drawImage(o.im,...o.rect,o.bounds.x-x,o.bounds.y-y,o.bounds.w,o.bounds.h);
+    t.globalCompositeOperation='destination-in';t.drawImage(mask,0,0);
+    c.save();c.globalAlpha=.95;c.drawImage(tile,x,y);c.restore();count++;
+  }
+  return count;
+}
 export function drawQuaySearchLabels(c,s,f,language='ko'){
-  for(const {berth,p,claimed} of quayLootSprites(s,f)){
+  drawQuayCacheOcclusion(c,s,f);
+  for(const {berth,p,claimed,bounds} of quayLootSprites(s,f)){
     if(s.person&&distance(s.person,berth.loot)<shoreRanges(s).search&&!claimed)
-      label(c,language==='en'?'Search':'수색',{x:p.x,y:p.y-Math.max(1.2*f.pixelsPerMetre,CREW_HEIGHT*humanVisualScale(s)*f.scale+8)});
+      label(c,language==='en'?'Open crate':'상자 열기',{x:p.x,y:bounds.y-6});
   }
 }
 const waterFields=new WeakMap();
 function drawWaterField(c,s,f,reduced){
- const unit=f.pixelsPerMetre,dpr=c.getTransform().a,margin=128,motion=reduced?0:s.time;
+ const unit=f.pixelsPerMetre,dpr=c.getTransform().a,margin=128,motion=reduced?0:s.time,now=performance.now();
  const x=f.ox+Math.sin(motion*.14)*unit*.055,y=f.oy+Math.sin(motion*.11)*unit*.025;
  let e=waterFields.get(c);
- if(!e||e.source!==art.water||e.unit!==unit||e.dpr!==dpr||e.width!==f.width||e.height!==f.height||Math.abs(x-e.x)>margin-2||Math.abs(y-e.y)>margin-2){
+ if(e&&e.requestUnit!==unit){e.requestUnit=unit;e.changedAt=now;}
+ const ratio=e?unit/e.unit:1;
+ const left=e?x-(e.x+margin)*ratio:0,top=e?y-(e.y+margin)*ratio:0;
+ const covered=e&&left<=0&&top<=0&&left+e.surface.width/dpr*ratio>=f.width&&top+e.surface.height/dpr*ratio>=f.height;
+ if(!e||e.source!==art.water||e.dpr!==dpr||!covered||ratio<.67||ratio>1.5||Math.abs(ratio-1)>.001&&now-e.changedAt>140){
   const surface=document.createElement('canvas');surface.width=Math.ceil((f.width+margin*2)*dpr);surface.height=Math.ceil((f.height+margin*2)*dpr);
   const p=surface.getContext('2d',{willReadFrequently:true}),pattern=p.createPattern(art.water,'repeat');
   p.setTransform(dpr,0,0,dpr,0,0);pattern.setTransform(new DOMMatrix().translate(x+margin,y+margin).scale(18*unit/art.water.width));p.fillStyle=pattern;p.fillRect(0,0,surface.width/dpr,surface.height/dpr);p.getImageData(0,0,surface.width,surface.height);
-  e={surface,source:art.water,unit,dpr,width:f.width,height:f.height,x,y};waterFields.set(c,e);
+  e={surface,source:art.water,unit,requestUnit:unit,changedAt:now,dpr,x,y};waterFields.set(c,e);
  }
- c.save();c.globalAlpha=.68;c.drawImage(e.surface,0,0,e.surface.width,e.surface.height,-margin+x-e.x,-margin+y-e.y,e.surface.width/dpr,e.surface.height/dpr);c.restore();
+ const scale=unit/e.unit;
+ c.save();c.globalAlpha=.68;c.drawImage(e.surface,0,0,e.surface.width,e.surface.height,x-(e.x+margin)*scale,y-(e.y+margin)*scale,e.surface.width/dpr*scale,e.surface.height/dpr*scale);c.restore();
 }
+
 export function drawQuay(c,s,f,{reduced=false,language='ko',task=null,search=null,cacheTerrain=true}={}){
   if(prepareQuayArt().status!=='ready'||s.map.cliffs&&!h12Ready())return {ready:false};
   const unit=f.pixelsPerMetre,tiles=visibleTiles(s,f);
@@ -451,7 +495,13 @@ export function drawQuay(c,s,f,{reduced=false,language='ko',task=null,search=nul
   return {ready:true,returnCue,boat,tow,vesselOrder:supplyBehind?['supply','captain']:['captain','supply'],actorBounds,captainOcclusion,scenery:props.filter(p=>p.box).map(p=>({box:p.box,bounds:p.bounds})),shoreEdges:edgeCount};
 }
 
-function sceneryKnown(s,p){
- const fog=fogState(s),x=Math.floor(p.x/fog.cell),y=Math.floor(p.y/fog.cell);
- return x>=0&&y>=0&&x<fog.cols&&y<fog.rows&&fog.alpha[y*fog.cols+x]<255;
+function sceneryKnown(s,box){
+ const fog=fogState(s);
+ // Solid buildings occlude their own interior. A discovered frontage anywhere
+ // along the footprint is sufficient; three hidden corners are not evidence
+ // that the entire structure is unknown. Include the adjacent face cells.
+ const x0=Math.max(0,Math.floor(box.x/fog.cell)-1),x1=Math.min(fog.cols-1,Math.floor((box.x+box.w)/fog.cell)+1);
+ const y0=Math.max(0,Math.floor(box.y/fog.cell)-1),y1=Math.min(fog.rows-1,Math.floor((box.y+box.h)/fog.cell)+1);
+ for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)if(fog.alpha[y*fog.cols+x]<255)return true;
+ return false;
 }

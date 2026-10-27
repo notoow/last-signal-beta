@@ -42,9 +42,13 @@ export function fineSight(s){
   const {cell,cols,rows}=surveyGrid(s.map),coarse=visibleSurvey(s),bits=new Uint16Array(cols*rows),radius=sightRadius(s);
   for(let y=Math.max(0,Math.floor((p.y-radius-cell)/cell));y<Math.min(rows,Math.ceil((p.y+radius+cell)/cell));y++)
     for(let x=Math.max(0,Math.floor((p.x-radius-cell)/cell));x<Math.min(cols,Math.ceil((p.x+radius+cell)/cell));x++){
-      const i=y*cols+x;if(coarse[i]){bits[i]=65535;continue;}
-      let boundary=false;
-      for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)if(x+dx>=0&&x+dx<cols&&y+dy>=0&&y+dy<rows&&coarse[(y+dy)*cols+x+dx])boundary=true;
+      const i=y*cols+x;
+      let boundary=false,interior=!!coarse[i];
+      for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+        const seen=x+dx>=0&&x+dx<cols&&y+dy>=0&&y+dy<rows&&coarse[(y+dy)*cols+x+dx];
+        if(seen)boundary=true;else interior=false;
+      }
+      if(interior){bits[i]=65535;continue;}
       if(!boundary)continue;
       for(let sy=0;sy<4;sy++)for(let sx=0;sx<4;sx++)if(visibleAt(s,{x:(x+(sx+.5)/4)*cell,y:(y+(sy+.5)/4)*cell}))bits[i]|=1<<(sy*4+sx);
     }
@@ -59,7 +63,7 @@ export function surveyedAt(s,p){
   return x>=0&&y>=0&&x<cols&&y<rows&&s.survey[y*cols+x]===1;
 }
 const reusable=(s,last,p)=>last&&last.map===s.map&&last.cliffs===s.map.cliffs&&last.survey===s.survey&&s.time-last.time>=0&&s.time-last.time<.2&&last.mode===s.mode&&Math.abs(last.radius-sightRadius(s))<1&&Math.hypot(last.x-p.x,last.y-p.y)<12;
-export const sightRadius=s=>(s.generator===12&&s.depth===0?(s.person?120:s.boss.active?760:280):(s.person?250:s.boss.active?760:520))*(s.daylight?daylight(s).sight:1);
+export const sightRadius=s=>(s.generator===12&&s.depth===0?(s.person?180:s.boss.active?760:280):(s.person?250:s.boss.active?760:520))*(s.daylight?daylight(s).sight:1);
 export function visibleAt(s,p){
   if(!s.survey)return true;
   const origin=s.person||s.boat;
@@ -96,6 +100,20 @@ export function updateSurvey(s){
   views.set(s,{map:s.map,cliffs:s.map.cliffs,survey:s.survey,x:p.x,y:p.y,mode:s.mode,time:s.time,radius:sightRadius(s),visible,mask:null});
 }
 const fogCanvases=new WeakMap();
+// Keep the interpolation band inside discovered space. Every unknown texel's
+// neighbours are opaque too, so smoothing cannot expose unseen terrain.
+export function fogRenderAlpha({cols,rows,alpha}){
+  const result=new Uint8Array(alpha.length);
+  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+    let value=0;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+      const nx=Math.max(0,Math.min(cols-1,x+dx)),ny=Math.max(0,Math.min(rows-1,y+dy));
+      value=Math.max(value,alpha[ny*cols+nx]);
+    }
+    result[y*cols+x]=value;
+  }
+  return result;
+}
 export function drawSurvey(c,s){
   if(!s.survey)return;
   const {cols,rows,cell,alpha}=fogState(s);
@@ -103,9 +121,10 @@ export function drawSurvey(c,s){
   if(!mask){
     mask=document.createElement('canvas');mask.width=cols;mask.height=rows;
     const m=mask.getContext('2d'),pixels=m.createImageData(cols,rows);
-    for(let i=0;i<alpha.length;i++)pixels.data[i*4+3]=alpha[i];
+    const shaded=fogRenderAlpha({cols,rows,alpha});
+    for(let i=0;i<alpha.length;i++){pixels.data[i*4]=7;pixels.data[i*4+1]=20;pixels.data[i*4+2]=27;pixels.data[i*4+3]=shaded[i];}
     m.putImageData(pixels,0,0);fogCanvases.set(alpha,mask);
   }
-  c.save();c.imageSmoothingEnabled=!s.map.cliffs;c.drawImage(mask,0,0,cols*cell,rows*cell);c.restore();
+  c.save();c.imageSmoothingEnabled=true;c.drawImage(mask,0,0,cols*cell,rows*cell);c.restore();
 }
 export function validSurvey(v,map){const {cols,rows}=surveyGrid(map);return v===null||Array.isArray(v)&&v.length===cols*rows&&v.every(x=>x===0||x===1);}

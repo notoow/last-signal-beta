@@ -1,14 +1,14 @@
 import {aroundCaptain} from './shore-rescue-route.js';
 import {boardingSlot,boardingTogether} from './shore-boarding.js';
 const followSlots=new WeakMap();
-import {shoreScale,crewRadius,shoreRanges} from './shore-scale.js';
+import {shoreScale,crewRadius,shoreRanges,crewSpeed,humanShore} from './shore-scale.js';
 import {walkableAt} from './rogue-map.js';
 import {toolBerth,sightLine} from './shore-encounters.js';
 import {shoreRoute,shoreWaypoint,shoreSegment} from './shore-navigation.js';
 import {visibleAt} from './rogue-vision.js';
 import {recordVoyage} from './rogue-voyage-record.js';
 
-export const rescueRanges=s=>Object.fromEntries(Object.entries(RESCUE).map(([k,v])=>[k,['order','ladder','follow','speed','notice','leash'].includes(k)?(s.generator>=4&&k==='order'?84:v)*shoreScale(s):v]));
+export const rescueRanges=s=>Object.fromEntries(Object.entries(RESCUE).map(([k,v])=>[k,k==='speed'&&humanShore(s)?crewSpeed(s,true)*1.05:['order','ladder','follow','speed','notice','leash'].includes(k)?(s.generator>=4&&k==='order'?84:v)*shoreScale(s):v]));
 export const RESCUE=Object.freeze({order:44,ladder:24,follow:40,speed:48,notice:90,leash:180,hp:24,crew:20,ammo:4});
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const active=s=>s.depth===0&&['waiting','following'].includes(s.rescue?.stage);

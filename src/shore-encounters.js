@@ -13,7 +13,8 @@ export const FAUNA={
   gull:{name:'약탈 갈매기',hp:18,speed:113,radius:9,reach:32,notice:330,windup:.7,recovery:1.8,damage:5}
 };
 const humanFauna=Object.fromEntries(Object.entries(FAUNA).map(([id,spec])=>[id,{...spec,
-  ...Object.fromEntries(['speed','radius','reach','notice'].map(k=>[k,spec[k]*HUMAN_SCALE]))}]));
+  ...Object.fromEntries(['speed','radius','reach','notice'].map(k=>[k,spec[k]*HUMAN_SCALE])),
+  notice:{rat:85,dog:135,crab:70,gull:180}[id]}]));
 export const fauna=(s,id)=>humanShore(s)?humanFauna[id]:FAUNA[id];
 export const SHORE_SITES=['폐선 수리장','연료 하역장','어시장 나루'];
 export const FLOOR_TOOLS=[
@@ -34,7 +35,7 @@ export function sightLine(map,a,b,{revealTerrainFace=false,visionOnly=false}={})
     // solids whose padded bounds cannot meet this ray. Without this broad
     // phase, surveying open sea repeats every distant building at every metre.
     const left=Math.min(a.x,b.x),right=Math.max(a.x,b.x),top=Math.min(a.y,b.y),bottom=Math.max(a.y,b.y);
-    candidates=[...(map.props||[]),...map.islands.flatMap(shoreBuildings)].filter(r=>!visionOnly||(r.blocksSight??r.visual!=='supplies')).filter(r=>{
+    candidates=[...(map.props||[]),...map.islands.flatMap(shoreBuildings)].filter(r=>!visionOnly||(r.blocksSight??!['supplies','cache'].includes(r.visual))).filter(r=>{
       const minX=r.footprint?Math.min(...r.footprint.map(p=>p.x)):r.x,maxX=r.footprint?Math.max(...r.footprint.map(p=>p.x)):r.x+r.w;
       const minY=r.footprint?Math.min(...r.footprint.map(p=>p.y)):r.y,maxY=r.footprint?Math.max(...r.footprint.map(p=>p.y)):r.y+r.h;
       return maxX+pad>=left&&minX-pad<=right&&maxY+pad>=top&&minY-pad<=bottom;
@@ -171,8 +172,8 @@ export function shoreAttack(s,kind='ranged',aim=null){
   if(kind==='melee'&&!s.person)return false;
   let angle=p.angle||0;
   if(aim&&Number.isFinite(aim.x)&&Number.isFinite(aim.y))angle=Math.atan2(aim.y-p.y,aim.x-p.x);
-  else if(kind==='ranged'){
-    const target=c.enemies.filter(e=>e.hp>0&&dist(e,p)<(s.person?210:320)*shoreScale(s)&&sightLine(s.map,p,e)).sort((a,b)=>dist(a,p)-dist(b,p))[0];
+  else {
+    const target=c.enemies.filter(e=>e.hp>0&&dist(e,p)<(kind==='melee'?54*shoreScale(s)+fauna(s,e.kind).radius:(s.person?210:320)*shoreScale(s))&&sightLine(s.map,p,e)).sort((a,b)=>dist(a,p)-dist(b,p))[0];
     if(target)angle=Math.atan2(target.y-p.y,target.x-p.x);
   }
   if(s.person)s.person.angle=angle;
@@ -278,8 +279,10 @@ export function tickEncounter(s,input,dt){
     }
     const away=dist(e,home)>560*unit||e.stolen>0||(e.kind==='gull'&&((e.stash||0)>=4||!s.person&&c.ammo===0));
     if(e.asleep){
-      const heard=s.noise?.left>0&&dist(e,s.noise)<145*unit&&sightLine(s.map,e,s.noise);
-      const close=dist(e,p)<(input.boost&&c.moving?100:42)*unit&&sightLine(s.map,e,p);
+      const heard=s.noise?.left>0&&dist(e,s.noise)<(humanShore(s)?spec.notice*1.2:145*unit)&&sightLine(s.map,e,s.noise);
+      const inRange=humanShore(s)&&dist(e,p)<spec.notice&&sightLine(s.map,e,p);
+      if(humanShore(s))e.awareness=inRange?Math.min(.3,e.awareness+dt):0;
+      const close=(humanShore(s)?e.awareness>=.3:dist(e,p)<(input.boost&&c.moving?100:42)*unit&&sightLine(s.map,e,p));
       if(!heard&&!close){e.alert=false;continue;}
       e.asleep=false;e.awareness=0;
     }

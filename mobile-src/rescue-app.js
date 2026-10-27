@@ -449,3 +449,7 @@ function customizeShip(){
  if(!menuScene.tug.complete)menuScene.tug.addEventListener('load',draw,{once:true});
  panel.querySelectorAll('[data-paint]').forEach(b=>b.addEventListener('click',()=>{campaign.paint=b.dataset.paint;save();update();}));update();bind('paintBack',cabin);
 }
+
+// Mobile task switching must stop both media decks and the Web Audio graph.
+addEventListener('pagehide',()=>sound.setFocused(false));
+addEventListener('pageshow',()=>sound.setFocused(!document.hidden&&document.hasFocus()));

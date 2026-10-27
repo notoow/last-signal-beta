@@ -83,7 +83,7 @@ function picture(id,hero=false){return rewardArt(id)?`<canvas width="512" height
 export function rewardPresentation({initial,language='ko',reduced=false,legacy=false,guard,present,onConfirm,onLeave,onContinue,onRetry,onPause}){
   initial=clone(initial);const lang=language,T=(ko,en)=>lang==='en'?en:ko,options=rewardOptions(initial,lang,legacy),common=legacy?[]:rewardCommon(initial,lang);
   const rig=legacy?null:cacheChoiceModel(initial,lang)?.rig;
-  let phase=legacy?'replace':'found',selected=options[0].id,replacing=legacy?initial.pendingGear:null,slot=undefined,receipt=null,finished=false,failed=false,details=false;
+  let phase=legacy?'replace':'choose',selected=options[0].id,replacing=legacy?initial.pendingGear:null,slot=undefined,receipt=null,finished=false,failed=false,details=false;
   const category=o=>o.type==='crew'?T('선원 장착','CREW'):o.type==='gear'?T('선박 장비','SHIP GEAR'):T('보급','SUPPLIES');
   const btn=(id,text,cls='',disabled=false)=>`<button type="button" id="${id}" class="${cls}" ${disabled?'disabled':''}>${text}</button>`;
   const stat=(o,before=o.before,after=o.after,current=false)=>`<div class="stat" data-reward-stat="${esc(o.id)}"><span class="stat-label">${esc(o.label)}</span><div>${o.id==='supplies'?`<strong>+${esc(fmt(after))}</strong>`:current?`<small>${T('현재','Now')}</small><strong>${o.prefix||''}${esc(fmt(before))}<i>${esc(o.unit)}</i></strong>`:`<span class="before">${o.prefix||''}${esc(fmt(before))}${esc(o.unit)}</span><span class="arrow" aria-hidden="true">→</span><strong>${o.prefix||''}${esc(fmt(after))}<i>${esc(o.unit)}</i></strong>`}</div></div>`;

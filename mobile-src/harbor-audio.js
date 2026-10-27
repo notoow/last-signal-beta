@@ -49,7 +49,7 @@ export class HarborAudio {
  }
  unlock(){
   if(!this.ctx){try{this.attach(new AudioContext());this.ready=this.load();}catch{return false;}}
-  if(this.ctx.state==='suspended'&&!this.ctx.startRendering)this.ctx.resume().catch(()=>{});
+  if(this.focused&&this.ctx.state==='suspended'&&!this.ctx.startRendering)this.ctx.resume().catch(()=>{});
   return true;
  }
  async load(){
@@ -66,7 +66,17 @@ export class HarborAudio {
   this.score?.setEnabled(this.focused&&this.masterLevel>0&&this.ambience>0);
  }
  setMusic(id){if(!id)return;this.scoreId=id;this.score?.select(id);}
- setFocused(focused){this.focused=!!focused;if(this.ctx)this.ramp(this.output.gain,this.focused?this.masterLevel:0,.03);this.score?.setEnabled(this.focused&&this.masterLevel>0&&this.ambience>0);}
+ setFocused(focused){
+  this.focused=!!focused;
+  this.score?.setEnabled(this.focused&&this.masterLevel>0&&this.ambience>0);
+  if(this.ctx){
+   this.ramp(this.output.gain,this.focused?this.masterLevel:0,.03);
+   if(!this.ctx.startRendering){
+    if(!this.focused)this.ctx.suspend().catch(()=>{});
+    else if(this.ctx.state==='suspended')this.ctx.resume().catch(()=>{});
+   }
+  }
+ }
  startHarbor(){
   const c=this.ctx,buffer=c.createBuffer(1,c.sampleRate*4,c.sampleRate),data=buffer.getChannelData(0);let previous=0;
   for(let i=0;i<data.length;i++){previous=(previous+(this.random()*2-1)*.022)/1.025;data[i]=previous*2.3*Math.min(1,i/(c.sampleRate*.04),(data.length-1-i)/(c.sampleRate*.04));}

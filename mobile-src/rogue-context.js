@@ -89,7 +89,7 @@ export function rogueContextActions(s){
     const b=s.map.berths.find(b=>b.id===s.mooring),search=shoreSearchStatus(s),rescue=rescueStatus(s),scrap=gullRecovery(s);
     if(scrap)result.primary=action('scrap','KeyF','고철 회수','Recover scrap',scrap.available);
     else if(search?.berth){
-      result.primary=action('search','KeyF',search.choiceMode?'수색':'보급 회수',search.choiceMode?'Search':'Supplies',!['choice','hit'].includes(search.blocked),true,search.progress/search.required);
+      result.primary=action('search','KeyF',search.choiceMode?'상자 열기':'보급 회수',search.choiceMode?'Open crate':'Supplies',!['choice','hit'].includes(search.blocked),true,search.progress/search.required);
       if(!search.choiceMode)result.secondary.push(action('equipment','KeyR','장비 회수','Equipment',result.primary.enabled,true,result.primary.progress));
     }
     if(b&&distance(s.person,b.landing)<shoreRanges(s).boarding){
