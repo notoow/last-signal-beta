@@ -90,11 +90,11 @@ export class ShoreGpuScene{
   }
   // Small premultiplied RGBA masks (fog/discovery), not framebuffer readbacks. Keep a CPU
   // copy so a restored GPU receives the current explored state, not old pixels.
-  pixels(id,width,height,rgba){
+  pixels(id,width,height,rgba,{nearest=true}={}){
     this.assertLive();
     if(!Number.isInteger(width)||!Number.isInteger(height)||width<1||height<1||rgba.length!==width*height*4)throw Error('Invalid shore mask');
     this.releaseTexture(id);
-    this.textures.set(id,{width,height,rgba:new Uint8Array(rgba),nearest:true,handle:null,patches:[]});
+    this.textures.set(id,{width,height,rgba:new Uint8Array(rgba),nearest,handle:null,patches:[]});
   }
   patchPixels(id,x,y,width,height,rgba){
     this.assertLive();const texture=this.textures.get(id);
@@ -150,7 +150,10 @@ export class ShoreGpuScene{
         const wrap=texture.repeat?g.REPEAT:g.CLAMP_TO_EDGE;
         g.texParameteri(g.TEXTURE_2D,g.TEXTURE_WRAP_S,wrap);g.texParameteri(g.TEXTURE_2D,g.TEXTURE_WRAP_T,wrap);
         if(texture.rgba){
-          g.texImage2D(g.TEXTURE_2D,0,g.RGBA,texture.width,texture.height,0,g.RGBA,g.UNSIGNED_BYTE,texture.rgba);texture.patches.length=0;
+          // pixels()/patchPixels() already contain premultiplied bytes.
+          g.pixelStorei(g.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);
+          g.texImage2D(g.TEXTURE_2D,0,g.RGBA,texture.width,texture.height,0,g.RGBA,g.UNSIGNED_BYTE,texture.rgba);
+          g.pixelStorei(g.UNPACK_PREMULTIPLY_ALPHA_WEBGL,true);texture.patches.length=0;
         }else g.texImage2D(g.TEXTURE_2D,0,g.RGBA,g.RGBA,g.UNSIGNED_BYTE,texture.uploadSource);
         const width=texture.uploadSource?.naturalWidth||texture.uploadSource?.width,height=texture.uploadSource?.naturalHeight||texture.uploadSource?.height;
         const powerOfTwo=n=>n>0&&(n&(n-1))===0;
@@ -163,9 +166,13 @@ export class ShoreGpuScene{
         }
         this.stats.textureUploads++;
       }else g.bindTexture(g.TEXTURE_2D,texture.handle);
-      for(const patch of texture.patches||[]){
-        g.texSubImage2D(g.TEXTURE_2D,0,patch.x,patch.y,patch.width,patch.height,g.RGBA,g.UNSIGNED_BYTE,patch.rgba);this.stats.texturePatches++;
+      const patches=texture.patches||[];
+      if(patches.length)g.pixelStorei(g.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);
+      for(const patch of patches){
+        g.texSubImage2D(g.TEXTURE_2D,0,patch.x,patch.y,patch.width,patch.height,g.RGBA,g.UNSIGNED_BYTE,patch.rgba);
+        this.stats.texturePatches++;
       }
+      if(patches.length)g.pixelStorei(g.UNPACK_PREMULTIPLY_ALPHA_WEBGL,true);
       if(texture.patches)texture.patches.length=0;
 
     return true;

@@ -1,6 +1,6 @@
 let saved={};
 try{saved=JSON.parse(localStorage.getItem('lastsignal.rogue.v1')||'{}')||{};}catch{}
-const context={version:'0.97.0',viewport:`${innerWidth}x${innerHeight}`,browser:navigator.userAgent};
+const context={version:'0.97.1',viewport:`${innerWidth}x${innerHeight}`,browser:navigator.userAgent};
 for(const key of ['seed','captain','build','depth','status'])
   if(['number','string'].includes(typeof saved[key]))context[key]=String(saved[key]).slice(0,150);
 const modes={sailing:'항해 / Sailing',moored:'접안 / Moored',ashore:'상륙 / Ashore'};
