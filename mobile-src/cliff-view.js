@@ -4,6 +4,8 @@ import {rasterCliff} from './cliff-raster-cache.js';
 const H=12,T=40,TARGET=975,PERIOD=19.2;
 const top=new Image(),face=new Image(),variations=[];top.src='assets/art/cliff-top-v1.png';face.src='assets/art/cliff-face-v1.png';
 const ready=im=>im.complete&&im.naturalWidth>0;
+let retryAttempt=0;
+export function retryCliffArt(){retryAttempt++;for(const image of [top,face,...variations])if(!ready(image)){const url=new URL(image.src,document.baseURI);url.searchParams.set('retry',retryAttempt);image.src=url.href;}}
 export const h12Ready=()=>ready(top)&&ready(face)&&variations.every(ready);
 export const isCliff=(s,t)=>s.map.cliffs?.[t.ty*s.map.cols+t.tx]===1;
 const views=new WeakMap(),lastIdentity=new WeakMap();export let h12Diagnostics=null;

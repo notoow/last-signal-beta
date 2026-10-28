@@ -1,3 +1,7 @@
+import {needsHarborEntry,harborEntryStatus} from './harbor-entry.js';
+import {mountHarborReadiness} from './harbor-readiness-ui.js';
+import {prepareQuayArt,retryQuayArt} from './quay-view.js';
+import {retryCliffArt} from './cliff-view.js';
 import {voyageEnding} from './rogue-ending.js';
 import {VoyageScore} from './soundtrack.js';
 import {frameSampler} from './frame-performance.js';
@@ -64,6 +68,20 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   function runAction(action,aim){const used=interact(state,action,aim);syncInputMode();return used;}
   function releaseControls(){clearRigAction(state);keys.clear();steering.clear();window.dispatchEvent(new CustomEvent('lastsignal:input-reset',{detail:{game:'rogue'}}));}
   let preparationReturn=null,resultView=null;
+  let harborEntry=null;const readyHarbors=new WeakSet();
+  function cancelHarborEntry(){const entry=harborEntry;harborEntry=null;entry?.ui.dispose();}
+  function beginHarborEntry(){
+    if(harborEntry)return;
+    paused=true;releaseControls();mapOpen=false;resultView=null;
+    const entry={owner:state,view:structuredClone(state),started:performance.now(),phase:null,ui:null};
+    harborEntry=entry;root.dataset.surface="harbor-ready";
+    entry.ui=mountHarborReadiness($("rogueModal"),{language,reduced,canFallback:false,signal:controller.signal,onAction:action=>{
+      if(harborEntry!==entry||closed)return false;
+      if(action==="back"){close();return !root.isConnected;}
+      if(action==="retry"){retryQuayArt();retryCliffArt();entry.started=performance.now();entry.phase="loading";entry.ui.update({phase:"loading",busy:null});return true;}
+      return false;
+    }});
+  }
   let lastMobileFrame=-Infinity,lastMobileMode=null,lastMobileEncounter=null;
   let quayRetryPending=false,quayAssetSignature='',quayAssetLayout='';
   let camera=cameraSettings(null);
@@ -137,12 +155,12 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     const workshopError=$('rogueWorkshopSaveError');if(workshopError){workshopError.hidden=!saveError;workshopError.textContent=saveError?ui.saveFailed:'';}
     const cacheError=$('rogueCacheSaveError');if(cacheError){cacheError.hidden=!saveError;cacheError.textContent=saveError?ui.saveFailed:'';}}
   function modalSurface(surface,markup){
-    releaseModal($('rogueModal'));root.dataset.surface=surface;
+    cancelHarborEntry();releaseModal($('rogueModal'));root.dataset.surface=surface;
     $('rogueModal').className='rogue-modal'+(['pause','result'].includes(surface)?' session-scrim':'');
     $('rogueModal').hidden=false;$('rogueModal').innerHTML=markup;
     activateModal($('rogueModal'),surface==='pause'?'#rogueContinue':surface==='result'?'#rogueNew':undefined);
   }
-  function close(){if(rewardView?.finished&&saveError){showReward();return;}if(!save())return;releaseControls();releaseModal($('rogueModal'));closed=true;controller.abort();cancelAnimationFrame(frameId);root.remove();if(document.documentElement.dataset.mobileUi==='true')window.dispatchEvent(new CustomEvent('lastsignal:mobile-frame',{detail:null}));onClose();}
+  function close(){if(rewardView?.finished&&saveError){showReward();return;}if(!save())return;cancelHarborEntry();releaseControls();releaseModal($('rogueModal'));closed=true;controller.abort();cancelAnimationFrame(frameId);root.remove();if(document.documentElement.dataset.mobileUi==='true')window.dispatchEvent(new CustomEvent('lastsignal:mobile-frame',{detail:null}));onClose();}
   function launchIntro(){
     let seen=false;try{seen=localStorage.getItem('lastsignal.mobile.intro.v1')==='seen';}catch{}
     if(document.documentElement.dataset.mobileUi!=='true'||seen){play();return;}
@@ -151,6 +169,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     bind('rogueIntroSail',sail);bind('rogueIntroSkip',sail);activateModal($('rogueModal'),'#rogueIntroSail');
   }
   function loadout({sameMap=false}={}){
+    prepareQuayArt();
     rewardView=null;rewardToken=null;
     preparationReturn=state&&state.status!=='playing'?state:null;
     const retrySeed=sameMap?preparationReturn?.seed:null;
@@ -307,7 +326,8 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   function play(){if(root.dataset.surface==='salvage'&&saveError&&!state?.salvage?.pending&&!save())return;
     if(rewardView?.finished){showReward();return;}
     if(state?.pendingGear){gearChoice();return;}if(state?.pendingCache){cacheChoice();return;}if(state?.salvage?.pending){salvageChoice();return;}
-    resultView=null;paused=false;releaseControls();root.dataset.surface='playing';releaseModal($('rogueModal'));$('rogueModal').hidden=true;
+    if(needsHarborEntry(state)&&!readyHarbors.has(state.map)){beginHarborEntry();return;}
+    cancelHarborEntry();resultView=null;paused=false;releaseControls();root.dataset.surface='playing';releaseModal($('rogueModal'));$('rogueModal').hidden=true;
     $('rogueSea').focus({preventScroll:true});probe.invalidate();last=performance.now();}
   const direction=()=>{
     const input=steering.read();
@@ -407,6 +427,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     if(!down){keys.delete(e.code);return;}
     if(e.target.closest?.('[data-supply-action]')&&['Tab','Enter','NumpadEnter','Space'].includes(e.code))return;
     if(e.code==='Escape'&&!e.repeat&&root.dataset.surface==='preparation'&&preparationReturn){e.preventDefault();end();return;}
+    if(root.dataset.surface==='harbor-ready'){if(e.code==='Escape'&&!e.repeat){e.preventDefault();harborEntry?.ui.request('back');}return;}
     if(['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName))return;
     if(root.dataset.surface==='chart'&&['Escape','KeyM'].includes(e.code)){
       e.preventDefault();if(!e.repeat)play();return;
@@ -447,6 +468,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     const shoreProfile=state?.generator>=4&&['moored','ashore'].includes(state.mode)?'metre':'';
     if(root.dataset.shoreProfile!==shoreProfile){root.dataset.shoreProfile=shoreProfile;probe.invalidate();}
     syncInputMode();
+    if(!paused&&needsHarborEntry(state)&&!readyHarbors.has(state.map))play();
     if(state){
       if(!paused){
         const before=state.combat?{...state.combat}:null;
@@ -515,8 +537,14 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
         });
       }else{
         const sluiceHud=!paused&&!mapOpen&&hud.sluice&&document.documentElement.dataset.mobileUi==='true'?{bounds:sluiceLabelProbe.read(now)}:null;
-        const view=drawRogue($('rogueSea'),resultView||state,{reduced,mapOpen,camera,occupied:hudRects,language,sluiceHud,supplyGuidanceActive:!paused&&!mapOpen&&!document.hidden&&root.dataset.surface==='playing',signal:controller.signal});
+        const view=drawRogue($('rogueSea'),harborEntry?.view||resultView||state,{reduced,mapOpen,camera,occupied:hudRects,language,sluiceHud,supplyGuidanceActive:!paused&&!mapOpen&&!document.hidden&&root.dataset.surface==='playing',signal:controller.signal});
         refreshQuayAssets(view);
+        const entry=harborEntry;
+        if(entry&&entry.owner===state&&root.dataset.surface==='harbor-ready'){
+          const elapsed=now-entry.started,status=harborEntryStatus({state,renderedState:entry.owner,frame:view,elapsed,hidden:document.hidden});
+          if(status.canReveal){readyHarbors.add(state.map);play();}
+          else{const phase=status.status==='error'?'error':elapsed>=4000?'delayed':'loading';if(entry.phase!==phase){entry.phase=phase;entry.ui.update({phase,busy:null});}}
+        }
       }
       if(pendingMinimap&&!paused)drawNavigationMap($('rogueMinimap'),{...pendingMinimap,viewport:navigationViewport(lastRogueCamera($('rogueSea')))});
 
