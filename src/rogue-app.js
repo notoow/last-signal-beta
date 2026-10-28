@@ -23,7 +23,7 @@ import {rogueHudModel,rogueHudMarkup,rogueDetailsMarkup,rogueHudText} from './ro
 import {impactSequence,recentImpact} from './rogue-impact.js';
 import {rigActionSequence,rigActionCue,clearRigAction} from './rig-feedback.js';
 import {sluiceImpactSequence,sluiceImpactCue} from './sluice-counterplay.js';
-import {rogueContextActions,rogueMinimap} from './rogue-context.js';
+import {rogueContextActions,rogueMinimap,rogueEncounterRevision} from './rogue-context.js';
 const esc=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function hasRogueSave(){try{return !!restoreRun(localStorage.getItem(SAVE_KEY));}catch{return false;}}
 export function openRogue({resume=false,language='ko',paint='harbor',reduced=false,onClose=()=>{},onPaint=()=>{},onSound=()=>{},onMusic=()=>{},audioSettings=()=>({master:1,volume:.38,music:.22}),onAudioChange=()=>true}={}){
@@ -61,7 +61,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   const steering=steeringInput(keys,{target:window,game:'rogue',active:()=>!paused&&!mapOpen&&!closed,signal:controller.signal});
   function releaseControls(){clearRigAction(state);keys.clear();steering.clear();window.dispatchEvent(new CustomEvent('lastsignal:input-reset',{detail:{game:'rogue'}}));}
   let preparationReturn=null,resultView=null;
-  let lastMobileFrame=-Infinity,lastMobileMode=null;
+  let lastMobileFrame=-Infinity,lastMobileMode=null,lastMobileEncounter=null;
   let quayRetryPending=false,quayAssetSignature='',quayAssetLayout='';
   let camera=cameraSettings(null);
   try{camera=cameraSettings(JSON.parse(localStorage.getItem(CAMERA_KEY)));}catch{}
@@ -490,8 +490,9 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
       setHud('rogueControls',markup.controls);
       refreshQuayAssets(lastRogueCamera($('rogueSea')));
       let pendingMinimap=null;
-      if(now-lastMobileFrame>=100||lastMobileMode!==state.mode){
-        lastMobileFrame=now;lastMobileMode=state.mode;
+      const encounterRevision=rogueEncounterRevision(state);
+      if(now-lastMobileFrame>=100||lastMobileMode!==state.mode||lastMobileEncounter!==encounterRevision){
+        lastMobileFrame=now;lastMobileMode=state.mode;lastMobileEncounter=encounterRevision;
         const minimap={...rogueMinimap(state),viewport:navigationViewport(lastRogueCamera($('rogueSea')))};
         if(document.documentElement.dataset.mobileUi==='true')
           window.dispatchEvent(new CustomEvent('lastsignal:mobile-frame',{detail:{game:'rogue',mode:state.mode,mapOpen,active:!paused,sluice:!paused&&!mapOpen?hud.sluice:null,context:rogueContextActions(state),rigAction:hud.rigAction,rigControl:hud.rigControl,captain:{id:state.captain,code:'KeyG',...hud.skill},minimap}}));

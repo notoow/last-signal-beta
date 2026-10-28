@@ -9,6 +9,13 @@ import {usesLighthouse} from './lighthouse-counterplay.js';
 import {harborDestination,rigRecoveryBerth,knownBerth} from './harbor-plan.js';
 import {gullRecovery,gullHornStatus} from './shore-encounters.js';
 import {towBow,canDeliverRogueTow} from './rogue-tow.js';
+// Semantic encounter transitions need the same rendered frame as world cues.
+// Continuous HP, tension and timer values retain the normal HUD cadence.
+export function rogueEncounterRevision(s){
+  const b=s?.boss;if(!b?.active)return '';
+  return [s.mode,b.phase,b.hook,b.cleared,bossLinkCandidate(s),
+    !!b.crane?.locked,!!b.crane?.impact].join('|');
+}
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const action=(id,code,labelKo,labelEn,enabled=true,hold=false,progress=0)=>({id,code,labelKo,labelEn,enabled,hold,progress});
 // Dedicated slots: connection on the left, anchor on the right. Never displace
