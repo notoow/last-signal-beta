@@ -59,6 +59,8 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   },options);
   let inputMode=null;
   const steering=steeringInput(keys,{target:window,game:'rogue',active:()=>!paused&&!mapOpen&&!closed,signal:controller.signal});
+  function syncInputMode(){if(state&&inputMode!==state.mode){if(inputMode!==null)releaseControls();inputMode=state.mode;}}
+  function runAction(action,aim){const used=interact(state,action,aim);syncInputMode();return used;}
   function releaseControls(){clearRigAction(state);keys.clear();steering.clear();window.dispatchEvent(new CustomEvent('lastsignal:input-reset',{detail:{game:'rogue'}}));}
   let preparationReturn=null,resultView=null;
   let lastMobileFrame=-Infinity,lastMobileMode=null,lastMobileEncounter=null;
@@ -316,7 +318,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     if(paused||!state||mapOpen||e.button!==0||e.pointerType==='touch')return;
     const rect=$('rogueSea').getBoundingClientRect(),view=lastRogueCamera($('rogueSea'));
     if(!view)return;
-    if(interact(state,'ranged',{aim:unproject(view,{x:e.clientX-rect.left,y:e.clientY-rect.top})}))onSound('anchor');
+    if(runAction('ranged',{aim:unproject(view,{x:e.clientX-rect.left,y:e.clientY-rect.top})}))onSound('anchor');
   },options);
   $('rogueSea').addEventListener('wheel',e=>{
     if(paused||mapOpen)return;e.preventDefault();changeZoom(camera.zoom*Math.exp(-e.deltaY*.001));
@@ -343,7 +345,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     if(pinch&&pinch.gap>0&&!paused&&!mapOpen)changeZoom(pinch.zoom*touchGap()/pinch.gap);
   },options);
   for(const event of ['pointerup','pointercancel','lostpointercapture'])$('rogueSea').addEventListener(event,e=>{touches.delete(e.pointerId);pinch=null;},options);
-  bind('rogueSkill',()=>{if(!paused&&state){interact(state,'captain',direction());save();}});
+  bind('rogueSkill',()=>{if(!paused&&state){runAction('captain',direction());save();}});
   bind('roguePause',pause);
   bind('rogueChart',()=>{if(state?.harborIntel)harborChart();else if(!paused){mapOpen=!mapOpen;releaseControls();}});
   function pause(){
@@ -416,10 +418,11 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     // cannot restart searching, walking or attacking; require a fresh press.
     if(e.repeat&&!keys.has(e.code)){e.preventDefault();return;}
     if(['Space','Enter','NumpadEnter','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Tab'].includes(e.code))e.preventDefault();
+    syncInputMode();
     keys.add(e.code);
     if(!e.repeat){
       const action={KeyE:'interact',KeyQ:'horn',KeyL:'rest',KeyF:'recoverScrap',KeyB:'special',KeyX:'cutnet',KeyG:'captain',KeyT:'tow',KeyH:'cargoAnchor',KeyV:'ranged',...(state.person?{Space:'melee'}:{})}[e.code];
-      if(action){const before=rigActionSequence(state);const used=interact(state,action,direction());if(used&&action==='recoverScrap')keys.delete(e.code);if(used&&(action==='ranged'||action==='melee'))onSound('anchor');const cue=rigActionCue(state,before);if(cue)onSound(cue);save();}
+      if(action){const before=rigActionSequence(state);const used=runAction(action,direction());if(used&&action==='recoverScrap')keys.delete(e.code);if(used&&(action==='ranged'||action==='melee'))onSound('anchor');const cue=rigActionCue(state,before);if(cue)onSound(cue);save();}
       if(e.code==='KeyM'){e.preventDefault();if(state.harborIntel)harborChart();else{mapOpen=!mapOpen;releaseControls();}}
       if(!mapOpen&&['Equal','NumpadAdd','Minus','NumpadSubtract'].includes(e.code))changeZoom(camera.zoom*(['Equal','NumpadAdd'].includes(e.code)?1.1:1/1.1));
     }
@@ -428,7 +431,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     const button=e.target.closest('[data-supply-action]');
     if(!button||paused||mapOpen)return;
     const a=rogueContextActions(state).supply?.actions.find(a=>a.id===button.dataset.supplyAction);
-    if(a?.enabled){interact(state,a.id,direction());save();}
+    if(a?.enabled){runAction(a.id,direction());save();}
   },options);
   window.addEventListener('keydown',e=>key(e,true),{...options,capture:true});
   window.addEventListener('keyup',e=>key(e,false),{...options,capture:true});
@@ -442,7 +445,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
       active:!!state&&state.status==='playing'&&!paused&&!mapOpen&&!document.hidden&&root.dataset.surface==='playing'});
     const shoreProfile=state?.generator>=4&&['moored','ashore'].includes(state.mode)?'metre':'';
     if(root.dataset.shoreProfile!==shoreProfile){root.dataset.shoreProfile=shoreProfile;probe.invalidate();}
-    if(state&&inputMode!==state.mode){if(inputMode!==null)releaseControls();inputMode=state.mode;}
+    syncInputMode();
     if(state){
       root.dataset.mobileMode=state.mode;
       root.dataset.mobileMap=String(mapOpen);
