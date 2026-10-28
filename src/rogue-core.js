@@ -15,7 +15,7 @@ import {newSalvage,recoverSalvage,tickSalvage,clearSalvageCharge,catchWinch,disc
 import {SLUICE_MODEL,SLUICE,usesSluice,newSluice,beginSluice,trackSluice,sluiceGate,sluiceCleat,applySluiceFlow,sluiceBlocked,sluiceContact,sluiceStatus,validSluice} from './sluice-counterplay.js';
 import {LIGHTHOUSE_MODEL,LIGHTHOUSE,usesLighthouse,newLighthouse,relayPosition,relayApproach,lighthouseStatus,tickLighthouse,lighthouseBlocked,validLighthouse} from './lighthouse-counterplay.js';
 import {CACHE_MODEL,cacheOffer,validCache} from './rogue-cache.js';
-import {CREW_UPGRADES,crewEffects,validCrewUpgrades} from './crew-upgrades.js';
+import {CREW_MODEL,CREW_UPGRADES,crewEffects,validCrewUpgrades} from './crew-upgrades.js';
 import {shoreScale,crewRadius,shoreRanges,crewSpeed,crewEffort,humanShore} from './shore-scale.js';
 import {newHarborIntel,refreshHarborIntel,harborPlan,harborDestination,harborRoutePriority,planHarbor,validHarborIntel,knownBerth,knownBlockade,bossApproach} from './harbor-plan.js';
 import {newVoyageRecord,recordVoyage,recordHit,resourceSnapshot,resourceGains,validVoyageRecord} from './rogue-voyage-record.js';
@@ -23,7 +23,7 @@ import {newShoreRescue,rescueStatus,rescueBerth,rescuePendingAt,orderRescue,tick
 import {publishRigAction} from './rig-feedback.js';
 import {newDaylight,startCamp,tickDaylight,validDaylight} from './voyage-daylight.js';
 export {planHarbor};
-export const RUN_VERSION=19;
+export const RUN_VERSION=20;
 export const SUPPLY_MODEL='carried-v1';
 export {CAPTAINS};
 export const BUILDS={standard:'표준선',bilge:'침수 발전선',winch:'축력 윈치선'};
@@ -89,7 +89,7 @@ export function createRun(seed,captain='woo',build='standard',paint='harbor',gen
   if(!Object.hasOwn(CAPTAINS,captain)||!Object.hasOwn(BUILDS,build)||!['harbor','ochre','red'].includes(paint))throw Error('Unknown loadout');
   const s={version:RUN_VERSION,physicsProfile:WATER_PROFILE,bossModel:DREDGER_MODEL,sluiceModel:SLUICE_MODEL,lighthouseModel:LIGHTHOUSE_MODEL,supplyModel:SUPPLY_MODEL,cacheModel:CACHE_MODEL,rigModel:RIG_MODEL,generator,seed,depth:0,captain,build,paint,
     status:'playing',time:0,daylight:newDaylight(),fuel:140,hp:CAPTAINS[captain].hp,boost:CAPTAINS[captain].boost,
-    flood:0,valve:false,charge:0,crewHp:100,crewUpgrades:[],equipment:[],pendingGear:null,salvage:newSalvage(),harborIntel:newHarborIntel(),voyageRecord:newVoyageRecord(),log:[],radio:null,reason:'',debris:false,netChoices:[],skill:newSkillState(),tools:[],combat:undefined};
+    flood:0,valve:false,charge:0,crewHp:100,crewModel:CREW_MODEL,crewUpgrades:[],equipment:[],pendingGear:null,salvage:newSalvage(),harborIntel:newHarborIntel(),voyageRecord:newVoyageRecord(),log:[],radio:null,reason:'',debris:false,netChoices:[],skill:newSkillState(),tools:[],combat:undefined};
   floor(s);return s;
 }
 export function hullPoints(b){
@@ -433,7 +433,7 @@ export function cacheSupplyPreview(s){
 export function cacheSelectionToken(s){
   if(!s.pendingCache||!validCache(s))return null;
   const offer=cacheOffer(s);
-  return JSON.stringify([s.seed,s.depth,offer.berth,offer.gear,offer.crew,
+  return JSON.stringify([s.seed,s.depth,offer.berth,offer.gear,offer.crews,
     s.equipment,s.crewUpgrades,s.hp,s.fuel,s.flood,s.combat.ammo,s.tools,s.salvage?.rank]);
 }
 // Full-hold previews choose a slot before claiming anything. Validate every
@@ -452,7 +452,7 @@ export function resolveCache(s,choice){
   if(!s.pendingCache||!validCache(s))return false;
   if(choice==='leave'){s.pendingCache=null;s.work=0;return true;}
   const offer=cacheOffer(s);
-  const crew=offer.crew&&choice==='crew:'+offer.crew?offer.crew:null;
+  const crew=offer.crews.find(id=>choice==='crew:'+id)||null;
   if(!crew&&choice!=='supplies'&&!offer.gear.includes(choice))return false;
   const berth=s.map.berths.find(b=>b.id===offer.berth);
   s.pendingCache=null;
@@ -754,7 +754,9 @@ export function restoreRun(raw){
   try{
     if(typeof raw!=='string'||raw.length>160000)return null;
     const s=JSON.parse(raw),finite=(v,min,max)=>Number.isFinite(v)&&v>=min&&v<=max;
-    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,RUN_VERSION].includes(s.version)||![1,2,3,4,5,6,7,8,9,10,11,12].includes(s.generator)||!Number.isInteger(s.seed)||!finite(s.seed,0,0xffffffff)||!Number.isInteger(s.depth)||!finite(s.depth,0,2))return null;
+    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,RUN_VERSION].includes(s.version)||![1,2,3,4,5,6,7,8,9,10,11,12].includes(s.generator)||!Number.isInteger(s.seed)||!finite(s.seed,0,0xffffffff)||!Number.isInteger(s.depth)||!finite(s.depth,0,2))return null;
+    if(s.version<20)s.crewModel='legacy';
+    if(!['legacy',CREW_MODEL].includes(s.crewModel))return null;
     if(s.version<18){s.daylight=newDaylight();if(s.combat?.enemies)for(const e of s.combat.enemies)e.stash=0;}
     if(!validDaylight(s))return null;
     if(s.version<17)s.crewUpgrades=null;

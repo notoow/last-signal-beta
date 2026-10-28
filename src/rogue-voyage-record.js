@@ -46,7 +46,7 @@ export function validVoyageRecord(s){
   if(r.events.some(e=>{
     switch(e.kind){
       case 'cache':return !int(e.site,0,2)||!(e.gear===null||gear(e.gear))||typeof e.pending!=='boolean'||
-        (e.pending&&e.gear===null)||(e.crew!=null&&!['grip','stride','guard'].includes(e.crew))||![null,'ratchet','baffle','shutter'].includes(e.tool)||!gains(e);
+        (e.pending&&e.gear===null)||(e.crew!=null&&!['grip','stride','guard',...(s.crewModel==='disciplines-v1'?['shot']:[])].includes(e.crew))||![null,'ratchet','baffle','shutter'].includes(e.tool)||!gains(e);
       case 'gear':return !gear(e.gear)||!(e.removed===null||gear(e.removed))||
         !(e.slot===null?e.removed===null:int(e.slot,0,5)&&e.removed!==null)||!num(e.fuel,0,15);
       case 'workshop':return e.depth!==0||!['rig','repair','fuel'].includes(e.choice)||!gains(e);

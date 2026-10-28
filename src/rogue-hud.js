@@ -709,7 +709,7 @@ export function rogueDetailsMarkup(s,language='ko'){
     [en?'Between regions':'해역 이동',s.supplyModel==='legacy'?(en?'Fuel +30, up to tank capacity':'연료 +30 · 탱크 최대치까지'):(en?'Remaining fuel carries over · no automatic refuel':'남은 연료 이월 · 자동 보충 없음')],
     [en?'Crew / scrap':'선원 / 고철',`${Math.ceil(s.crewHp)}/100 · ${s.combat?.ammo??0}/12`],
     [en?'Equipment':'장비',s.equipment.map(id=>tr(GEAR[id])).join(' · ')||(en?'None':'없음')],
-    [en?'Crew equipment · this voyage':'선원 장비 · 이번 항해',[...new Set(s.crewUpgrades||[])].map(id=>(en?{grip:'Iron grip',stride:'Deck footwork',guard:'Padded vest'}:{grip:'강철 손아귀',stride:'갑판 발놀림',guard:'충격 안감'})[id]+' '+s.crewUpgrades.filter(x=>x===id).length).join(' · ')||(en?'None':'없음')],
+    [en?'Crew equipment · this voyage':'선원 장비 · 이번 항해',[...new Set(s.crewUpgrades||[])].map(id=>(en?{grip:'Iron grip',shot:'Scrap bandolier',stride:'Deck footwork',guard:'Padded vest'}:{grip:'강철 손아귀',shot:'고철 탄띠',stride:'갑판 발놀림',guard:'충격 안감'})[id]+' '+s.crewUpgrades.filter(x=>x===id).length).join(' · ')||(en?'None':'없음')],
     [en?'Recovered tools':'회수 도구',s.tools.map(id=>tr(FLOOR_TOOLS.find(t=>t.id===id).name)).join(' · ')||(en?'None':'없음')],
     [en?'Ship fittings':'선체 개조',tr(BUILDS[s.build])],
     [en?'Time underway':'항해 경과',`${Math.floor(s.time/60)}:${String(Math.floor(s.time%60)).padStart(2,'0')}`]

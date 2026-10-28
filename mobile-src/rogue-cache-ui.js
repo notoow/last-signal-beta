@@ -1,15 +1,35 @@
+// Existing offer identities and grants come from the authoritative core.
 import {shoreSiteName} from './shore-sites.js';
 import {GEAR,maxHp,maxFuel,cacheSupplyPreview} from './rogue-core.js';
 import {cacheOffer,gearEffect} from './rogue-cache.js';
 import {FLOOR_TOOLS,SHORE_SITES,toolBerth,hasTool} from './shore-encounters.js';
 import {salvageDeviceName} from './rogue-salvage-ui.js';
 import {rigRecoveryBerth} from './harbor-plan.js';
-import {CREW_UPGRADES,crewRank} from './crew-upgrades.js';
+import {CREW_UPGRADES,crewUpgradePreview} from './crew-upgrades.js';
 
 const esc=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const number=value=>value>0&&value<.1?'<0.1':String(Number(value.toFixed(1)));
 const names={motor:'Drive motor',pump:'Bilge pump',winch:'Reinforced line',tank:'Fuel tank',plating:'Impact bulkhead',turbine:'Flood turbine'};
 export const cacheGearName=(id,language='ko')=>language==='en'?names[id]:GEAR[id];
+// Only localize authoritative values/conditions. Never calculate a crew effect here.
+export function crewPreviewCopy(preview,language='ko'){
+  const en=language==='en',T=(ko,english)=>en?english:ko;
+  const labels={meleeDamage:T('근접 공격력','Melee damage'),rangedDamage:T('원거리 공격력','Ranged damage'),speedBonus:T('이동 속도 보너스','Move speed bonus'),damageReduction:T('선원 피해 감소','Crew damage reduction')};
+  const conditions={melee:T('근접 공격','Melee attack'),crabWarning:T('게의 예고 동작 중','During a crab’s windup'),cooldownReady:T('공통 재사용 대기 종료 후','Shared cooldown must be ready'),ranged:T('원거리 공격','Ranged attack'),wallsBlock:T('벽에서 멈춤','Walls stop the shot'),uniqueTargets:T('같은 적 중복 타격 불가','No repeat hit on the same target'),rangedKill:T('실제 원거리 처치당','Per confirmed ranged kill'),ammoCapacity12:T('고철 보유 최대 12','Scrap inventory cap 12'),unalerted:T('비경계 적에게만','Unalerted enemies only'),notSprinting:T('달리지 않을 때','Not sprinting'),notNoisy:T('소음이 없을 때','Not noisy'),unalertedAtLaunch:T('공격 시작 시 비경계인 적','Target unalerted at attack launch')};
+  const unlocks=preview.unlocks.map(u=>{
+    const v=String(u.value),copy={
+      wideSwing:[T(`공격각 ×${v}`,`Attack arc ×${v}`),T(`근접 공격각이 ${v}배가 됩니다. 공격 거리는 늘지 않습니다.`,`Melee attack arc becomes ×${v}. Attack reach is unchanged.`)],
+      guardBreak:[T(`게 예고 파훼 · 공통 ${v}초`,`Crab windup break · ${v}s shared`),T(`게의 예고 동작 중 방어 파훼 · 전체 공통 재사용 대기 ${v}초`,`Break crab guard during windup · shared cooldown ${v}s`)],
+      pierce:[T(`관통 +${v} · 벽에서 멈춤`,`Pierce +${v} · walls block`),T(`원거리 관통 ${v}회`,`Ranged piercing: ${v}`)],
+      killRefund:[T(`처치 고철 +${v} · 최대 12`,`Kill: scrap +${v} · cap 12`),T(`실제 원거리 처치당 고철 ${v} 회수`,`Recover ${v} scrap per confirmed ranged kill`)],
+      quietWalk:[T(`비경계·걷기·무소음 감지 ×${v}`,`Unalerted · quiet walk: radius ×${v}`),T(`걷는 동안 비경계 적의 감지 거리가 ${v}배가 됩니다. 달리기·소음·추격 중에는 줄어들지 않습니다.`,`Unalerted detection radius becomes ×${v} while walking. No reduction when sprinting, noisy, or pursued.`)],
+      ambush:[T(`비경계 기습 ×${v}`,`Unalerted ambush ×${v}`),T(`공격 시작 시 비경계인 적에게 기습 피해 ${v}배`,`Damage ×${v} against targets unalerted at attack launch`)]
+    }[u.id];
+    const conditionLabels=u.conditions.map(id=>conditions[id]??T('조건 정보 확인 필요','Condition unavailable'));
+    return {id:u.id,value:u.value,conditions:[...u.conditions],conditionLabels,short:copy?.[0]??T('효과 정보 확인 필요','Effect details unavailable'),note:u.id==='wideSwing'?T('공격 거리는 늘지 않습니다.','Attack reach is unchanged.'):'',detail:[copy?.[1]??T('효과 정보 확인 필요','Effect details unavailable'),...conditionLabels].join(' · ')};
+  });
+  return {label:labels[preview.stat.key]??T('강화 수치','Upgrade value'),unlocks};
+}
 // Use this copy only with an authoritative recovery/receipt contract. These
 // short introductions describe the new control, not current firing readiness.
 export function rigRecoveryCopy(build,language='ko'){
@@ -79,8 +99,8 @@ export function cacheChoiceModel(s,language='ko'){
       commonItems.push({kind:'tool',id:FLOOR_TOOLS[s.depth].id,text:en?['Anti-reverse ratchet','Flow baffle','Light shutter'][s.depth]:FLOOR_TOOLS[s.depth].name});
     }
   }
-  const crew=offer.crew?{id:offer.crew,rank:crewRank(s,offer.crew),...CREW_UPGRADES[offer.crew]}:null;
-  return {full:s.equipment.length>=6,slots:s.equipment.length,crew,rig,commonItems,
+  const crews=offer.crews.map(id=>{const preview=crewUpgradePreview(s,id);return preview?{id,...CREW_UPGRADES[id],...preview}:null;}).filter(Boolean);
+  return {full:s.equipment.length>=6,slots:s.equipment.length,crews,crew:crews[0]??null,rig,commonItems,
     site:shoreSiteName(s,berth,language),
     gear:offer.gear.map(id=>cacheGearModel(s,id,language)),supply,offered:offer.supply,siteRole:offer.siteRole,common:commonItems.map(x=>x.text)};
 }
@@ -97,14 +117,14 @@ export function cacheChoiceMarkup(s,language='ko'){
       <div class="rogue-cache-capacity"><span>${en?'Equipment carried':'보유 장비'}</span><b>${m.slots}<small> / 6</small></b><span>${m.full?(en?'Replacement required':'선택 후 교체 필요'):(en?'Copies stack':'같은 장비도 중첩')}</span></div>
     </header>
     <div class="rogue-salvage-options" data-crew-choice="${!!m.crew}">
-      ${m.crew?`<article class="rogue-salvage-option rogue-crew-reward" data-cache-option="crew:${m.crew.id}">
-        <img class="rogue-reward-art" src="assets/art/crew-upgrade-${m.crew.id}-v1.png" width="128" height="128" alt="">
-        <div class="rogue-salvage-option-heading"><span>${en?'CREW':'선원'}</span><h3>${esc(en?m.crew.en:m.crew.name)}</h3></div>
-        <p class="rogue-cache-effect"><span>${en?'Rank':'등급'} ${m.crew.rank}</span><i aria-hidden="true">→</i><b>${m.crew.rank+1}</b></p>
-        <p class="rogue-cache-description">${m.crew.id==='grip'?(en?`Melee damage ${24+m.crew.rank*8} → ${32+m.crew.rank*8}`:`근접 공격력 ${24+m.crew.rank*8} → ${32+m.crew.rank*8}`):m.crew.id==='stride'?(en?`Walk / sprint speed +${m.crew.rank*12}% → +${(m.crew.rank+1)*12}%`:`걷기·달리기 속도 +${m.crew.rank*12}% → +${(m.crew.rank+1)*12}%`):(en?`Crew damage reduction ${m.crew.rank*15}% → ${(m.crew.rank+1)*15}%`:`선원 받는 피해 감소 ${m.crew.rank*15}% → ${(m.crew.rank+1)*15}%`)}</p>
+      ${m.crews.map(crew=>{const copy=crewPreviewCopy(crew,language);return `<article class="rogue-salvage-option rogue-crew-reward" data-cache-option="crew:${crew.id}">
+        <img class="rogue-reward-art" src="assets/art/crew-upgrade-${crew.id}-v1.png" width="128" height="128" alt="">
+        <div class="rogue-salvage-option-heading"><span>${en?'CREW':'선원'}</span><h3>${esc(en?crew.en:crew.name)}</h3></div>
+        <p class="rogue-cache-effect"><span>${en?'Rank':'등급'} ${crew.rank}</span><i aria-hidden="true">→</i><b>${crew.nextRank}</b></p>
+        <p class="rogue-cache-description">${esc(copy.label)} ${crew.stat.before} → ${crew.stat.after}${crew.stat.unit}${copy.unlocks.length?`<br>${copy.unlocks.map(x=>esc(x.detail)).join('<br>')}`:''}</p>
         <p class="rogue-cache-note">${en?'This voyage · stacks to rank 3 · no ship slot':'이번 항해에서 유지 · 3단계 중첩 · 선박 장비칸 별도'}</p>
-        <button data-cache-choice="crew:${m.crew.id}">${en?'Equip on crew':'선원에게 장착'}<span aria-hidden="true">↗</span></button>
-      </article>`:''}
+        <button data-cache-choice="crew:${crew.id}">${en?'Equip on crew':'선원에게 장착'}<span aria-hidden="true">↗</span></button>
+      </article>`;}).join('')}
       ${m.gear.map((g,i)=>`<article class="rogue-salvage-option" data-cache-option="${g.id}">
         <div class="rogue-salvage-option-heading"><span>0${i+1}</span><h3>${esc(g.name)}</h3></div>
         <p class="rogue-cache-label">${m.full?(en?'If added · ':'추가 장착 시 · '):''}${esc(g.label)}</p>

@@ -3,7 +3,8 @@ import {cliffRayClear} from './shore-cliffs.js';
 import {shoreWaypoint,shoreRoute} from './shore-navigation.js';
 import {recordHit} from './rogue-voyage-record.js';
 import {publishImpact} from './rogue-impact.js';
-import {crewEffects} from './crew-upgrades.js';
+import {crewEffects,noticeRadius,CREW_RULES} from './crew-upgrades.js';
+import {advanceShot} from './shot-flight.js';
 import {shoreScale,crewRadius,HUMAN_SCALE,humanShore,shoreRanges} from './shore-scale.js';
 
 export const FAUNA={
@@ -157,8 +158,11 @@ export function recoverGullScrap(s){
   const e=s.combat.enemies.find(e=>e.id===r.id),amount=Math.min(e.stash,12-s.combat.ammo);
   e.stash-=amount;s.combat.ammo+=amount;s.radio={text:`Woo: 둥지에서 고철 ${amount}개 회수했어.`,left:4};return true;
 }
-function hurtEnemy(s,e,n,angle){
+function hurtEnemy(s,e,n,angle,{breakGuard=false,refund=0}={}){
   if(e.hp<=0)return;
+  if(breakGuard&&e.kind==='crab'&&e.phase==='warn'&&(s.combat.breakerCooldown??0)<=0){
+    e.phase='recover';e.left=fauna(s,e.kind).recovery;s.combat.breakerCooldown=CREW_RULES.breakerCooldown;
+  }
   const armor=e.kind==='crab'&&e.phase!=='recover'? .3:1;
   e.hp=Math.max(0,e.hp-n*armor);e.hit=.22;s.combat.hitId++;
   if('asleep'in e){e.asleep=false;e.awareness=.3;e.alert=true;}
@@ -168,7 +172,7 @@ function hurtEnemy(s,e,n,angle){
   if(e.kind!=='crab'){e.phase='recover';e.left=.5;}
   const push=16*shoreScale(s),p={x:e.x+Math.cos(angle)*push,y:e.y+Math.sin(angle)*push};
   if((e.kind!=='crab'||e.phase==='recover')&&(e.kind==='gull'||walkableAt(s.map,p,fauna(s,e.kind).radius))){e.x=p.x;e.y=p.y;}
-  if(!e.hp){e.dead=.65;s.combat.ammo=Math.min(12,s.combat.ammo+e.stolen);e.stolen=0;s.combat.killId++;effect(s,e.x,e.y,'defeat');}
+  if(!e.hp){e.dead=.65;s.combat.ammo=Math.min(12,s.combat.ammo+e.stolen+refund);e.stolen=0;s.combat.killId++;effect(s,e.x,e.y,'defeat');}
 }
 export function shoreAttack(s,kind='ranged',aim=null){
   const c=s.combat;if(!c||c.cooldown>0||s.status!=='playing'||s.pendingGear)return false;
@@ -181,12 +185,13 @@ export function shoreAttack(s,kind='ranged',aim=null){
     if(target)angle=Math.atan2(target.y-p.y,target.x-p.x);
   }
   if(s.person)s.person.angle=angle;
+  const fx=crewEffects(s),ambushIds=fx.ambush>1?c.enemies.filter(e=>e.hp>0&&!e.alert).map(e=>e.id):[];
   if(kind==='ranged'){
     if(!c.ammo){effect(s,p.x,p.y,'empty');return false;}
     c.ammo--;c.cooldown=.65;c.shotId++;
-    c.shots.push({x:p.x,y:p.y,vx:Math.cos(angle)*throwSpeed(s),vy:Math.sin(angle)*throwSpeed(s),left:s.person?.55:.84});
+    c.shots.push({x:p.x,y:p.y,vx:Math.cos(angle)*throwSpeed(s),vy:Math.sin(angle)*throwSpeed(s),left:s.person?.55:.84,pierces:fx.pierce,hitIds:[],ambushIds});
   }else c.cooldown=.52;
-  c.action={kind,angle,left:kind==='melee'?.42:.32,done:false};s.work=0;
+  c.action={kind,angle,left:kind==='melee'?.42:.32,done:false,ambushIds};s.work=0;
   s.noise={x:p.x,y:p.y,left:1.6};
   return true;
 }
@@ -258,6 +263,7 @@ export function firstShotContact(s,from,to){
 }
 export function tickEncounter(s,input,dt){
   const c=s.combat;if(!c)return;const unit=shoreScale(s);
+  c.breakerCooldown=Math.max(0,(c.breakerCooldown??0)-dt);
   c.cooldown=Math.max(0,c.cooldown-dt);c.hit=Math.max(0,c.hit-dt);
   for(const fx of c.effects)fx.left-=dt;c.effects=c.effects.filter(f=>f.left>0);
   if(input.melee&&s.person)shoreAttack(s,'melee');
@@ -266,15 +272,15 @@ export function tickEncounter(s,input,dt){
     c.action.left-=dt;
     if(c.action.kind==='melee'&&!c.action.done&&c.action.left<.26&&s.person){
       c.action.done=true;
-      for(const e of c.enemies)if(e.hp>0&&dist(e,s.person)<meleeReach(s)+fauna(s,e.kind).radius&&Math.abs(diff(Math.atan2(e.y-s.person.y,e.x-s.person.x),c.action.angle))<1&&sightLine(s.map,s.person,e))hurtEnemy(s,e,crewEffects(s).melee,c.action.angle);
+      const fx=crewEffects(s);
+      for(const e of c.enemies)if(e.hp>0&&dist(e,s.person)<meleeReach(s)+fauna(s,e.kind).radius&&Math.abs(diff(Math.atan2(e.y-s.person.y,e.x-s.person.x),c.action.angle))<fx.meleeArc&&sightLine(s.map,s.person,e))hurtEnemy(s,e,fx.melee*(c.action.ambushIds?.includes(e.id)?fx.ambush:1),c.action.angle,{breakGuard:fx.breakGuard});
     }
     if(c.action.left<=0)c.action=null;
   }
   for(const shot of c.shots){
-    const old={x:shot.x,y:shot.y};shot.x+=shot.vx*dt;shot.y+=shot.vy*dt;shot.left-=dt;
-    const contact=firstShotContact(s,old,shot),end=contact||shot;
-    if(!shotPathClear(s.map,old,end)){shot.left=0;effect(s,end.x,end.y,'shell');continue;}
-    if(contact){shot.x=contact.x;shot.y=contact.y;hurtEnemy(s,contact.enemy,20,Math.atan2(shot.vy,shot.vx));shot.left=0;}
+    const fx=crewEffects(s),result=advanceShot(shot,dt,c.enemies,e=>fauna(s,e.kind).radius+5*unit,
+      (a,b)=>shotPathClear(s.map,a,b),e=>hurtEnemy(s,e,fx.ranged*(shot.ambushIds?.includes(e.id)?fx.ambush:1),Math.atan2(shot.vy,shot.vx),{refund:fx.killRefund}));
+    if(result.blocked)effect(s,shot.x,shot.y,'shell');
   }
   c.shots=c.shots.filter(p=>p.left>0);
   for(const e of c.enemies){
@@ -296,7 +302,7 @@ export function tickEncounter(s,input,dt){
     const away=dist(e,home)>560*unit||e.stolen>0||(e.kind==='gull'&&((e.stash||0)>=4||!s.person&&c.ammo===0));
     if(e.asleep){
       const heard=s.noise?.left>0&&dist(e,s.noise)<(humanShore(s)?spec.notice*1.2:145*unit)&&sightLine(s.map,e,s.noise);
-      const inRange=humanShore(s)&&dist(e,p)<spec.notice&&sightLine(s.map,e,p);
+      const inRange=humanShore(s)&&dist(e,p)<noticeRadius(s,e,spec,input)&&sightLine(s.map,e,p);
       if(humanShore(s))e.awareness=inRange?Math.min(.3,e.awareness+dt):0;
       const close=(humanShore(s)?e.awareness>=.3:dist(e,p)<(input.boost&&c.moving?100:42)*unit&&sightLine(s.map,e,p));
       if(!heard&&!close){e.alert=false;continue;}
@@ -305,7 +311,7 @@ export function tickEncounter(s,input,dt){
     // Attack noise at the player must not act as a decoy and suppress bites.
     // Only a can thrown away from the player draws attention elsewhere.
     const lure=s.noise?.left>0&&dist(e,s.noise)<200*unit&&dist(p,s.noise)>48*unit&&e.kind!=='gull';
-    const perceived=(dist(e,p)<(e.alert?spec.notice+75*unit:spec.notice))&&sightLine(s.map,e,p)&&!away;
+    const perceived=(dist(e,p)<(e.alert?spec.notice+75*unit:noticeRadius(s,e,spec,input)))&&sightLine(s.map,e,p)&&!away;
     if('awareness'in e)e.awareness=perceived?Math.min(.3,e.awareness+dt):0;
     const canSee=perceived&&(!('awareness'in e)||e.alert||e.awareness>=.3||dist(e,p)<spec.reach+8*unit);
     const target=away?home:lure?s.noise:canSee?p:home;
@@ -334,9 +340,14 @@ export function validateEncounter(s,finite){
   if(!['shotId','hitId','killId'].every(k=>Number.isInteger(c[k])&&finite(c[k],0,1e9)))return false;
   if(c.action&&(!['melee','ranged'].includes(c.action.kind)||!finite(c.action.angle,-Math.PI,Math.PI)||!finite(c.action.left,0,.43)||typeof c.action.done!=='boolean'))return false;
   if(!Array.isArray(c.enemies)||c.enemies.length>(s.generator>=3?13:9)||new Set(c.enemies.map(e=>e.id)).size!==c.enemies.length)return false;
+  const enemyIds=new Set(c.enemies.map(e=>e.id));
+  const validIds=ids=>ids===undefined||Array.isArray(ids)&&ids.length<=13&&new Set(ids).size===ids.length&&ids.every(id=>typeof id==='string'&&enemyIds.has(id));
+  if(c.breakerCooldown!==undefined&&!finite(c.breakerCooldown,0,CREW_RULES.breakerCooldown))return false;
+  if(c.action&&!validIds(c.action.ambushIds))return false;
   if(c.enemies.some(e=>('asleep'in e)&&(typeof e.asleep!=='boolean'||!finite(e.awareness,0,.3))))return false;
   if(c.enemies.some(e=>!Number.isInteger(e.stash)||!finite(e.stash,0,16)||(e.kind!=='gull'&&e.stash!==0)))return false;
   if(c.enemies.some(e=>!FAUNA[e.kind]||typeof e.id!=='string'||!['idle','warn','strike','recover'].includes(e.phase)||!finite(e.hp,0,FAUNA[e.kind].hp)||!finite(e.x,0,3400)||!finite(e.y,0,1800)||!finite(e.homeX,0,3400)||!finite(e.homeY,0,1800)||!finite(e.angle,-Math.PI,Math.PI)||!finite(e.left,-.02,6)||!finite(e.hit,0,.23)||!finite(e.stride,0,1e9)||!finite(e.dead,0,.66)||!Number.isInteger(e.stolen)||!finite(e.stolen,0,12)||typeof e.moving!=='boolean'||typeof e.alert!=='boolean'||(e.kind!=='gull'&&!walkableAt(s.map,e,0))))return false;
   if(!Array.isArray(c.shots)||c.shots.length>4||c.shots.some(p=>!finite(p.x,-400,3800)||!finite(p.y,-400,2200)||!finite(p.vx,-390,390)||!finite(p.vy,-390,390)||!finite(p.left,0,.85)))return false;
+  if(c.shots.some(p=>!validIds(p.hitIds)||!validIds(p.ambushIds)||p.pierces!==undefined&&(!Number.isInteger(p.pierces)||!finite(p.pierces,0,1))))return false;
   return Array.isArray(c.effects)&&c.effects.length<=40&&c.effects.every(f=>finite(f.x,-400,3800)&&finite(f.y,-400,2200)&&finite(f.left,0,.31)&&['empty','shell','hit','hurt','defeat'].includes(f.kind));
 }
