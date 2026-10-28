@@ -1,5 +1,7 @@
 import {touchText} from './mobile-touch-text.js';
 import {mobileLabelFits} from './mobile-presentation.js';
+import {drawSupplyWorkCue} from './supply-work-cue.js';
+import {legacySupplyVessels} from './legacy-supply-geometry.js';
 import {voyageLight} from './voyage-light-view.js';
 import {identitySurvey} from './cliff-view.js';
 import {shoreSiteName} from './shore-sites.js';
@@ -342,7 +344,7 @@ export function rogueCamera(canvas,s,mapOpen=false,options={},previous=null,dt=0
 }
 const frames=new WeakMap();
 export const lastRogueCamera=canvas=>frames.get(canvas)?.frame;
-export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,camera:settings={},occupied=null,language='ko',sluiceHud=null,signal}={}){
+export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,camera:settings={},occupied=null,language='ko',sluiceHud=null,supplyGuidanceActive=false,signal}={}){
   // The compact planning chart has accessible DOM pins; world-size action
   // captions would obscure entire quays at this scale.
   const label=chartPins?()=>{}:canvasLabel;
@@ -562,10 +564,13 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   // the console remains authoritative when a world tag has no clear space.
   const impact=mapOpen?null:impactPresentation(recentImpact(s),language);
   if(impact)impactFrames.set(canvas,{impact,tag:impactTag(c,impact,frame,s,panel)});else impactFrames.delete(canvas);
+  const supplyGeometry=supplyGuidanceActive&&!mapOpen?legacySupplyVessels(s,frame,{reduced}):null;
+  const supplyWorkCue=drawSupplyWorkCue(c,s,frame,supplyGeometry,language,{suppressed:!supplyGuidanceActive||mapOpen,reserved:[panel,impactFrames.get(canvas)?.tag].filter(Boolean)});
+  frame.supplyWorkCue=supplyWorkCue;frame.supplyWorkGeometry=supplyGeometry;
   if(!mapOpen){
     const points=[];
     if(target&&!namedDriveTarget)points.push({p:target,text:(driveTarget?driveTarget.name+' · '+driveTarget.prompt:null)||connectionMarker?.text||(task.rescue?(language==='en'?'Escort / ladder':'정비공 / 사다리'):task.planSite?(language==='en'?'Planned quay':'선택한 부두'):task.planBoss?(language==='en'?'Outer approach':'바깥 해역 입구'):language==='en'?(s.person?'Search / return':'Target'):(s.person?'수색 / 귀환':'목표')),color:driveTarget?.color||connectionMarker?.color||'#f6dda2'});
-    if(s.tow?.connected&&!s.person)points.push({p:s.tow,text:language==='en'?'Supply tow':'견인선',color:'#adc8c3'});
+    if(supplyGuidanceActive&&s.tow?.connected&&!s.person&&!supplyWorkCue&&s.tow.hp>0&&!s.tow.delivered&&visibleAt(s,s.tow))points.push({p:s.tow,text:language==='en'?'Supply tow':'견인선',color:'#adc8c3'});
     if(!dredger&&!sluice&&!lighthouse&&s.boss.active&&!s.boss.cleared)points.push({p:s.map.boss,text:boss.phase==='warn'?'보스 · 공격 예고':'보스',color:boss.phase==='warn'?'#f4ad7d':'#e4ca9b'});
     for(const {p,text,color} of points){
       const mark=edgeMarker(frame,p);

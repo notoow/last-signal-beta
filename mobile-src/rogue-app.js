@@ -516,7 +516,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
         });
       }else{
         const sluiceHud=!paused&&!mapOpen&&hud.sluice&&document.documentElement.dataset.mobileUi==='true'?{bounds:sluiceLabelProbe.read(now)}:null;
-        const view=drawRogue($('rogueSea'),resultView||state,{reduced,mapOpen,camera,occupied:hudRects,language,sluiceHud,signal:controller.signal});
+        const view=drawRogue($('rogueSea'),resultView||state,{reduced,mapOpen,camera,occupied:hudRects,language,sluiceHud,supplyGuidanceActive:!paused&&!mapOpen&&!document.hidden&&root.dataset.surface==='playing',signal:controller.signal});
         refreshQuayAssets(view);
       }
       if(pendingMinimap&&!paused)drawNavigationMap($('rogueMinimap'),{...pendingMinimap,viewport:navigationViewport(lastRogueCamera($('rogueSea')))});
