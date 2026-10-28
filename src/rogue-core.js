@@ -158,7 +158,7 @@ export function objective(s){
   if(s.status==='won')return {text:'세 계층 돌파 · 마지막 신호를 전달했다',target:null};
   if(s.mode==='ashore'){
     const b=s.map.berths.find(b=>!s.claimed.includes(b.id)&&distance(s.person,b.loot)<100)||s.map.berths.find(b=>b.id===s.mooring);
-    const cache=s.map.berths.find(x=>!s.claimed.includes(x.id)&&distance(s.person,x.loot)<shoreRanges(s).search);
+    const cache=searchCache(s);
     const home=s.map.berths.find(x=>x.id===s.mooring);
     const rescue=rescueStatus(s);
     if(rescue?.active&&rescue.discovered){

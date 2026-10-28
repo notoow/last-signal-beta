@@ -13,7 +13,7 @@ import {bakeQuayMaterial} from './quay-material.js';
 import {prepareSupplyFleet,drawSupplyBoat} from './supply-fleet.js';
 import {tugStern,towBow} from './rogue-tow.js';
 import {quaySprite} from './quay-details.js';
-import {drawCaptainOcclusion,drawCaptainVisible} from './shore-occlusion-outline.js';
+import {prepareWholeActor,prepareWholeLoot,drawWholeActorBase,drawWholeActorOverlay} from './shore-occlusion-outline.js';
 
 const load=(file,retry=0)=>{const im=new Image();im.src='assets/art/'+file+(retry?'?quayRetry='+retry:'');return im;};
 let art=null,loadStarted=0,retryAttempt=0;
@@ -241,7 +241,7 @@ export function quayScenerySprites(s,f,{cull=true}={}){
 function scenery(c,s,f,tiles){
   const objects=[],unit=f.pixelsPerMetre;
   for(const {b,p,supply,im,scale,rect,bounds,floorImage} of quayScenerySprites(s,f)){
-    objects.push({type:'scenery',p,box:b,bounds,image:im,sourceRect:rect,draw:()=>{
+    objects.push({type:'scenery',p,box:b,bounds,image:im,floorImage,sourceRect:rect,draw:()=>{
       // Source art and projected anchors stay unchanged; no building fade.
       c.save();c.globalAlpha=1;if(floorImage)c.drawImage(floorImage,...rect,bounds.x,bounds.y,bounds.w,bounds.h);c.drawImage(im,...rect,bounds.x,bounds.y,bounds.w,bounds.h);c.restore();
     }});
@@ -400,9 +400,9 @@ export function drawQuaySearchRings(c,s,f){
   }
 }
 const cacheOcclusionScratch=new WeakMap();
-export function drawQuayCacheOcclusion(c,s,f){
+export function drawQuayCacheOcclusion(c,s,f,skipIds=new Set()){
   if(!s.person)return 0;
-  const nearby=quayLootSprites(s,f).filter(r=>!r.claimed&&distance(s.person,r.berth.loot)<shoreRanges(s).search);
+  const nearby=quayLootSprites(s,f).filter(r=>!skipIds.has(r.berth.id)&&!r.claimed&&distance(s.person,r.berth.loot)<shoreRanges(s).search);
   if(!nearby.length)return 0;
   const scenery=quayScenerySprites(s,f);let count=0;
   for(const r of nearby){
@@ -423,8 +423,8 @@ export function drawQuayCacheOcclusion(c,s,f){
   }
   return count;
 }
-export function drawQuaySearchLabels(c,s,f,language='ko'){
-  drawQuayCacheOcclusion(c,s,f);
+export function drawQuaySearchLabels(c,s,f,language='ko',skipIds=new Set()){
+  drawQuayCacheOcclusion(c,s,f,skipIds);
   for(const {berth,p,claimed,bounds} of quayLootSprites(s,f)){
     if(s.person&&distance(s.person,berth.loot)<shoreRanges(s).search&&!claimed){
       const target={x:Math.max(45,Math.min(f.width-45,p.x+76)),y:bounds.y-14};
@@ -472,13 +472,16 @@ export function drawQuay(c,s,f,{reduced=false,language='ko',task=null,search=nul
   supplyCaption(c,tow,boat,f,language);
   groundThreats(c,s,f);
   // Cache contents, search clock, threats and rewards all come from the voyage.
-  for(const {berth:b,p,image,claimed,rect,bounds} of quayLootSprites(s,f)){
-    props.push({type:'cache',p,draw:()=>{c.save();c.globalAlpha=claimed?.45:1;c.drawImage(image,...rect,bounds.x,bounds.y,bounds.w,bounds.h);c.restore();}});
+  const preparedLoot=new Map();
+  for(const item of quayLootSprites(s,f)){
+    const {p,image,claimed,rect,bounds}=item;
+    props.push({type:'cache',p,loot:item,draw:()=>{if(preparedLoot.get(item)?.active)return;c.save();c.globalAlpha=claimed?.45:1;c.drawImage(image,...rect,bounds.x,bounds.y,bounds.w,bounds.h);c.restore();}});
   }
   drawQuaySearchRings(c,s,f);
   const actorBounds=[];
+  const preparedActors=new Map();
   const actors=shoreActors(s).map(a=>({type:'actor',p:project(f,a.p),actor:a,draw:()=>actorBounds.push({enemy:!!a.enemy,worker:!!a.worker,
-    ...(a.enemy?{kind:a.p.kind,phase:a.p.phase,hp:a.p.hp}:{}),...(a.p===s.person&&!a.enemy&&!a.worker?drawCaptainVisible(c,s,f,a,props.filter(o=>o.image&&behind(f,a.p,o.box)),reduced):drawProjectedShoreActor(c,s,a,f,reduced))})}));
+    ...(a.enemy?{kind:a.p.kind,phase:a.p.phase,hp:a.p.hp}:{}),...drawWholeActorBase(c,s,f,a,preparedActors.get(a),reduced)})}));
   // Sorting uses the ground contact, then corrects only actual footprint
   // occlusion around tall buildings. Empty alpha padding never hides the crew.
   const objects=[...props,...actors].sort((a,b)=>a.p.y-b.p.y);
@@ -486,16 +489,26 @@ export function drawQuay(c,s,f,{reduced=false,language='ko',task=null,search=nul
     const ai=objects.indexOf(a),bi=objects.indexOf(b),shouldBehind=behind(f,a.actor.p,b.box);
     if(shouldBehind&&ai>bi){objects.splice(ai,1);objects.splice(objects.indexOf(b),0,a);}
   }
+  for(const a of actors){
+    const covers=objects.slice(objects.indexOf(a)+1).filter(o=>o.image&&o.box&&behind(f,a.actor.p,o.box));
+    preparedActors.set(a.actor,prepareWholeActor(c,s,f,a.actor,covers,reduced));
+  }
+  for(const o of props)if(o.loot){
+    const covers=objects.slice(objects.indexOf(o)+1).filter(p=>p.image&&p.box&&behind(f,o.loot.berth.loot,p.box));
+    preparedLoot.set(o.loot,prepareWholeLoot(c,s,o.loot,covers));
+  }
   for(const o of objects)o.draw();
   const captain=actors.find(a=>a.actor.p===s.person&&!a.actor.enemy&&!a.actor.worker);
-  const occluders=captain?objects.slice(objects.indexOf(captain)+1).filter(o=>o.image&&behind(f,s.person,o.box)):[];
-  const captainOcclusion=drawCaptainOcclusion(c,s,f,captain?.actor,occluders,reduced);
-  drawQuaySearchLabels(c,s,f,language);
+  const wholeActorOcclusion=actors.map(a=>preparedActors.get(a.actor)).filter(Boolean).map(p=>({id:p.actor.p.id||'captain',...drawWholeActorOverlay(c,p)}));
+  const captainOcclusion=wholeActorOcclusion.find(x=>x.subject==='captain')||{subject:null,active:false};
+  const wholeLootOcclusion=[...preparedLoot.values()].filter(Boolean).map(p=>drawWholeActorOverlay(c,p));
+
+  drawQuaySearchLabels(c,s,f,language,new Set(wholeLootOcclusion.filter(p=>p.active).map(p=>p.lootId)));
   drawQuayCombat(c,s,f);
   drawQuaySearchProgress(c,s,f,search);
   const returnCue=drawReturnLanding(c,s,f,boat?.bounds);
   drawQuayObjective(c,s,f,task,language);
-  return {ready:true,returnCue,boat,tow,vesselOrder:supplyBehind?['supply','captain']:['captain','supply'],actorBounds,captainOcclusion,scenery:props.filter(p=>p.box).map(p=>({box:p.box,bounds:p.bounds})),shoreEdges:edgeCount};
+  return {ready:true,returnCue,boat,tow,vesselOrder:supplyBehind?['supply','captain']:['captain','supply'],actorBounds,captainOcclusion,wholeActorOcclusion,wholeLootOcclusion,scenery:props.filter(p=>p.box).map(p=>({box:p.box,bounds:p.bounds})),shoreEdges:edgeCount};
 }
 
 function sceneryKnown(s,box){

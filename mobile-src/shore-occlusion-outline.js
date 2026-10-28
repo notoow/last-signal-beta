@@ -1,82 +1,64 @@
 import {drawProjectedShoreActor} from './shore-animation.js';
-import {project} from './world-projection.js';
-import {CREW_HEIGHT,humanVisualScale} from './shore-scale.js';
+import {ShoreSpriteRecorder} from './shore-sprite-recorder.js';
+import {visibleAt} from './rogue-vision.js';
+import {coverRatio,coverState,actorImageCommands} from './shore-actor-cover.js';
+import {wholeEligible,wholeLootEligible,sceneryCoverCommands,wholeTiles,wholePixels} from './shore-occlusion-model.js';
 
-// Isolated visual candidate. Source-sized static alpha is read once per image.
-// Per-frame work is limited to a captain-sized patch; no map or LOS mutation.
-const sourceMasks=new WeakMap();
-let maskReads=0,scratch=null;
-function sourceMask(image){
-  let mask=sourceMasks.get(image);if(mask)return mask;
-  const canvas=document.createElement('canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;
-  const context=canvas.getContext('2d',{willReadFrequently:true});context.drawImage(image,0,0);
-  const rgba=context.getImageData(0,0,canvas.width,canvas.height).data,alpha=new Uint8Array(canvas.width*canvas.height);
-  for(let i=0;i<alpha.length;i++)alpha[i]=rgba[i*4+3];
-  mask={alpha,width:canvas.width,height:canvas.height};sourceMasks.set(image,mask);maskReads++;return mask;
+// Caller supplies shoreActors(state), already filtered by LOS.
+// State/hysteresis and one bounded scratch surface belong to this Canvas view.
+const views=new WeakMap();
+function viewFor(context){let v=views.get(context);if(!v){v={states:new WeakMap(),canvas:null,context:null};views.set(context,v);}return v;}
+function record(state,actor,frame,reduced){const c=new ShoreSpriteRecorder(),bounds=drawProjectedShoreActor(c,state,actor,frame,reduced,{shadow:false});if(c.stack.length)throw Error('Unbalanced actor painter');return{commands:c.images,bounds};}
+export function prepareWholeActor(context,state,frame,actor,occluders,reduced=false){
+  const view=viewFor(context);
+  if(!wholeEligible(state,actor,{visible:!actor?.enemy||!!actor.p&&visibleAt(state,actor.p)})){if(actor?.p)view.states.delete(actor.p);return null;}
+  const recorded=record(state,actor,frame,reduced),body=actorImageCommands(recorded.commands);
+  const ratio=coverRatio(body,sceneryCoverCommands(occluders),recorded.bounds);
+  const previous=view.states.get(actor.p),next=coverState(previous,ratio,previous?state.time-previous.time:0);next.time=state.time;view.states.set(actor.p,next);
+  return {actor,kind:actor.enemy?'enemy':'captain',...recorded,ratio,active:next.active&&body.length>0,clear:next.clear};
 }
-function covered(occluders,x,y){
-  for(const o of occluders){
-    const b=o.bounds;if(x<b.x||x>=b.x+b.w||y<b.y||y>=b.y+b.h)continue;
-    const [sx,sy,sw,sh]=o.sourceRect,mask=sourceMask(o.image);
-    const px=Math.floor(sx+(x-b.x)/b.w*sw),py=Math.floor(sy+(y-b.y)/b.h*sh);
-    if(px>=0&&py>=0&&px<mask.width&&py<mask.height&&mask.alpha[py*mask.width+px]>=128)return true;
-  }return false;
+export function prepareWholeLoot(context,state,item,occluders){
+  const view=viewFor(context),visible=!!item?.berth&&visibleAt(state,item.berth.loot);
+  if(!wholeLootEligible(state,item,{visible})){if(item?.berth)view.states.delete(item.berth);return null;}
+  const commands=sceneryCoverCommands([{image:item.image,sourceRect:item.rect,bounds:item.bounds}]);
+  const ratio=coverRatio(commands,sceneryCoverCommands(occluders),item.bounds),previous=view.states.get(item.berth);
+  const next=coverState(previous,ratio,previous?state.time-previous.time:0);next.time=state.time;view.states.set(item.berth,next);
+  return {kind:'loot',lootId:item.berth.id,commands,bounds:item.bounds,ratio,active:next.active&&commands.length>0,clear:next.clear};
 }
-// Render in bounded tiles with a one-pixel halo for contour neighbours.
-// The halo is sampled, but never composited twice at a tile seam.
-function* patches(foot,height){
-  const pad=3,left=Math.floor(foot.x-height*1.15-pad),top=Math.floor(foot.y-height*1.4-pad);
-  const width=Math.ceil(height*2.3+pad*2),tall=Math.ceil(height*1.8+pad*2);
-  if(!Number.isFinite(width)||!Number.isFinite(tall)||width<4||tall<4)return;
-  for(let y=0;y<tall;y+=510)for(let x=0;x<width;x+=510){
-    const w=Math.min(510,width-x),h=Math.min(510,tall-y);
-    yield {left:left+x-1,top:top+y-1,width:w+2,tall:h+2,w,h};
-  }
+function nonImage(context,commands){
+  context.save();try{for(const c of commands){if(c.image||!c.color)continue;context.globalAlpha=c.opacity??1;context.fillStyle=c.color;context.beginPath();context.moveTo(c.points[0],c.points[1]);for(let i=2;i<c.points.length;i+=2)context.lineTo(c.points[i],c.points[i+1]);context.closePath();context.fill();}}finally{context.restore();}
 }
-function paintPatch(state,frame,actor,reduced,patch,options){
-  if(!scratch){const canvas=document.createElement('canvas');scratch={canvas,context:canvas.getContext('2d',{willReadFrequently:true})};}
-  const {width,tall,left,top}=patch,c=scratch.context;
-  if(scratch.canvas.width!==width)scratch.canvas.width=width;
-  if(scratch.canvas.height!==tall)scratch.canvas.height=tall;
-  c.setTransform(1,0,0,1,0,0);c.clearRect(0,0,width,tall);
-  drawProjectedShoreActor(c,state,actor,{...frame,ox:frame.ox-left,oy:frame.oy-top},reduced,options);
-  return c;
+export function drawWholeActorBase(context,state,frame,actor,prepared,reduced=false){
+  if(!prepared?.active)return drawProjectedShoreActor(context,state,actor,frame,reduced);
+  // Remove the normal coloured sprite/shadow before the ghost pass, retaining
+  // the actor's normal non-image bars. Never paint the full original twice.
+  nonImage(context,prepared.commands);return prepared.bounds;
 }
-function compositePatch(context,c,data,p){
-  c.clearRect(0,0,p.width,p.tall);c.putImageData(data,0,0);
-  context.drawImage(scratch.canvas,1,1,p.w,p.h,p.left+1,p.top+1,p.w,p.h);
+function sprite(context,command){
+  if(!command.image)return;const p=command.points,u=command.uv;
+  if(u?.length!==4)throw Error('Canvas recorded actor requires rectangular source crop');
+  const iw=command.image.naturalWidth||command.image.width,ih=command.image.naturalHeight||command.image.height;
+  const sx=u[0]*iw,sy=u[1]*ih,sw=(u[2]-u[0])*iw,sh=(u[3]-u[1])*ih;
+  context.save();context.globalAlpha=command.opacity??1;
+  context.transform((p[2]-p[0])/sw,(p[3]-p[1])/sw,(p[6]-p[0])/sh,(p[7]-p[1])/sh,p[0],p[1]);
+  context.drawImage(command.image,sx,sy,sw,sh,0,0,sw,sh);context.restore();
 }
-export function drawCaptainVisible(context,state,frame,actor,occluders,reduced=false){
-  if(!state.person||actor.p!==state.person||actor.enemy||actor.worker||!occluders.length)return drawProjectedShoreActor(context,state,actor,frame,reduced);
-  const foot=project(frame,state.person),height=CREW_HEIGHT*frame.scale*humanVisualScale(state);
-  for(const p of patches(foot,height)){
-    const c=paintPatch(state,frame,actor,reduced,p),data=c.getImageData(0,0,p.width,p.tall);
-    for(let y=1;y<=p.h;y++)for(let x=1;x<=p.w;x++){
-      const i=(y*p.width+x)*4;
-      if(data.data[i+3]&&covered(occluders,p.left+x+.5,p.top+y+.5))data.data[i+3]=0;
-    }
-    compositePatch(context,c,data,p);
-  }
-  return{x:foot.x-height*.35,y:foot.y-height,w:height*.7,h:height,foot,height};
-}
-export function drawCaptainOcclusion(context,state,frame,actor,occluders,reduced=false){
-  const stats={subject:null,outlinePixels:0,hiddenPixels:0,spritePixels:0,patchPixels:0,maxPatchPixels:0,tiles:0,maskReads,occluders:occluders.length};
-  if(!state.person||!actor||actor.p!==state.person||actor.enemy||actor.worker||!occluders.length)return stats;
-  const foot=project(frame,state.person),height=CREW_HEIGHT*frame.scale*humanVisualScale(state);
+export function drawWholeActorOverlay(context,prepared){
+  const stats={subject:prepared?.kind||'captain',...(prepared?.lootId!==undefined?{lootId:prepared.lootId}:{}),active:!!prepared?.active,ratio:prepared?.ratio??0,clear:prepared?.clear??0,fillPixels:0,outlinePixels:0,tiles:0,maxPatchPixels:0};
+  if(!prepared?.active)return stats;
+  const view=viewFor(context);if(!view.canvas){view.canvas=document.createElement('canvas');view.context=view.canvas.getContext('2d',{willReadFrequently:true});if(!view.context)throw Error('Canvas actor scratch unavailable');}
+  const dpr=Math.hypot(context.getTransform().a,context.getTransform().b),c=view.context;
   context.save();context.globalAlpha=1;context.globalCompositeOperation='source-over';
-  for(const p of patches(foot,height)){
-    const c=paintPatch(state,frame,actor,reduced,p,{shadow:false});
-    const rgba=c.getImageData(0,0,p.width,p.tall).data,output=c.createImageData(p.width,p.tall),out=output.data;
-    const opaque=(x,y)=>rgba[(y*p.width+x)*4+3]>=96;
-    for(let y=1;y<=p.h;y++)for(let x=1;x<=p.w;x++){
-      if(!opaque(x,y))continue;stats.spritePixels++;
-      if(!covered(occluders,p.left+x+.5,p.top+y+.5))continue;stats.hiddenPixels++;
-      if(opaque(x-1,y)&&opaque(x+1,y)&&opaque(x,y-1)&&opaque(x,y+1))continue;
-      const i=(y*p.width+x)*4;out[i]=183;out[i+1]=224;out[i+2]=210;out[i+3]=235;stats.outlinePixels++;
+  try{for(const p of wholeTiles(prepared.commands,dpr)){
+    if(view.canvas.width!==p.width)view.canvas.width=p.width;if(view.canvas.height!==p.height)view.canvas.height=p.height;
+    c.setTransform(1,0,0,1,0,0);c.clearRect(0,0,p.width,p.height);c.setTransform(dpr,0,0,dpr,-p.left,-p.top);
+    for(const command of prepared.commands)sprite(c,command);
+    const input=c.getImageData(0,0,p.width,p.height),result=wholePixels(input.data,p.width,p.height,dpr,prepared.kind==='loot'?'loot':!!prepared.actor?.enemy);
+    input.data.set(result.rgba);c.setTransform(1,0,0,1,0,0);c.clearRect(0,0,p.width,p.height);c.putImageData(input,0,0);
+    context.drawImage(view.canvas,p.innerX,p.innerY,p.w,p.h,(p.left+p.innerX)/dpr,(p.top+p.innerY)/dpr,p.w/dpr,p.h/dpr);
+    for(let y=p.innerY;y<p.innerY+p.h;y++)for(let x=p.innerX;x<p.innerX+p.w;x++){
+      const alpha=result.rgba[(y*p.width+x)*4+3];if(alpha===235)stats.outlinePixels++;else if(alpha)stats.fillPixels++;
     }
-    compositePatch(context,c,output,p);
-    stats.patchPixels+=p.width*p.tall;stats.maxPatchPixels=Math.max(stats.maxPatchPixels,p.width*p.tall);stats.tiles++;
-  }
-  context.restore();
-  return {...stats,subject:'captain',maskReads,foot,height};
+    stats.tiles++;stats.maxPatchPixels=Math.max(stats.maxPatchPixels,p.width*p.height);
+  }}finally{context.restore();}return stats;
 }
