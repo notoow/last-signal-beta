@@ -234,6 +234,15 @@ function drawDockPanel(c,a,presentation,language,panel){
   lines.forEach((text,i)=>{const x=panel.x+12,y=panel.y+hintY+i*19;c.fillText(text,x,y);textBounds.push({x,y,w:c.measureText(text).width,h:19});});c.restore();
   return {...panel,textBounds};
 }
+function supplyDamageBar(c,s,frame){
+ const t=s.tow;if(!t||t.delivered||t.hp>=80||t.hp<=0||!visibleAt(s,t))return;
+ const p=projectWorld(frame,t),bounds=frame.projection?supplyBoatLayout(t,frame).visibleBounds:null;
+ const x=bounds?bounds.x+bounds.w/2:p.x,y=bounds?bounds.y-11:p.y-t.width*frame.scale/2-16;
+ const width=64;c.save();c.setTransform(renderDpr(),0,0,renderDpr(),0,0);
+ c.fillStyle='#07151ee8';c.fillRect(x-width/2-2,y-2,width+4,9);
+ c.fillStyle='#642e2a';c.fillRect(x-width/2,y,width,5);
+ c.fillStyle=t.hp<=24?'#f07761':'#e6bf6c';c.fillRect(x-width/2,y,width*Math.max(0,t.hp)/80,5);c.restore();
+}
 const towCaption=(t,language)=>language==='en'?(t.connected?'T Release · H '+(t.anchor?'Raise anchor':'Drop anchor'):'Supply boat · T Tow / H Anchor'):
   t.connected?'T 분리 · H 닻 '+(t.anchor?'올리기':'내리기'):'보급정 · T 견인 / H 닻';
 function net(c,x,y,r=50){c.save();c.translate(x,y);c.rotate(.3);c.strokeStyle='#b4b299';c.lineWidth=1;for(let i=-r;i<=r;i+=12){c.beginPath();c.moveTo(i,-r);c.lineTo(i,r);c.moveTo(-r,i);c.lineTo(r,i);c.stroke();}c.restore();}
@@ -312,7 +321,6 @@ function craneWarning(c,s,reduced=false,language='ko'){
   c.setLineDash([]);c.lineWidth=2;
   // The shrinking outer arc is time to impact, never a second damage radius.
   if(b.phase==='warn'&&locked){c.beginPath();c.arc(t.x,t.y,CRANE.radius+6,-Math.PI/2,-Math.PI/2+Math.PI*2*Math.max(0,b.timer)/craneLockTime(s));c.stroke();}
-  canvasLabel(c,language==='en'?'FALLING CRANE · MOVE OUT':'낙하 위험 · 원 밖으로',t.x,t.y-CRANE.radius-20,'#ffada7',13);
   c.restore();
 }
 function craneBucket(c,s,reduced){
@@ -331,7 +339,7 @@ export function rogueCamera(canvas,s,mapOpen=false,options={},previous=null,dt=0
     const berth=s.map.berths.find(b=>b.id===s.mooring);
     return quayCamera({width,height,focus:s.person||berth.landing,options,previous,dt,occupied:occupied||[],
       focusBounds:quayReady&&!s.person?f=>dockedCaptainBoatBounds(projectWorld(f,s.boat,-.8*M),s.boat.length*f.scale,s.captain):null,
-      companionBounds:quayReady&&s.person?f=>dockedCaptainBoatBounds(projectWorld(f,s.boat,-.8*M),s.boat.length*f.scale,s.captain):quayReady&&s.tow?.connected&&!s.tow.delivered&&s.tow.hp>0&&visibleAt(s,s.tow)?f=>supplyBoatLayout(s.tow,f).visibleBounds:null,
+      companionBounds:quayReady&&!s.person&&s.tow?.connected&&!s.tow.delivered&&s.tow.hp>0&&visibleAt(s,s.tow)?f=>supplyBoatLayout(s.tow,f).visibleBounds:null,
       ...(quayReady?{}:{projection:IDENTITY_PROJECTION,projectionId:'quay-map-fallback'})});
   }
   const target=s.person?objective(s).target:null;
@@ -371,7 +379,7 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
     voyageLight(c,s,frame,reduced,mapOpen,renderDpr());gullScrapMarkers(c,s,frame,language);
     const impact=impactPresentation(recentImpact(s),language);
     if(impact)impactFrames.set(canvas,{impact,tag:impactTag(c,impact,frame,s,null)});else impactFrames.delete(canvas);
-    return frame;
+    supplyDamageBar(c,s,frame);return frame;
   }
   c.save();c.translate(ox,oy);c.scale(scale,scale);
   gameArt.water(c,s.map.width,s.map.height,reduced?0:s.time);
@@ -601,5 +609,5 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
       label(c,captionText,caption.x,caption.y,color,12);
     }
   }
-  return frame;
+  supplyDamageBar(c,s,frame);return frame;
 }

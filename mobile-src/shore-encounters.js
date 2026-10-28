@@ -14,8 +14,12 @@ export const FAUNA={
 };
 const humanFauna=Object.fromEntries(Object.entries(FAUNA).map(([id,spec])=>[id,{...spec,
   ...Object.fromEntries(['speed','radius','reach','notice'].map(k=>[k,spec[k]*HUMAN_SCALE])),
+  radius:spec.radius*HUMAN_SCALE*1.4,reach:spec.reach*HUMAN_SCALE*1.4,
   notice:{rat:85,dog:135,crab:70,gull:180}[id]}]));
 export const fauna=(s,id)=>humanShore(s)?humanFauna[id]:FAUNA[id];
+export const faunaVisualScale=s=>humanShore(s)?1.4:1;
+export const meleeReach=s=>(humanShore(s)?80:54)*shoreScale(s);
+export const throwSpeed=s=>390*shoreScale(s)*(humanShore(s)?1.6:1);
 export const SHORE_SITES=['폐선 수리장','연료 하역장','어시장 나루'];
 export const FLOOR_TOOLS=[
   {id:'ratchet',name:'역회전 멈춤쇠',effect:'기계선 고리 노출 +3초',clue:'멈춤쇠가 남아 있대. 정비 기록을 찾으면 구동부를 더 오래 멈출 수 있어.'},
@@ -173,14 +177,14 @@ export function shoreAttack(s,kind='ranged',aim=null){
   let angle=p.angle||0;
   if(aim&&Number.isFinite(aim.x)&&Number.isFinite(aim.y))angle=Math.atan2(aim.y-p.y,aim.x-p.x);
   else {
-    const target=c.enemies.filter(e=>e.hp>0&&dist(e,p)<(kind==='melee'?54*shoreScale(s)+fauna(s,e.kind).radius:(s.person?210:320)*shoreScale(s))&&sightLine(s.map,p,e)).sort((a,b)=>dist(a,p)-dist(b,p))[0];
+    const target=c.enemies.filter(e=>e.hp>0&&dist(e,p)<(kind==='melee'?meleeReach(s)+fauna(s,e.kind).radius:throwSpeed(s)*(s.person?.55:.84))&&sightLine(s.map,p,e)).sort((a,b)=>dist(a,p)-dist(b,p))[0];
     if(target)angle=Math.atan2(target.y-p.y,target.x-p.x);
   }
   if(s.person)s.person.angle=angle;
   if(kind==='ranged'){
     if(!c.ammo){effect(s,p.x,p.y,'empty');return false;}
     c.ammo--;c.cooldown=.65;c.shotId++;
-    c.shots.push({x:p.x,y:p.y,vx:Math.cos(angle)*390*shoreScale(s),vy:Math.sin(angle)*390*shoreScale(s),left:s.person?.55:.84});
+    c.shots.push({x:p.x,y:p.y,vx:Math.cos(angle)*throwSpeed(s),vy:Math.sin(angle)*throwSpeed(s),left:s.person?.55:.84});
   }else c.cooldown=.52;
   c.action={kind,angle,left:kind==='melee'?.42:.32,done:false};s.work=0;
   s.noise={x:p.x,y:p.y,left:1.6};
@@ -240,6 +244,18 @@ export function shotPathClear(map,a,b){
   }
   return true;
 }
+// Swept projectile contact: a fast shot cannot tunnel between sampled frames.
+export function firstShotContact(s,from,to){
+ const dx=to.x-from.x,dy=to.y-from.y,a=dx*dx+dy*dy;let hit=null;
+ for(const enemy of s.combat.enemies){
+  if(enemy.hp<=0)continue;
+  const x=from.x-enemy.x,y=from.y-enemy.y,r=fauna(s,enemy.kind).radius+5*shoreScale(s),c=x*x+y*y-r*r;
+  let t=0;
+  if(c>0){if(a===0)continue;const b=2*(x*dx+y*dy),d=b*b-4*a*c;if(d<0)continue;t=(-b-Math.sqrt(d))/(2*a);if(t<0||t>1)continue;}
+  if(!hit||t<hit.t)hit={enemy,t,x:from.x+dx*t,y:from.y+dy*t};
+ }
+ return hit;
+}
 export function tickEncounter(s,input,dt){
   const c=s.combat;if(!c)return;const unit=shoreScale(s);
   c.cooldown=Math.max(0,c.cooldown-dt);c.hit=Math.max(0,c.hit-dt);
@@ -250,15 +266,15 @@ export function tickEncounter(s,input,dt){
     c.action.left-=dt;
     if(c.action.kind==='melee'&&!c.action.done&&c.action.left<.26&&s.person){
       c.action.done=true;
-      for(const e of c.enemies)if(e.hp>0&&dist(e,s.person)<54*unit+fauna(s,e.kind).radius&&Math.abs(diff(Math.atan2(e.y-s.person.y,e.x-s.person.x),c.action.angle))<1&&sightLine(s.map,s.person,e))hurtEnemy(s,e,crewEffects(s).melee,c.action.angle);
+      for(const e of c.enemies)if(e.hp>0&&dist(e,s.person)<meleeReach(s)+fauna(s,e.kind).radius&&Math.abs(diff(Math.atan2(e.y-s.person.y,e.x-s.person.x),c.action.angle))<1&&sightLine(s.map,s.person,e))hurtEnemy(s,e,crewEffects(s).melee,c.action.angle);
     }
     if(c.action.left<=0)c.action=null;
   }
   for(const shot of c.shots){
     const old={x:shot.x,y:shot.y};shot.x+=shot.vx*dt;shot.y+=shot.vy*dt;shot.left-=dt;
-    if(!shotPathClear(s.map,old,shot)){shot.left=0;effect(s,shot.x,shot.y,'shell');continue;}
-    const e=c.enemies.find(e=>e.hp>0&&dist(e,shot)<fauna(s,e.kind).radius+5*unit);
-    if(e){hurtEnemy(s,e,20,Math.atan2(shot.vy,shot.vx));shot.left=0;}
+    const contact=firstShotContact(s,old,shot),end=contact||shot;
+    if(!shotPathClear(s.map,old,end)){shot.left=0;effect(s,end.x,end.y,'shell');continue;}
+    if(contact){shot.x=contact.x;shot.y=contact.y;hurtEnemy(s,contact.enemy,20,Math.atan2(shot.vy,shot.vx));shot.left=0;}
   }
   c.shots=c.shots.filter(p=>p.left>0);
   for(const e of c.enemies){

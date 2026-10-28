@@ -1,3 +1,4 @@
+import {canBoardAt} from './shore-boarding.js';
 import {berthReadiness,shoreSearchStatus,bossLinkCandidate} from './rogue-core.js';
 import {rescueStatus} from './shore-rescue.js';
 import {visibleAt,visibleSurvey,surveyedAt,surveyGrid,newSurvey} from './rogue-vision.js';
@@ -99,7 +100,7 @@ export function rogueContextActions(s){
       result.primary=action('search','KeyF',search.choiceMode?'상자 열기':'보급 회수',search.choiceMode?'Open crate':'Supplies',!['choice','hit'].includes(search.blocked),true,search.progress/search.required);
       if(!search.choiceMode)result.secondary.push(action('equipment','KeyR','장비 회수','Equipment',result.primary.enabled,true,result.primary.progress));
     }
-    if(b&&distance(s.person,b.landing)<shoreRanges(s).boarding){
+    if(canBoardAt(s,b)){
       const together=rescue?.ready,alone=rescue?.active&&rescue.discovered;
       const board=action('board','KeyE',together?'함께 승선':alone?'혼자 승선':'승선',together?'Board together':alone?'Board alone':'Board');
       result.transit.push(board);

@@ -1,5 +1,5 @@
 import {walkableAt} from './rogue-map.js';
-import {crewRadius,shoreRanges} from './shore-scale.js';
+import {crewRadius,shoreRanges,humanShore} from './shore-scale.js';
 import {shoreSegment} from './shore-navigation.js';
 // Jeong's wheelhouse projects over the ladder centre. Keep the physical berth
 // and interaction radius; stand on the adjacent visible quay when it is clear.
@@ -28,4 +28,13 @@ export function boardingSlot(s,home){
 export function boardingTogether(s){
  const dx=s.rescue.x-s.person.x,dy=s.rescue.y-s.person.y;
  return Math.abs(dx-.6*dy)>=8&&Math.hypot(dx,dy)<=13&&Math.abs(dx*(156/788)+dy*.4266)<=4.5;
+}
+
+// A visible quay-side boarding affordance uses the same reach as the action.
+// Broader reach is restricted to a clear ground path, never through a warehouse.
+export function canBoardAt(s,berth){
+ if(!s.person||!berth?.landing)return false;
+ const reach=humanShore(s)?24:shoreRanges(s).boarding;
+ return Math.hypot(s.person.x-berth.landing.x,s.person.y-berth.landing.y)<reach&&
+  (!humanShore(s)||shoreSegment(s.map,s.person,berth.landing,crewRadius(s)));
 }

@@ -1,4 +1,4 @@
-import {shoreStandingPoint} from './shore-boarding.js';
+import {shoreStandingPoint,canBoardAt} from './shore-boarding.js';
 import {shoreSiteName} from './shore-sites.js';
 import {harborLandmark,harborArenaX} from './rogue-landmarks.js';
 import {generateHarbor,GENERATOR_VERSION,DEPTHS,inside,waterAt,shoreBuildings,walkableAt} from './rogue-map.js';
@@ -67,17 +67,13 @@ function floor(s){
   if(s.combat!==null)s.combat=newEncounter(s,s.combat?.ammo??12);
   s.survey=s.combat?newSurvey(s.map):null;
   s.fineSurvey=newFineSurvey(s.map,s.survey);
-  s.tow=s.combat&&s.generator>=2?newRogueTow(s):null;
   // Begin alongside the first quay: both hulls share the landscape viewport.
   // Keep the supply boat anchored until the player deliberately takes it along.
   if(s.generator===12&&s.depth===0){
     const berth=s.map.berths[0];
     Object.assign(s.boat,{x:berth.x-80,y:berth.y+80});
-    if(s.tow){
-      Object.assign(s.tow,{x:s.boat.x-s.boat.length/2-132,y:s.boat.y,angle:0});
-      s.tow.anchor={x:s.tow.x,y:s.tow.y,angle:s.tow.angle};
-    }
   }
+  s.tow=s.combat&&s.generator>=2?newRogueTow(s):null;
   s.boss={active:false,cleared:false,phase:'idle',timer:0,cycle:0,aim:0,parts:Array(s.depth===0?2:3).fill(30),hook:-1,rest:70,tension:0};
   s.boss.crane=s.bossModel===DREDGER_MODEL&&s.depth===0?newCrane():null;
   s.boss.sluice=s.sluiceModel===SLUICE_MODEL&&s.depth===1?newSluice():null;
@@ -183,7 +179,7 @@ export function objective(s){
       const island=s.map.islands[cache.island],gear=GEAR[island.equipment];
       action=s.cacheModel===CACHE_MODEL?'F / R 수색 · 길게 누른 뒤 장비 또는 보급 선택':island.role==='equipment'?'F / R '+gear+' 회수 · 길게 누르기':
         'F '+(island.role==='fuel'?'연료 보충':'선체 수리')+' · R '+gear+' 회수 · 길게 누르기';
-    }else if(distance(s.person,home.landing)<shoreRanges(s).boarding)action='E 재승선';
+    }else if(canBoardAt(s,home))action='E 재승선';
     return s.claimed.includes(b.id)?{text:'배로 돌아가기',target:shoreStandingPoint(s,b),action}:{text:'부두 수색',target:surveyedAt(s,b.loot)||visibleAt(s,b.loot)?b.loot:null,action};
   }
   if(s.mode==='moored')return {text:'E · 하선 / Q · 계류 해제',target:s.map.berths.find(b=>b.id===s.mooring)};
@@ -303,7 +299,7 @@ export function interact(s,action,input={}){
   if(action!=='interact')return false;
   if(s.mode==='ashore'){
     const berth=s.map.berths.find(x=>x.id===s.mooring);
-    if(distance(s.person,berth.landing)<shoreRanges(s).boarding){boardRescue(s,maxHp(s));s.person=null;s.mode='moored';return true;}
+    if(canBoardAt(s,berth)){boardRescue(s,maxHp(s));s.person=null;s.mode='moored';return true;}
     return orderRescue(s);
   }
   if(s.mode==='moored'){

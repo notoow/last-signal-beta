@@ -41,6 +41,11 @@ export class ShoreGpuSprites{
   sync(commands){
     const scene=this.scene,order=[],groups=[];
     for(const command of commands){
+      if(command.atlas){
+        if(!scene.textures.has(command.atlas))throw Error('Missing shared sprite atlas');
+        groups.push({atlas:command.atlas,quads:[{points:command.points,uv:command.uv,opacity:command.opacity??1}]});
+        continue;
+      }
       let image=command.image;
       if(!image){
         image=this.colors.get(command.color);

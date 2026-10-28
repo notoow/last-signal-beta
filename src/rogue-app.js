@@ -276,20 +276,22 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     rewardToken=legacy?state.pendingGear:cacheSelectionToken(state);
     if(!rewardToken){pause();return;}
     const pendingToken=rewardToken;
-    rewardView=rewardPresentation({initial:state,language,reduced,legacy,guard:rewardGuard,present:showReward,
+    const nextView=rewardPresentation({initial:state,language,reduced,legacy,guard:rewardGuard,present:showReward,
       onConfirm:(choice,slot)=>{
-        if(!rewardView||rewardView.finished)return;
+        if(rewardView!==nextView||nextView.finished)return;
         const before=structuredClone(state);
         const applied=legacy?state.pendingGear===pendingToken&&resolveGear(state,slot):resolveCacheSelection(state,choice,{token:pendingToken,...(slot!==undefined?{slot}:{})});
         if(!applied)return;
-        rewardView.complete(before,state,choice,slot);onSound('lift');save();showReward();
+        nextView.complete(before,state,choice,slot);onSound('lift');
+        if(save()){rewardGuard.transition();rewardView=null;rewardToken=null;play();}else showReward();
       },
       onLeave:()=>{
-        if(!rewardView||rewardView.finished||!resolveCacheSelection(state,'leave',{token:pendingToken}))return;
-        rewardView.complete(state,state,'leave');if(save()){rewardView=null;rewardToken=null;play();}else showReward();
+        if(rewardView!==nextView||nextView.finished||!resolveCacheSelection(state,'leave',{token:pendingToken}))return;
+        nextView.complete(state,state,'leave');if(save()){rewardGuard.transition();rewardView=null;rewardToken=null;play();}else showReward();
       },
-      onContinue:()=>{if(!rewardView?.finished||saveError)return;rewardView=null;rewardToken=null;play();},
-      onRetry:()=>{if(!rewardView?.finished)return;save();showReward();},onPause:pause});
+      onContinue:()=>{if(rewardView!==nextView||!nextView.finished||saveError)return;rewardGuard.transition();rewardView=null;rewardToken=null;play();},
+      onRetry:()=>{if(rewardView!==nextView||!nextView.finished)return;if(save()){rewardGuard.transition();rewardView=null;rewardToken=null;play();}else showReward();},onPause:pause});
+    rewardView=nextView;
   }
   function gearChoice(){
     paused=true;releaseControls();save();if(!rewardView?.legacy||rewardToken!==state.pendingGear)newReward(true);showReward();

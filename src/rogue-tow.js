@@ -1,4 +1,4 @@
-import {waterAt} from './rogue-map.js';
+import {waterAt,random} from './rogue-map.js';
 import {waterMotion,waterVelocity,driftBody} from './ship-motion.js';
 import {sluiceBlocked} from './sluice-counterplay.js';
 import {lighthouseBlocked} from './lighthouse-counterplay.js';
@@ -14,6 +14,20 @@ export function newRogueTow(s){
   const t={x:380,y:990,angle:Math.PI,vx:0,vy:0,length:94,width:34,hp:80,inv:0,connected:false,anchor:{x:380,y:990,angle:Math.PI},tension:0,delivered:false};
   // The guaranteed arrival channel is broad; verify the chosen full hull.
   if(!towClear(s.map,t)){t.x=300;t.y=900;t.anchor={x:t.x,y:t.y,angle:t.angle};}
+  if(s.generator>=12){
+    const rng=random(s.seed^Math.imul(s.depth+1,0x71e3b927));
+    // Sample reachable arrival water, not arbitrary disconnected water pockets.
+    // Check the whole hull along its approach, including turning clearance.
+    for(let attempt=0;attempt<128;attempt++){
+      const direction=rng()*Math.PI*2,distance=160+rng()*180;
+      const candidate={...t,x:s.boat.x+Math.cos(direction)*distance,y:s.boat.y+Math.sin(direction)*distance,angle:wrap(direction+Math.PI)};
+      if(s.map.berths.some(b=>dist(candidate,b)<85)||!towClear(s.map,candidate))continue;
+      let clear=true;
+      for(let d=90;d<=distance;d+=10)if(!waterAt(s.map,{x:s.boat.x+Math.cos(direction)*d,y:s.boat.y+Math.sin(direction)*d},t.length/2)){clear=false;break;}
+      if(!clear)continue;
+      Object.assign(t,candidate);t.anchor={x:t.x,y:t.y,angle:t.angle};break;
+    }
+  }
   return t;
 }
 export function towControl(s,action){

@@ -1,5 +1,5 @@
-/* Visual reference: docs/design/pause-reward-20261024/reward-concept.png.
-   Live text, real offers and the production object atlas remain independent. */
+/* Direct growth selection: evidence/reward-growth-20261029/ui-review-01/.
+   Replacement/save recovery retains the existing reward presentation. */
 #rogueModal:not([hidden]):has(>.rr-view){padding:0;overflow:hidden;display:grid;place-items:center;background:linear-gradient(180deg,#07111be8,#08121ae8 50%,#060e16f5);backdrop-filter:blur(5px) saturate(.55)}
 .rr-view{--amber:#e9c388;--muted:#a7b1b9;--line:#ced8dd30;box-sizing:border-box;isolation:isolate;position:relative;color:#f1eee6;font:400 16px/1.3 Pretendard,Arial,sans-serif;width:100%;max-width:1680px;height:100dvh;margin:auto;padding:5vh 4.2vw 3.8vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:24px}
 .rr-view *{box-sizing:border-box}.rr-view [hidden]{display:none!important}
@@ -69,3 +69,104 @@
 @media(max-width:620px) and (max-height:420px){.rr-view .rr-choice-name{font-size:11px}.rr-view .rr-choice-shelf .rr-stat-label{font-size:8px;min-height:20px;display:flex;align-items:center;justify-content:center}.rr-view .rr-choice-art{height:20vh}.rr-view .rr-choice-shelf .rr-stat strong{font-size:15px}.rr-view .rr-choice-category{font-size:7px}.rr-view .rr-choice-shelf button{padding:0 4%}.rr-view .rr-top h1{font-size:23px}}
 @media(orientation:portrait) and (max-width:600px){.rr-view{padding:20px 18px;gap:14px}.rr-view .rr-top h1{font-size:29px}.rr-view .rr-subtitle{font-size:12px}.rr-view .rr-top small{font-size:8px}.rr-view .rr-choice-shelf{grid-template-columns:1fr 1fr;row-gap:16px;padding:0}.rr-view .rr-choice-shelf button:nth-child(3){border-left:0}.rr-view .rr-choice-art{height:14vh}.rr-view .rr-choice-number{font-size:10px}.rr-view .rr-choice-number:after{line-height:12px}.rr-view .rr-choice-name{font-size:15px;margin-top:5px}.rr-view .rr-choice-category{font-size:9px;margin:4px 0}.rr-view .rr-choice-category:after{display:none}.rr-view .rr-choice-shelf .rr-stat-label{font-size:10px}.rr-view .rr-choice-shelf .rr-stat strong{font-size:19px}.rr-view .rr-choice-shelf .rr-stat .rr-before{font-size:12px}.rr-view .rr-selection-note{gap:6px;text-align:left}.rr-view .rr-selection-note .rr-description{display:none}.rr-view .rr-selection-note .rr-retention{font-size:10px}.rr-view .rr-actions{gap:12px;flex-wrap:wrap;padding-top:12px}.rr-view .rr-included{max-width:65%;margin:0 0 0 auto;display:block}.rr-view .rr-primary{margin-left:auto;font-size:13px;min-width:180px}.rr-view .rr-showcase,.rr-view .rr-discovery{grid-template-columns:1fr;grid-template-rows:minmax(100px,1fr) auto;gap:8px;width:100%;max-height:none}.rr-view .rr-object{max-height:33dvh}.rr-view .rr-object-copy h2{font-size:27px}.rr-view .rr-discovery h2{font-size:32px}.rr-view .rr-replacement{grid-template-columns:1fr;gap:12px;overflow:auto}.rr-view .rr-replace-note{display:none}.rr-view .rr-decision-note{font-size:11px}.rr-view .rr-save-error{bottom:2px}}
 @media(prefers-reduced-motion:reduce){.rr-view *,.rr-view *:before{animation:none!important;transition:none!important}}
+
+/* Actual choices are the action targets; no selected-card/Take step. */
+.rr-view[data-phase=choose]{max-width:914px;padding:32px;grid-template-rows:auto minmax(0,1fr) auto;gap:12px}
+.rr-view[data-phase=choose] .rr-top{align-items:center;gap:16px}
+.rr-view[data-phase=choose] .rr-top>div>small{display:none}
+.rr-view[data-phase=choose] .rr-top h1{font-size:32px;line-height:1.1;margin:0;letter-spacing:-.02em}
+.rr-view[data-phase=choose] .rr-subtitle{font-size:14px;margin-top:5px}
+.rr-view[data-phase=choose] .rr-top-tools{gap:16px}
+.rr-view[data-phase=choose] .rr-capacity{font-size:12px;letter-spacing:0}
+.rr-view[data-phase=choose] .rr-content{display:grid;grid-template-rows:minmax(0,1fr);gap:0;overflow:auto;overscroll-behavior:contain;touch-action:pan-y}
+.rr-view .rr-growth-options{display:flex;flex-direction:column;justify-content:center;min-height:min-content}
+.rr-view .rr-growth-row{display:flex;flex-shrink:0;min-width:0;border-bottom:1px solid var(--line)}
+.rr-view .rr-growth-pick{display:grid;grid-template-columns:70px minmax(0,1fr) minmax(120px,auto);align-items:center;gap:18px;min-width:0;min-height:98px;flex:1;padding:14px 10px 14px 0;text-align:left;position:relative;touch-action:pan-y}
+.rr-view .rr-growth-pick:hover,.rr-view .rr-growth-pick:focus-visible{background:linear-gradient(90deg,#e4b77514,transparent)}
+.rr-view .rr-growth-pick:before{content:'';position:absolute;inset:16px auto 16px 0;width:3px;background:var(--amber);opacity:0}
+.rr-view .rr-growth-pick:hover:before,.rr-view .rr-growth-pick:focus-visible:before{opacity:1}
+.rr-view .rr-growth-art{width:70px;height:70px;display:block;pointer-events:none;filter:drop-shadow(0 3px 5px #0008)}
+.rr-view .rr-growth-art .rr-thumb-art,.rr-view .rr-growth-art .rr-supply-mark{width:100%;height:100%}
+.rr-view .rr-growth-copy{min-width:0}
+.rr-view .rr-growth-name{display:block;font-size:20px;font-weight:700;line-height:1.3}
+.rr-view .rr-growth-name small{font-size:14px;font-weight:500;color:var(--amber);margin-left:8px;white-space:nowrap}
+.rr-view .rr-growth-effect{display:block;font-size:15px;line-height:1.3;color:#acb8bd;margin-top:5px}
+.rr-view .rr-growth-value{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.rr-view .rr-growth-value strong{font-size:23px;color:#f4cf95;font-weight:650}
+.rr-view .rr-growth-value small{display:block;font-size:13px;font-weight:500;color:#c6ccce;margin-top:4px}
+.rr-view .rr-growth-info{width:44px;flex-shrink:0;color:#acb8bd;font-size:19px;touch-action:pan-y}
+.rr-view[data-phase=choose] .rr-actions{border-top:0;min-height:44px;padding-top:0;gap:12px;flex-wrap:nowrap}
+.rr-view .rr-growth-history{flex:1;min-width:44px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left;font-size:13px;color:#acb8bd}
+.rr-view .rr-growth-history b{color:#eee7d8;font-weight:500;margin-left:12px}
+.rr-view .rr-growth-common,.rr-view .rr-growth-leave{flex-shrink:0;font-size:13px;color:#d6d0c4}
+.rr-view .rr-history-list{list-style:none;margin:16px 0;padding:0}
+.rr-view .rr-history-list li{display:flex;align-items:center;gap:16px;border-bottom:1px solid var(--line);padding:8px 0}
+.rr-view .rr-history-list li span{flex:1}.rr-view .rr-history-list li b{white-space:nowrap;color:var(--amber);font-size:14px;font-weight:500}
+@media(max-height:650px){
+ .rr-view .rr-growth-pick{min-height:68px;padding:6px 6px 6px 0;grid-template-columns:56px minmax(0,1fr) minmax(110px,auto);gap:12px}
+ .rr-view .rr-growth-art{width:56px;height:56px}.rr-view .rr-growth-name{font-size:18px}.rr-view .rr-growth-effect{font-size:14px}.rr-view .rr-growth-value strong{font-size:21px}
+}
+@media(max-height:420px){
+ .rr-view[data-phase=choose]{padding:8px max(18px,env(safe-area-inset-right)) 6px max(18px,env(safe-area-inset-left));gap:3px;grid-template-rows:44px minmax(0,1fr) 44px}
+ .rr-view[data-phase=choose] .rr-top h1{font-size:23px}.rr-view[data-phase=choose] .rr-subtitle{font-size:12px;margin-top:2px}.rr-view[data-phase=choose] .rr-capacity{font-size:12px}.rr-view[data-phase=choose] .rr-capacity b{font-size:14px;margin-top:2px}
+ .rr-view .rr-growth-pick{min-height:50px;padding:3px 5px 3px 0;grid-template-columns:44px minmax(0,1fr) minmax(100px,auto);gap:9px}
+ .rr-view .rr-growth-art{width:44px;height:44px}.rr-view .rr-growth-art .rr-supply-mark{padding:8px}
+ .rr-view .rr-growth-name{font-size:15px}.rr-view .rr-growth-name small{font-size:12px;margin-left:5px}.rr-view .rr-growth-effect{font-size:12px;margin-top:2px}
+ .rr-view .rr-growth-value strong{font-size:17px}.rr-view .rr-growth-value small{font-size:12px;margin-top:1px}
+ .rr-view[data-phase=choose] .rr-actions{gap:6px}.rr-view .rr-growth-history{font-size:12px}.rr-view .rr-growth-history b{margin-left:6px}.rr-view .rr-growth-common,.rr-view .rr-growth-leave{font-size:12px}
+ .rr-view .rr-history-list li{gap:10px}.rr-view .rr-history-list li span{font-size:14px}
+}
+@media(orientation:portrait) and (max-width:600px){
+ .rr-view[data-phase=choose]{padding:20px 16px;gap:10px}.rr-view .rr-growth-pick{grid-template-columns:48px minmax(0,1fr);gap:10px;min-height:96px;padding:8px 0}
+ .rr-view .rr-growth-art{width:48px;height:48px}.rr-view .rr-growth-value{grid-column:2;text-align:left}.rr-view .rr-growth-value strong{font-size:20px}.rr-view .rr-growth-value small{display:inline;margin-left:12px}
+ .rr-view .rr-growth-name{font-size:18px}.rr-view .rr-growth-effect{font-size:14px}
+}
+
+/* Keep the entire loss/receipt above the action row at phone landscape height. */
+@media(max-height:420px) and (orientation:landscape){
+ .rr-view[data-phase=replace],.rr-view:has(.rr-save-error:not([hidden])){padding:8px max(18px,env(safe-area-inset-right)) 6px max(18px,env(safe-area-inset-left));gap:3px;grid-template-rows:44px minmax(0,1fr) 44px}
+ .rr-view:is([data-phase=replace],:has(.rr-save-error:not([hidden]))) .rr-top{align-items:center;gap:12px}
+ .rr-view:is([data-phase=replace],:has(.rr-save-error:not([hidden]))) .rr-top>div>small{display:none}
+ .rr-view:is([data-phase=replace],:has(.rr-save-error:not([hidden]))) .rr-top h1{font-size:23px;line-height:1.1;margin:0}
+ .rr-view:is([data-phase=replace],:has(.rr-save-error:not([hidden]))) .rr-subtitle{font-size:12px;margin-top:2px}
+ .rr-view:is([data-phase=replace],:has(.rr-save-error:not([hidden]))) .rr-content{overflow:auto;overscroll-behavior:contain;touch-action:pan-y}
+ .rr-view:is([data-phase=replace],:has(.rr-save-error:not([hidden]))) .rr-actions{min-height:44px;padding-top:0;gap:8px;flex-wrap:nowrap}
+ .rr-view:is([data-phase=replace],:has(.rr-save-error:not([hidden]))) .rr-primary{font-size:12px;min-height:44px;padding:8px 12px;gap:10px}
+ .rr-view[data-phase=replace] .rr-replacement{gap:14px;padding:0;align-items:start}
+ .rr-view[data-phase=replace] .rr-hold>.rr-eyebrow{font-size:11px;letter-spacing:0;margin-bottom:4px;line-height:1.3}
+ .rr-view[data-phase=replace] .rr-slots{gap:3px 8px}
+ .rr-view[data-phase=replace] .rr-slots button{min-height:44px;padding:1px 0;gap:5px;touch-action:pan-y}
+ .rr-view[data-phase=replace] .rr-slots .rr-thumb-art{width:32px;height:32px}
+ .rr-view[data-phase=replace] .rr-slots small{font-size:8px;margin-bottom:1px;line-height:1.2}
+ .rr-view[data-phase=replace] .rr-slots b{font-size:12px;line-height:1.2}
+ .rr-view[data-phase=replace] .rr-trade{min-height:44px;font-size:11px;line-height:1.25;margin-top:3px;padding:3px 0;touch-action:pan-y}
+ .rr-view[data-phase=replace] .rr-incoming{gap:6px;margin-bottom:4px}
+ .rr-view[data-phase=replace] .rr-incoming .rr-thumb-art{width:36px;height:36px}
+ .rr-view[data-phase=replace] .rr-incoming h2{font-size:18px;margin-top:3px}
+ .rr-view[data-phase=replace] .rr-stat-label{font-size:11px;margin-bottom:4px;line-height:1.3}
+ .rr-view[data-phase=replace] .rr-swap-name{font-size:11px;line-height:1.25;margin:6px 0 5px}
+ .rr-view[data-phase=replace] .rr-limits{font-size:11px;line-height:1.25;padding-top:4px}
+ .rr-view[data-phase=replace] .rr-limits>div{margin:3px 0}
+ .rr-view[data-phase=replace] .rr-loss{font-size:12px;line-height:1.25;margin-top:6px}
+ .rr-view[data-phase=replace] .rr-included{display:block;flex:1;max-width:none;margin:0;min-width:0}
+ .rr-view[data-phase=replace] .rr-included>span{font-size:10px;line-height:1.2}
+ .rr-view[data-phase=replace] .rr-included b,.rr-view[data-phase=replace] .rr-rig-use{font-size:11px;line-height:1.25}
+ .rr-view[data-phase=replace] .rr-quiet{font-size:11px}
+ .rr-view[data-phase=replace] .rr-quiet:before{margin-right:5px}
+ .rr-view:has(.rr-save-error:not([hidden])){padding-bottom:24px}
+ .rr-view:has(.rr-save-error:not([hidden])) .rr-showcase{width:100%;height:auto;max-height:none;margin:0;grid-template-columns:96px minmax(0,1fr);gap:16px;align-items:start}
+ .rr-view:has(.rr-save-error:not([hidden])) .rr-object{height:96px;max-height:96px}
+ .rr-view:has(.rr-save-error:not([hidden])) .rr-hero-art{max-height:96px}
+ .rr-view:has(.rr-save-error:not([hidden])) .rr-supply-mark.rr-large{width:90px;height:90px;padding:12px}
+ .rr-view:has(.rr-save-error:not([hidden])) .rr-object-caption,.rr-view:has(.rr-save-error:not([hidden])) .rr-object-copy>.rr-eyebrow{display:none}
+ .rr-view:has(.rr-save-error:not([hidden])) .rr-object-copy h2{font-size:20px;line-height:1.1;margin:0 0 6px}
+ .rr-view:has(.rr-save-error:not([hidden])) .rr-equipped-check{font-size:12px;line-height:1.25;margin-bottom:6px}
+ .rr-view:has(.rr-save-error:not([hidden])) .rr-stat-label{font-size:12px;line-height:1.25;margin-bottom:3px}
+ .rr-view:has(.rr-save-error:not([hidden])) .rr-stat strong{font-size:24px}
+ .rr-view:has(.rr-save-error:not([hidden])) .rr-retention{font-size:12px;line-height:1.25;margin-top:4px}
+ .rr-view:has(.rr-save-error:not([hidden])) .rr-receipt-extra{font-size:12px;line-height:1.25;margin-top:6px;gap:4px 12px}
+ .rr-view:has(.rr-save-error:not([hidden])) .rr-decision-note{font-size:12px;line-height:1.25}
+ .rr-view:has(.rr-save-error:not([hidden])) .rr-rig-use{font-size:11px;line-height:1.25}
+ .rr-view:has(.rr-save-error:not([hidden])) .rr-save-error{font-size:12px;line-height:1.25;bottom:3px}
+ .rr-view:has(.rr-save-error:not([hidden])) #rogueRewardRetrySave{font-size:12px}
+}

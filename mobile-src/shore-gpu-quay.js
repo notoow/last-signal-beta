@@ -26,6 +26,7 @@ const world={scale:1,ox:0,oy:0,pixelsPerMetre:M,projection:HARBOR_PROJECTION};
 export class ShoreGpuQuay{
   constructor(canvas){this.canvas=canvas;this.scene=new ShoreGpuScene(canvas);this.map=null;}
   clearMap(){
+    this.cutaways=new WeakMap();
     this.outline?.dispose();this.outline=null;this.actorMask?.dispose();this.actorMask=null;this.coverMask?.dispose();this.coverMask=null;
     this.scene.removeTarget('captain-mask');this.scene.removeTarget('cover-mask');
     this.reflections?.dispose();this.reflections=null;this.reflectionGeometry=null;
@@ -66,12 +67,29 @@ export class ShoreGpuQuay{
     const captain=actors.find(a=>a.actor.p===s.person&&!a.actor.enemy&&!a.actor.worker);
     const occluders=captain?objects.slice(objects.indexOf(captain)+1).filter(o=>o.box&&behind(world,s.person,o.box)):[];
     const camera=[frame.scale,0,0,0,frame.scale,0,frame.ox,frame.oy,1];
+    // Only already visible actors can request a building cutaway. Keep the
+    // foundation opaque so the blocked footprint remains legible.
+    const revealed=actors.filter(a=>a===captain||a.actor.enemy&&a.actor.p.hp>0&&a.actor.p.alert);
+    const coveredProps=props.filter(p=>!('ownerIndex' in p)&&(revealed.some(a=>objects.indexOf(p)>objects.indexOf(a)&&behind(world,a.actor.p,p.box))||
+      loot.some(l=>{const b=s.map.berths.find(b=>b.id===l.lootId);return !s.claimed.includes(l.lootId)&&objects.indexOf(p)>objects.indexOf(l)&&behind(world,b.loot,p.box);} )));
+    for(const prop of props.filter(p=>!('ownerIndex' in p))){
+      const target=coveredProps.includes(prop)?.22:1,old=this.cutaways.get(prop.box);
+      const opacity=old?old.opacity+(target-old.opacity)*(1-Math.exp(-12*Math.max(0,Math.min(.1,s.time-old.time)))):target;
+      this.cutaways.set(prop.box,{opacity,time:s.time});
+      if(opacity>.999)continue;
+      prop.commands=prop.commands.flatMap(c=>{
+        if(c.uv?.length!==4)return [c];
+        const p=c.points,u=c.uv,cut=p[1]+(p[5]-p[1])*.9,v=u[1]+(u[3]-u[1])*.9;
+        return [{...c,points:[p[0],p[1],p[2],p[3],p[4],cut,p[6],cut],uv:[u[0],u[1],u[2],v],opacity},
+          {...c,points:[p[0],cut,p[2],cut,p[4],p[5],p[6],p[7]],uv:[u[0],v,u[2],u[3]]}];
+      });
+    }
     if(occluders.length){
       this.scene.target('captain-mask',width,height);this.scene.target('cover-mask',width,height);
       const maskCommands=recordShoreActor(s,captain.actor,frame,reduced,{shadow:false}).commands.map(normalize);
       this.scene.draw({width:frame.width,height:frame.height,camera,target:'captain-mask',order:this.actorMask.sync(maskCommands)});
       this.scene.draw({width:frame.width,height:frame.height,camera,target:'cover-mask',alphaCutoff:128/255,order:this.coverMask.sync(occluders.flatMap(o=>o.commands))});
-      captain.commands=captain.commands.map(c=>({...c,occlusionMask:'cover-mask'}));
+      // Preserve the authored body beneath locally softened cover.
     }
     const order=this.sprites.sync(objects.flatMap(object=>object.commands)),fog=this.fog.sync(s);
     const vesselRecorder=new ShoreSpriteRecorder(),vessels=drawQuayVessels(vesselRecorder,s,frame);

@@ -1,6 +1,6 @@
 import {shoreScale,humanVisualScale} from './shore-scale.js';
 import {project,HARBOR_PROJECTION,IDENTITY_PROJECTION} from './world-projection.js';
-import {FAUNA,fauna as faunaSpec} from './shore-encounters.js';
+import {FAUNA,fauna as faunaSpec,faunaVisualScale} from './shore-encounters.js';
 import {visibleAt} from './rogue-vision.js';
 import {crewWalkCycle,crewPose,CREW_CYCLE} from './shore-pose.js';
 import {drawCrewRig} from './shore-rig.js';
@@ -180,7 +180,7 @@ export function shoreActors(s){
   return actors;
 }
 export function drawProjectedShoreActor(c,s,actor,frame,reduced=false,{shadow=true}={}){
-  const {p,enemy,worker}=actor,unit=shoreScale(s),visual=enemy?1:humanVisualScale(s),k=unit*frame.scale*visual;
+  const {p,enemy,worker}=actor,unit=shoreScale(s),visual=enemy?faunaVisualScale(s):humanVisualScale(s),k=unit*frame.scale*visual;
   const foot=project(frame,p),fight=s.combat;
   const angle=(!enemy&&!worker&&fight.action?fight.action.angle:p.angle)||0;
   const m=frame.projection||HARBOR_PROJECTION,v={x:Math.cos(angle),y:Math.sin(angle)};

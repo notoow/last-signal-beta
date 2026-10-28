@@ -1,7 +1,7 @@
 import {resolveCache,resolveGear,maxHp,maxFuel} from './rogue-core.js';
 import {gearEffect} from './rogue-cache.js';
 import {cacheChoiceModel,cacheGearModel,cacheGearName} from './rogue-cache-ui.js';
-import {crewEffects,crewRank} from './crew-upgrades.js';
+import {CREW_UPGRADES,crewEffects,crewRank} from './crew-upgrades.js';
 import {escapeUi as esc} from './session-ui.js';
 
 const clone=s=>structuredClone(s),fmt=v=>v>0&&v<.1?'<0.1':String(Number(v.toFixed(1)));
@@ -36,7 +36,12 @@ export function rewardOptions(s,lang='ko',legacy=false){
       description:en?'Keep your equipment. Recover only what you can use.':'장비는 유지하고, 필요한 만큼만 보충합니다.',detail:Object.entries(m.offered).filter(([,v])=>v>0).map(([k,v])=>`${labels[k]}: ${fmt(m.supply[k])} / ${fmt(v)}${k==='flood'?'%':''}`).join('\n')});
   }return result;
 }
-export const rewardCommon=(s,lang)=>cacheChoiceModel(s,lang)?.common.map(v=>v.replace(/ · (시제품|Prototype) I$/,''))||[];
+export const rewardCommon=(s,lang)=>cacheChoiceModel(s,lang)?.commonItems.filter(x=>x.amount===undefined||x.amount>0).map(x=>x.text.replace(/ · (시제품|Prototype) I$/,''))||[];
+export function rewardHistory(s,lang='ko'){
+  const counts=new Map();for(const id of s.equipment)counts.set(id,(counts.get(id)||0)+1);
+  return [...Object.entries(CREW_UPGRADES).filter(([id])=>crewRank(s,id)>0).map(([id,g])=>({id:'crew:'+id,name:lang==='en'?g.en:g.name,progress:`Lv.${crewRank(s,id)} / ${g.limit}`})),
+    ...[...counts].map(([id,n])=>({id,name:cacheGearName(id,lang),progress:`×${n}`}))];
+}
 // Previews only: never mutate the live run. The app commits through the token API.
 export function rewardPreview(s,id,slot,legacy=false){
   const next=clone(s);if(!legacy&&!resolveCache(next,id))return null;
@@ -82,26 +87,35 @@ function picture(id,hero=false){return rewardArt(id)?`<canvas width="512" height
 
 export function rewardPresentation({initial,language='ko',reduced=false,legacy=false,guard,present,onConfirm,onLeave,onContinue,onRetry,onPause}){
   initial=clone(initial);const lang=language,T=(ko,en)=>lang==='en'?en:ko,options=rewardOptions(initial,lang,legacy),common=legacy?[]:rewardCommon(initial,lang);
-  const rig=legacy?null:cacheChoiceModel(initial,lang)?.rig;
-  let phase=legacy?'replace':'choose',selected=options[0].id,replacing=legacy?initial.pendingGear:null,slot=undefined,receipt=null,finished=false,failed=false,details=false;
+  const rig=legacy?null:cacheChoiceModel(initial,lang)?.rig,history=rewardHistory(initial,lang);
+  let phase=options.length?(legacy?'replace':'choose'):'unavailable',selected=options[0]?.id,replacing=legacy?initial.pendingGear:null,slot=undefined,receipt=null,finished=false,failed=false,details=false,detailReturn='';
   const category=o=>o.type==='crew'?T('선원 장착','CREW'):o.type==='gear'?T('선박 장비','SHIP GEAR'):T('보급','SUPPLIES');
   const btn=(id,text,cls='',disabled=false)=>`<button type="button" id="${id}" class="${cls}" ${disabled?'disabled':''}>${text}</button>`;
   const stat=(o,before=o.before,after=o.after,current=false)=>`<div class="stat" data-reward-stat="${esc(o.id)}"><span class="stat-label">${esc(o.label)}</span><div>${o.id==='supplies'?`<strong>+${esc(fmt(after))}</strong>`:current?`<small>${T('현재','Now')}</small><strong>${o.prefix||''}${esc(fmt(before))}<i>${esc(o.unit)}</i></strong>`:`<span class="before">${o.prefix||''}${esc(fmt(before))}${esc(o.unit)}</span><span class="arrow" aria-hidden="true">→</span><strong>${o.prefix||''}${esc(fmt(after))}<i>${esc(o.unit)}</i></strong>`}</div></div>`;
   const tradeStat=gain=>stat({id:'supplies',label:T('실제 연료 보충','Actual fuel recovered'),after:gain,unit:''});
   const included=()=>`<div class="included${rig?' has-rig':''}"${rig?` data-reward-rig="${rig.id}"`:''}><span>${T('어느 것을 골라도 함께','Included with any choice')}</span><div><b>${esc(common[0]||T('추가 보급 없음','No extra supplies'))}${common.length>1?` <em>+${common.length-1}</em>`:''}</b>${rig?`<small class="rig-use">${esc(rig.action)}</small>`:''}</div></div>`;
   const keep=o=>o.type==='crew'?`${T('선원 등급','Crew rank')} ${o.rank} → ${o.rank+1} / ${o.limit} · ${T('선박 장비칸 사용 안 함','No ship slot')}`:o.type==='gear'?`${T('같은 장비','Copies')} ${o.count} → ${o.count+1} · ${T('선박 장비 1칸','1 ship slot')}`:T('장비칸 사용 안 함','No equipment slot');
+  const progress=o=>o.type==='crew'?`Lv.${o.rank} → ${o.rank+1}`:o.type==='gear'?(o.full?T('교체','REPLACE'):`×${o.count} → ${o.count+1}`):T('회복','RECOVER');
+  const comparison=o=>o.type==='supplies'?`+${fmt(o.after)}`:o.full?`${T('현재','Now')} ${o.prefix||''}${fmt(o.before)}${o.unit}`:`${o.prefix||''}${fmt(o.before)} → ${o.prefix||''}${fmt(o.after)}${o.unit}`;
+  const effectDetail=o=>o.detail.startsWith(o.description)?o.detail:o.description+'\n'+o.detail;
+  const commonDetails=()=>`<h3>${T('어느 보상을 골라도 함께 회수','Included with any choice')}</h3><ul>${common.map((x,i)=>`<li>${esc(x)}${rig&&i===0?`<small class="rig-use">${esc(rig.action)}</small>`:''}</li>`).join('')}</ul>`;
   const hero=(o,body,caption)=>`<section class="showcase"><div class="object">${picture(o.id,true)}<div class="object-shadow"></div><p class="object-caption">${caption}</p></div><div class="object-copy"><span class="eyebrow">${category(o)}</span><h2>${esc(o.name)}</h2>${body}</div></section>`;
   const refresh=focus=>present(api,focus);
   function markup(){
     const o=options.find(x=>x.id===selected);let body='',footer='';
-    if(details){body=`<section class="detail-panel"><h2>${esc(o.name)}</h2><p class="eyebrow">${T('효과 상세','FULL EFFECT')}</p><p class="detail-text">${esc(o.detail)}</p><h3>${T('어느 보상을 골라도 함께 회수','Included with any choice')}</h3><ul>${common.map((x,i)=>`<li>${esc(x)}${rig&&i===0?`<small class="rig-use">${esc(rig.action)}</small>`:''}</li>`).join('')}</ul></section>`;footer=btn('rogueRewardDetailsClose',T('돌아가기','Back to the find'),'primary');}
-    else if(phase==='found'){
-      body=`<section class="discovery"><div class="object">${picture('cache',true)}<div class="object-shadow"></div></div><div><p class="eyebrow">${T('부두에서 찾은 물건','FOUND ON THE QUAY')}</p><h2>${T('살펴보고,<br>하나만 싣자.','Take a look.<br>Bring one aboard.')}</h2><p class="muted">${T('선원에게 필요한 것, 배를 위한 것.','Something for the crew. Something for the boat.')}</p><div class="find-count">${[...new Set(options.map(category))].map(esc).join('<i> / </i>')}</div></div></section>`;
-      footer=btn('rogueCacheLeave',T('지금은 두기','Leave for now'),'quiet')+included()+btn('rogueRewardInspect',T('물건 살펴보기','Inspect the find'),'primary');
+    if(details){
+      let content;
+      if(details==='history'){
+        const items=history.length?`<ul class="history-list">${history.map(x=>`<li>${picture(x.id)}<span>${esc(x.name)}</span><b>${esc(x.progress)}</b></li>`).join('')}</ul>`:`<p>${T('아직 획득한 강화가 없습니다.','No upgrades acquired yet.')}</p>`;
+        content=`<h2>${T('이번 항해의 성장','This voyage’s upgrades')}</h2>${items}`;
+      }else if(details==='included')content=commonDetails();
+      else content=`<h2>${esc(o.name)}</h2><p class="eyebrow">${category(o)} · ${esc(progress(o))}</p>${stat(o,o.before,o.after,o.full)}<p class="detail-text">${esc(effectDetail(o))}</p><p class="retention">${esc(o.full?T('선박 장비칸이 모두 찼습니다. 교체할 장비를 골라 비교하세요.','Ship slots are full. Choose a replacement to compare.'):keep(o))}</p>${commonDetails()}`;
+      body=`<section class="detail-panel">${content}</section>`;footer=btn('rogueRewardDetailsClose',T('돌아가기','Back to choices'),'primary');
+    }else if(phase==='unavailable'){
+      body=`<section class="end-state"><h2>${T('보상을 다시 확인할 수 없습니다.','This reward is unavailable.')}</h2><p>${T('항해는 멈춰 있습니다. 일시정지 메뉴로 돌아가세요.','The voyage is paused. Return to the pause menu.')}</p></section>`;
     }else if(phase==='choose'){
-      body=`<nav class="choice-shelf" style="--rr-choices:${options.length}" aria-label="${T('발견한 보상','Found rewards')}">${options.map((x,i)=>`<button type="button" data-cache-choice="${x.id}" aria-pressed="${x.id===selected}" aria-label="${esc(x.name+' · '+category(x))}"><span class="choice-number" aria-hidden="true">${String(i+1).padStart(2,'0')}</span><span class="choice-art">${picture(x.id)}</span><b class="choice-name">${esc(x.name)}</b><span class="choice-category">${category(x)}</span>${stat(x,x.before,x.after,x.full)}</button>`).join('')}</nav>`;
-      body+=`<div class="selection-note"><div><p class="retention">${esc(o.full?T('선박 장비칸이 모두 찼습니다. 교체할 장비를 골라 비교하세요.','Ship slots are full. Choose a replacement to compare.'):keep(o))}</p><p class="description">${esc(o.description)}</p></div>${btn('rogueRewardDetails',T('효과 자세히','Full effect'),'text-link')}</div>`;
-      footer=btn('rogueCacheLeave',T('두기','Leave'),'quiet')+included()+btn('rogueRewardTake',o.type==='crew'?T('선원에게 장착','Equip on crew'):o.type==='supplies'?T('보급품 회수','Take supplies'):o.full?T('교체할 장비 선택','Choose replacement'):T('배에 장착','Fit to the boat'),'primary');
+      body=`<nav class="growth-options" aria-label="${T('성장 선택','Choose an upgrade')}">${options.map(x=>`<div class="growth-row"><button type="button" class="growth-pick" data-cache-choice="${esc(x.id)}"><span class="growth-art">${picture(x.id)}</span><span class="growth-copy"><b class="growth-name">${esc(x.name)} <small>${esc(progress(x))}</small></b><span class="growth-effect">${esc(x.label)}</span></span><span class="growth-value" data-reward-stat="${esc(x.id)}"><strong>${esc(comparison(x))}</strong><small>${x.full?T('교체 비교 →','Compare swap →'):T('선택 →','Choose →')}</small></span></button><button type="button" class="growth-info" data-reward-detail="${esc(x.id)}" aria-label="${esc(x.name+' · '+T('효과 상세','Full effect'))}">ⓘ</button></div>`).join('')}</nav>`;
+      footer=btn('rogueRewardHistory',`${T('이번 항해','This run')} <b>${history.length?esc(history.slice(0,2).map(x=>x.name+' '+x.progress).join(' · ')):T('첫 성장 선택','First upgrade')}</b>${history.length>2?' +'+(history.length-2):''} <span aria-hidden="true">›</span>`,'growth-history')+(common.length?btn('rogueRewardIncluded',`${T('함께','Also')} +${common.length}`,'growth-common'):'')+btn('rogueCacheLeave',T('두기','Leave'),'growth-leave');
     }else if(phase==='replace'){
       const g=options.find(x=>x.id===replacing),after=slot===undefined?null:rewardPreview(initial,replacing,slot,legacy),trade=slot===null,gain=rewardPreview(initial,replacing,null,legacy).fuel-initial.fuel;
       const loss=after?{hp:initial.hp-after.hp,fuel:initial.fuel-after.fuel}:null;
@@ -116,28 +130,31 @@ export function rewardPresentation({initial,language='ko',reduced=false,legacy=f
     if(finished){
       const status=receipt?.rig?`<p class="decision-note rig-received" data-reward-rig="${receipt.rig.id}"><b>✓ ${esc(receipt.rig.name)} · ${failed?T('장착 · 저장 대기','Installed · save pending'):T('장착 · 저장 완료','Installed · saved')}</b><small class="rig-use">${esc(receipt.rig.action)}</small></p>`:
         `<p class="decision-note">${failed?T('보상은 처리됐습니다. 저장만 다시 시도합니다.','The decision is complete. Only saving will be retried.'):T('저장 완료 · 항해를 계속할 수 있습니다.','Saved. Ready to continue.')}</p>`;
-      footer=status+`${failed?btn('rogueRewardRetrySave',T('저장 다시 시도','Retry saving'),'quiet'):''}${btn('rogueRewardContinue',T('항해 계속','Continue voyage'),'primary',failed)}`;
+      footer=status+`${failed?btn('rogueRewardRetrySave',T('저장 다시 시도','Retry saving'),'primary'):btn('rogueRewardContinue',T('항해 계속','Continue voyage'),'primary')}`;
     }
-    const site=cacheChoiceModel(initial,lang)?.site||T('회수 장비','RECOVERED GEAR'),title=details?T('물건 자세히 보기','Inspect the details'):phase==='found'?T('수색 완료','Search complete'):phase==='choose'?T('회수품 선택','Choose your salvage'):phase==='replace'?T('장비 교체','Make room aboard'):T('회수 완료','Ready aboard');
-    const subtitle=phase==='choose'?T('이번 항해에 가져갈 하나를 고르세요.','Choose one thing to bring on this voyage.'):site;
+    const site=cacheChoiceModel(initial,lang)?.site||T('회수 장비','RECOVERED GEAR'),title=finished&&failed?T('저장 대기','Save pending'):details?T('보상 정보','Reward details'):phase==='choose'?T('성장 선택','Choose an upgrade'):phase==='replace'?T('장비 교체','Make room aboard'):phase==='unavailable'?T('보상 확인','Reward unavailable'):T('회수 완료','Ready aboard');
+    const subtitle=phase==='choose'?T('하나 선택 · 항해 일시정지','Choose one · Voyage paused'):site;
     const html=`<section class="view" data-reward-phase="${details?'details':phase}" data-phase="${details?'details':phase}" data-motion="${reduced?'reduced':'full'}"><header class="top"><div><small>LAST SIGNAL</small><h1 id="rogueRewardHeading" tabindex="-1">${title}</h1><p class="subtitle">${esc(subtitle)}</p></div><div class="top-tools"><span class="capacity">${T('선박 장비','SHIP GEAR')}<b>${receipt?.slots??initial.equipment.length}<i> / 6</i></b></span>${btn('rogueRewardPause','Ⅱ','tool',finished&&failed)}</div></header><div class="content">${body}</div><footer class="actions">${footer}</footer><p id="rogueCacheSaveError" class="save-error" role="status" ${failed?'':'hidden'}>${failed?T('저장 실패 · 게임을 닫지 말고 다시 시도해 주세요.','Save failed. Keep the game open and try again.'):''}</p></section>`;
     return html.replace(/class="([^"]*)"/g,(_,names)=>`class="${names.split(/\s+/).filter(Boolean).map(n=>'rr-'+n).join(' ')}"`);
   }
   function mount(container,focus){
     const bind=(id,fn)=>guard.bind(container.querySelector('#'+id),fn);
-    bind('rogueRewardInspect',()=>{phase='choose';refresh();});bind('rogueCacheLeave',()=>{if(!finished)onLeave();});bind('rogueRewardPause',onPause);
-    bind('rogueRewardTake',()=>{if(finished)return;const o=options.find(x=>x.id===selected);if(o.full){replacing=o.id;slot=undefined;phase='replace';refresh();}else onConfirm(o.id);});
+    bind('rogueCacheLeave',()=>{if(!finished)onLeave();});bind('rogueRewardPause',onPause);
     bind('rogueRewardBack',()=>{if(legacy)onPause();else{phase='choose';refresh();}});
     bind('rogueRewardConfirm',()=>{if(!finished&&slot!==undefined)onConfirm(replacing,slot);});
     bind('rogueTrade',()=>{slot=null;refresh('#rogueTrade');});bind('rogueRewardContinue',()=>{if(finished&&!failed)onContinue();});bind('rogueRewardRetrySave',onRetry);
-    bind('rogueRewardDetails',()=>{details=true;refresh();});bind('rogueRewardDetailsClose',()=>{details=false;refresh('#rogueRewardDetails');});
-    container.querySelectorAll('[data-cache-choice]').forEach(el=>guard.bind(el,()=>{selected=el.dataset.cacheChoice;refresh(`[data-cache-choice="${selected}"]`);}));
+    const openDetails=(kind,back)=>{details=kind;detailReturn=back;refresh();};
+    bind('rogueRewardHistory',()=>openDetails('history','#rogueRewardHistory'));
+    bind('rogueRewardIncluded',()=>openDetails('included','#rogueRewardIncluded'));
+    bind('rogueRewardDetailsClose',()=>{details=false;refresh(detailReturn);});
+    container.querySelectorAll('[data-reward-detail]').forEach(el=>guard.bind(el,()=>{if(finished)return;selected=el.dataset.rewardDetail;openDetails('effect',`[data-reward-detail="${selected}"]`);}));
+    container.querySelectorAll('[data-cache-choice]').forEach(el=>guard.bind(el,()=>{if(finished)return;selected=el.dataset.cacheChoice;const o=options.find(x=>x.id===selected);if(!o)return;if(o.full){replacing=o.id;slot=undefined;phase='replace';refresh();}else onConfirm(o.id);}));
     container.querySelectorAll('[data-replace]').forEach(el=>guard.bind(el,()=>{slot=Number(el.dataset.replace);refresh(`[data-replace="${slot}"]`);}));
     container.querySelector('#rogueRewardPause')?.setAttribute('aria-label',T('일시정지 / 저장 후 항구로','Pause / save and return to harbor'));
     paint(container);container.querySelector(guard.modality==='keyboard'&&focus?focus:'#rogueRewardHeading')?.focus({preventScroll:true});
   }
   const api={markup,mount,legacy,get finished(){return finished;},get surface(){return phase==='replace'?'inventory':finished?'reward':'cache';},
     setSaveError(value){failed=value;},complete(before,after,id,choiceSlot){finished=true;details=false;phase=id==='leave'?'left':'equipped';if(id!=='leave')receipt=rewardReceipt(before,after,id,choiceSlot,lang,legacy);},
-    escape(){if(!details)return false;details=false;refresh('#rogueRewardDetails');return true;}};
+    escape(){if(!details)return false;details=false;refresh(detailReturn);return true;}};
   return api;
 }

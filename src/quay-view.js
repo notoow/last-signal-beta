@@ -367,7 +367,7 @@ export function quayLootSprites(s,f){
   const records=[];
   for(const berth of s.map.berths){
     if(!visibleAt(s,berth.loot))continue;
-    const p=project(f,berth.loot),k=1.2*f.pixelsPerMetre/465;
+    const p=project(f,berth.loot),k=1.8*f.pixelsPerMetre/465;
     records.push({berth,p,image:chestRaster(),claimed:s.claimed.includes(berth.id),
       rect:[0,0,465,318],bounds:{x:p.x-465*k/2,y:p.y-318*k,w:465*k,h:318*k}});
   }
@@ -426,8 +426,11 @@ export function drawQuayCacheOcclusion(c,s,f){
 export function drawQuaySearchLabels(c,s,f,language='ko'){
   drawQuayCacheOcclusion(c,s,f);
   for(const {berth,p,claimed,bounds} of quayLootSprites(s,f)){
-    if(s.person&&distance(s.person,berth.loot)<shoreRanges(s).search&&!claimed)
-      label(c,language==='en'?'Open crate':'상자 열기',{x:p.x,y:bounds.y-6});
+    if(s.person&&distance(s.person,berth.loot)<shoreRanges(s).search&&!claimed){
+      const target={x:Math.max(45,Math.min(f.width-45,p.x+76)),y:bounds.y-14};
+      c.save();c.strokeStyle='#d8c799';c.lineWidth=1;c.beginPath();c.moveTo(bounds.x+bounds.w,bounds.y+bounds.h*.4);c.lineTo(target.x-32,target.y+5);c.stroke();c.restore();
+      label(c,language==='en'?'Open crate':'상자 열기',target);
+    }
   }
 }
 const waterFields=new WeakMap();

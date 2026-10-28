@@ -2,10 +2,10 @@ import {cameraSettings,clearViewport} from './rogue-camera.js';
 import {project,unproject,HARBOR_PROJECTION} from './world-projection.js';
 import {WORLD_UNITS_PER_METRE as M,CREW_HEIGHT} from './shore-scale.js';
 
-function fitPaintedPair(width,height,objects,occupied,desired){
+function fitPaintedPair(width,height,objects,occupied,desired,pad=10){
   // A pair can straddle two clear pockets even when its enclosing rectangle
   // cannot. Keep clearViewport's 10px HUD padding and 16px screen inset.
-  const pad=10,edge=16,valid=b=>[b.x,b.y,b.w,b.h].every(Number.isFinite)&&b.w>0&&b.h>0;
+  const edge=16,valid=b=>[b.x,b.y,b.w,b.h].every(Number.isFinite)&&b.w>0&&b.h>0;
   const blocks=occupied.filter(valid),clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
   const left=Math.max(...objects.map(a=>edge-a.x)),right=Math.min(...objects.map(a=>width-edge-a.x-a.w));
   const top=Math.max(...objects.map(a=>edge-a.y)),bottom=Math.min(...objects.map(a=>height-edge-a.y-a.h));
@@ -134,6 +134,13 @@ export function quayCamera({width,height,focus,previous=null,options={},occupied
   if(group!==actor&&!fits(group,viewport)){
     const pair=fitPaintedPair(width,height,[actor,companion],occupied,{x:ox,y:oy});
     if(pair){ox=pair.x;oy=pair.y;}
+    else{
+      const single=fitPaintedPair(width,height,[actor],occupied,{x:ox,y:oy},2);
+      if(single){ox=single.x;oy=single.y;}
+    }
+  }else if(!fits(actor,viewport)){
+    const single=fitPaintedPair(width,height,[actor],occupied,{x:ox,y:oy},2);
+    if(single){ox=single.x;oy=single.y;}
   }
   // Smooth the completed layout, not an intermediate target that the later
   // HUD/pair clamps can overwrite. A change of clear-space pocket must not
