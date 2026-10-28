@@ -66,14 +66,20 @@ export function rewardInputGuard(root,signal){
   for(const type of ['pointerup','pointercancel'])window.addEventListener(type,e=>contacts.delete(e.pointerId),options);
   // Only an actual window blur ends contacts. Capturing descendant focus blur
   // would erase the fingers still held when gameplay focuses the new dialog.
-  window.addEventListener('blur',()=>{contacts.clear();overlap=true;generation++;},{signal});
+  const interrupt=()=>{contacts.clear();overlap=true;generation++;};
+  window.addEventListener('blur',interrupt,{signal});
+  // Mobile app switching can hide the page without delivering blur or the
+  // final pointer event. Discard that gesture; require a fresh press on return.
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)interrupt();},{signal});
   return {transition(){generation++;},keyboard(){modality='keyboard';root.dataset.rewardInput=modality;},get modality(){return modality;},
-    bind(el,fn){if(!el)return;let active=null;const born=generation;
+    bind(el,fn){if(!el)return;let active=null;
       el.addEventListener('pointerdown',e=>{if(el.disabled||e.button!==0)return;e.preventDefault();active={id:e.pointerId,generation,x:e.clientX,y:e.clientY,dragged:false};el.setPointerCapture(e.pointerId);});
       el.addEventListener('pointermove',e=>{if(active?.id===e.pointerId&&Math.hypot(e.clientX-active.x,e.clientY-active.y)>10)active.dragged=true;});
       el.addEventListener('pointerup',e=>{if(active?.id!==e.pointerId)return;const valid=active.generation===generation&&!overlap&&!active.dragged&&Math.hypot(e.clientX-active.x,e.clientY-active.y)<=10,r=el.getBoundingClientRect();active=null;e.preventDefault();if(valid&&!el.disabled&&e.clientX>=r.x&&e.clientX<=r.right&&e.clientY>=r.y&&e.clientY<=r.bottom)fn();});
       for(const type of ['pointercancel','lostpointercapture'])el.addEventListener(type,()=>{active=null;});
-      el.addEventListener('click',e=>{e.preventDefault();if(e.detail===0&&!el.disabled&&!contacts.size&&born===generation)fn();});
+      // Blur invalidates in-flight pointer gestures, not fresh keyboard input
+      // on the still-mounted dialog. Detached previous views stay inert.
+      el.addEventListener('click',e=>{e.preventDefault();if(e.detail===0&&!el.disabled&&!contacts.size&&el.isConnected&&root.contains(el))fn();});
     }};
 }
 
