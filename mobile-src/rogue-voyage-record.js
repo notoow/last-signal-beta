@@ -57,6 +57,7 @@ export function validVoyageRecord(s){
       case 'rescue':return e.depth!==0||!int(e.site,0,2)||!['aboard','left-behind'].includes(e.outcome)||
         typeof e.discovered!=='boolean'||!num(e.hp,0,24)||!num(e.crew,0,20)||!int(e.ammo,0,4)||
         (e.outcome==='aboard'?!e.discovered:e.hp!==0||e.crew!==0||e.ammo!==0);
+      case 'mechanic':return !Array.isArray(s.mechanicService)||s.rescue?.stage!=='aboard'||e.ammo!==2||!num(e.hp,Number.EPSILON,18)||!int(e.remaining,0,1);
       case 'net':return !['cut','recovered'].includes(e.choice);
       default:return true;
     }

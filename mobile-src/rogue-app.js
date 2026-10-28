@@ -1,3 +1,6 @@
+import {mechanicHudText} from './mechanic-hud-text.js';
+import {mechanicOffer} from './rogue-core.js';
+import {createMechanicController,mountMechanicUI,positionMechanicUI,mechanicOwnsKey} from './mechanic-ui.js';
 import {needsHarborEntry,harborEntryStatus} from './harbor-entry.js';
 import {mountHarborReadiness} from './harbor-readiness-ui.js';
 import {prepareQuayArt,retryQuayArt} from './quay-view.js';
@@ -48,7 +51,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   const hidden=(el,value)=>{if(el.hidden!==value)el.hidden=value;};
   const text=(el,value)=>{if(el.textContent!==value)el.textContent=value;};
   const setHud=(id,html)=>{if(hudMarkup.get(id)!==html){$(id).innerHTML=html;hudMarkup.set(id,html);}};
-  const probe=hudProbe($('rogueSea'),'#rogue .rogue-top-stack,#rogue .rogue-console,#rogueSkill,#roguePause,#rogueChart,#rogueQuayAssets,#rogue[data-shore-profile=metre] #rogueReadings,#rogue[data-shore-profile=metre] #rogueControls,#rogue[data-shore-profile=metre] #rogueConditions');
+  const probe=hudProbe($('rogueSea'),'#rogueMechanic,#rogue .rogue-top-stack,#rogue .rogue-console,#rogueSkill,#roguePause,#rogueChart,#rogueQuayAssets,#rogue[data-shore-profile=metre] #rogueReadings,#rogue[data-shore-profile=metre] #rogueControls,#rogue[data-shore-profile=metre] #rogueConditions');
   const sluiceLabelProbe=hudProbe($('rogueSea'),'.sluice-speed,#mobileNotice,#mobileObjective,#mobileResources,#mobileVitals,#mobileMinimap,#mobileActions button,#mobileTools,#mobileStick');
   $('rogueSea').tabIndex=-1;
   let hudRects=[];
@@ -56,6 +59,31 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
   $('rogueChart').innerHTML='<canvas id="rogueMinimap" width="336" height="192" aria-hidden="true"></canvas><span>'+(en?'M · Chart':'M · 해도')+'</span>';
   $('rogueChart').setAttribute('aria-label',en?'Expand chart · current position':'해도 확대 · 현재 위치');
   let state=null,paused=true,mapOpen=false,last=performance.now(),clock=0,frameId,closed=false,captain='woo',build='standard',saveError=false;
+  const mechanicHost=document.createElement('div');mechanicHost.id='rogueMechanic';root.append(mechanicHost);
+  const mechanicEpochs=new WeakMap();let mechanicNextEpoch=0,mechanicView=null;
+  const mechanicController=createMechanicController({language,
+    read:()=>{
+      if(!state)return {active:false,contextKey:'none'};
+      if(!mechanicEpochs.has(state))mechanicEpochs.set(state,++mechanicNextEpoch);
+      return {active:!paused&&!mapOpen&&!closed&&state.status==='playing'&&state.mode==='moored',
+        contextKey:mechanicEpochs.get(state)+':'+state.depth+':'+state.mooring,
+        ownedAmmo:state.combat?.ammo,offer:mechanicOffer(state)};
+    },
+    onAction:async action=>{
+      if(paused||mapOpen||closed||saveError||!state)return {applied:false};
+      if(!runAction(action))return {applied:false};
+      const receipt={...state.voyageRecord.events.at(-1)};
+      return {applied:true,receipt,saved:save()};
+    },
+    onRetrySave:async()=>({saved:save()}),onChange:()=>{if(mechanicView){updateMechanic();probe.invalidate();}}
+  });
+  mechanicView=mountMechanicUI(mechanicHost,mechanicController);
+  function updateMechanic(){
+    mechanicView.update();if(mechanicHost.hidden)return;
+    const mobile=document.documentElement.dataset.mobileUi==='true';
+    positionMechanicUI(mechanicHost,mobile?[document.getElementById('mobileTransit'),document.getElementById('mobileTransitNote')]:[$('rogueControls')],
+      {side:mobile&&document.documentElement.dataset.mobileMoveSide==='right'?'left':'right'});
+  }
   const performanceSamples=frameSampler();
   window.addEventListener('lastsignal:performance-request',event=>{
     if(!event.detail||closed)return;
@@ -160,7 +188,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     $('rogueModal').hidden=false;$('rogueModal').innerHTML=markup;
     activateModal($('rogueModal'),surface==='pause'?'#rogueContinue':surface==='result'?'#rogueNew':undefined);
   }
-  function close(){if(rewardView?.finished&&saveError){showReward();return;}if(!save())return;cancelHarborEntry();releaseControls();releaseModal($('rogueModal'));closed=true;controller.abort();cancelAnimationFrame(frameId);root.remove();if(document.documentElement.dataset.mobileUi==='true')window.dispatchEvent(new CustomEvent('lastsignal:mobile-frame',{detail:null}));onClose();}
+  function close(){if(rewardView?.finished&&saveError){showReward();return;}if(!save())return;cancelHarborEntry();releaseControls();releaseModal($('rogueModal'));closed=true;mechanicView.destroy();controller.abort();cancelAnimationFrame(frameId);root.remove();if(document.documentElement.dataset.mobileUi==='true')window.dispatchEvent(new CustomEvent('lastsignal:mobile-frame',{detail:null}));onClose();}
   function launchIntro(){
     let seen=false;try{seen=localStorage.getItem('lastsignal.mobile.intro.v1')==='seen';}catch{}
     if(document.documentElement.dataset.mobileUi!=='true'||seen){play();return;}
@@ -419,6 +447,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     bind('rogueHome',close);bind('rogueReprepare',()=>loadout({sameMap:true}));bind('rogueNew',()=>loadout());bind('rogueRetry',()=>{state=createRun(state.seed,state.captain,state.build,paint);mapOpen=false;save();play();});
   }
   function key(e,down){
+    if(mechanicOwnsKey(e,mechanicHost)){keys.delete(e.code);return;}
     e.stopImmediatePropagation();
     if(down)rewardGuard.keyboard();
     if(e.target===$('rogueQuayRetry')&&['Enter','NumpadEnter','Space'].includes(e.code)){
@@ -515,7 +544,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
       setHud('rogueMission',markup.mission);
       setHud('rogueReadings',markup.readings);
       setHud('rogueConditions',markup.conditions);
-      if(!saveError)text($('rogueRadio'),state.radio?.left>0?rogueHudText(state.radio.text,language):'');
+      if(!saveError)text($('rogueRadio'),state.radio?.left>0?mechanicHudText(state.radio.text,language):'');
       attr($('rogueControls'),'data-motion',hud.motion);
       setHud('rogueControls',markup.controls);
       refreshQuayAssets(lastRogueCamera($('rogueSea')));
@@ -529,8 +558,9 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
         else pendingMinimap=minimap;
         // Mobile listeners commit their layout synchronously, before we measure
         // occupied space. Never introduce new HUD over an already drawn hull.
-        probe.invalidate();
+        updateMechanic();probe.invalidate();
       }
+      if(paused)mechanicHost.hidden=true;
       if(!paused)hudRects=probe.read(now);
       if(root.dataset.surface==='chart'){
         const chart=$('harborPlanSea'),frame=drawRogue(chart,state,{reduced:true,mapOpen:true,chartPins:true,occupied:[],language});

@@ -1,3 +1,4 @@
+import {mechanicReceiptText} from './mechanic-ui.js';
 import {shoreSiteName} from './shore-sites.js';
 import {voyageDebrief} from './rogue-voyage-record.js';
 import {cacheGearName} from './rogue-cache-ui.js';
@@ -45,6 +46,10 @@ export function voyageRecordModel(s,language='ko'){
       detail=`${en?'Hull':'선체'} ${n(e.hp)} · ${en?'Fuel':'연료'} ${n(e.fuel)} · ${e.tool?(en?'Counter-tool aboard':'대응 도구 보유'):(en?'No counter-tool':'대응 도구 없음')}`;
     }else if(e.kind==='passage')title=e.depth===2?(en?'Lighthouse dock · final delivery':'등대 부두 귀항 · 최종 전송 완료'):(en?`Passage to region ${e.depth+2}`:`${e.depth+2}번째 해역으로 이동`);
     else if(e.kind==='tow')title=en?'Supply boat delivered':'보급정 귀항';
+    else if(e.kind==='mechanic'){
+      title=en?'Dock repair · Mechanic':'정박 수리 · 정비공';
+      detail=mechanicReceiptText(e,language);
+    }
     else if(e.kind==='net')title=e.choice==='cut'?(en?'Fishing net cut':'폐어망 절단'):(en?'Fishing net recovered':'폐어망 회수');
     else if(e.kind==='rescue'){
       title=e.outcome==='aboard'?(en?'Mechanic boarded':'정비공 승선'):e.discovered?(en?'Mechanic left at the harbor':'정비공은 폐항에 남았습니다'):(en?'Mechanic not found':'정비공 미발견');
@@ -79,7 +84,7 @@ function isChoice(e){
  if(e.kind==='rescue')return e.outcome==='aboard'||e.discovered===true;
  if(e.kind==='cache')return !e.pending&&(!!e.gear||!!e.crew||!!e.tool||positive(e));
  if(e.kind==='workshop')return e.choice==='rig'||positive(e);
- return ['gear','net','tow'].includes(e.kind);
+ return ['gear','net','tow','mechanic'].includes(e.kind);
 }
 export function resultInsight(s,language='ko'){
  const en=language==='en',m=voyageRecordModel(s,language);

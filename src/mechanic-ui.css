@@ -1,0 +1,28 @@
+/* Evidence-only dock affordance. Measured placement is supplied by the host. */
+.dock-mechanic-host{position:fixed;z-index:8;width:256px;pointer-events:none}
+.dock-mechanic-host[hidden],.dock-mechanic-host [hidden]{display:none!important}
+.dock-mechanic-host:not([data-placement-ready]){visibility:hidden}
+.dock-mechanic{margin:0;color:#edf1e5;font-family:Pretendard,sans-serif;text-align:left}
+.dock-mechanic-host button.dock-mechanic-action{box-sizing:border-box;display:flex;align-items:center;gap:10px;width:100%;min-width:0;min-height:52px;height:auto;padding:7px 10px;border:0;border-bottom:1px solid #a9c5ca66;border-radius:3px;background:#0b202bee;color:inherit;text-align:left;box-shadow:none;pointer-events:auto;touch-action:manipulation;cursor:pointer}
+.dock-mechanic-action>svg{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round}
+.dock-mechanic-copy{display:grid;gap:3px;min-width:0;flex:1}
+.dock-mechanic-heading{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:14px;line-height:18px}
+.dock-mechanic-heading strong{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;color:#e8c68c}
+.dock-mechanic-detail,.dock-mechanic-reason{font-size:12px;line-height:16px;white-space:normal;font-variant-numeric:tabular-nums}
+.dock-mechanic-detail{color:#c6d5d7}
+.dock-mechanic-reason{color:#e4bb8e}
+.dock-mechanic-action:disabled{cursor:default;opacity:1;color:#c6d5d7}
+.dock-mechanic-action:disabled strong{color:#c6d5d7}
+.dock-mechanic-action:focus-visible{outline:2px solid #f2cc85;outline-offset:3px}
+.dock-mechanic-action:not(:disabled):hover{background:#153441f5}
+.dock-mechanic-action:not(:disabled):active{background:#214653;transform:none}
+.dock-mechanic[data-phase=complete] .dock-mechanic-heading strong{color:#c4e4d4}
+.dock-mechanic[data-phase=save-error] .dock-mechanic-heading strong{color:#e8c68c}
+/* The mobile HUD's generic span/icon sizing must not shrink this local row. */
+#mobileControls #mobileActions .dock-mechanic-host .dock-mechanic-action{width:100%;height:auto;min-height:52px;border-radius:3px}
+#mobileActions .dock-mechanic-action>svg{width:20px;height:20px}
+#mobileActions .dock-mechanic-action .dock-mechanic-copy{max-width:none;text-align:left}
+#mobileActions .dock-mechanic-action .dock-mechanic-heading,#mobileActions .dock-mechanic-action .dock-mechanic-heading>span{font-size:14px;line-height:18px}
+#mobileActions .dock-mechanic-action .dock-mechanic-detail,#mobileActions .dock-mechanic-action .dock-mechanic-reason{font-size:12px;line-height:16px}
+/* No clipping/ellipsis, global button overrides, mobile tray dependency or
+   movement-control relocation. Actual small-screen fit remains a browser gate. */

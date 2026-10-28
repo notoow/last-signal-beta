@@ -1,3 +1,4 @@
+import {mechanicService,useMechanicService,validMechanicService} from './mechanic-service.js';
 import {shoreStandingPoint,canBoardAt} from './shore-boarding.js';
 import {shoreSiteName} from './shore-sites.js';
 import {harborLandmark,harborArenaX} from './rogue-landmarks.js';
@@ -23,7 +24,7 @@ import {newShoreRescue,rescueStatus,rescueBerth,rescuePendingAt,orderRescue,tick
 import {publishRigAction} from './rig-feedback.js';
 import {newDaylight,startCamp,tickDaylight,validDaylight} from './voyage-daylight.js';
 export {planHarbor};
-export const RUN_VERSION=20;
+export const RUN_VERSION=21;
 export const SUPPLY_MODEL='carried-v1';
 export {CAPTAINS};
 export const BUILDS={standard:'표준선',bilge:'침수 발전선',winch:'축력 윈치선'};
@@ -89,7 +90,7 @@ export function createRun(seed,captain='woo',build='standard',paint='harbor',gen
   if(!Object.hasOwn(CAPTAINS,captain)||!Object.hasOwn(BUILDS,build)||!['harbor','ochre','red'].includes(paint))throw Error('Unknown loadout');
   const s={version:RUN_VERSION,physicsProfile:WATER_PROFILE,bossModel:DREDGER_MODEL,sluiceModel:SLUICE_MODEL,lighthouseModel:LIGHTHOUSE_MODEL,supplyModel:SUPPLY_MODEL,cacheModel:CACHE_MODEL,rigModel:RIG_MODEL,generator,seed,depth:0,captain,build,paint,
     status:'playing',time:0,daylight:newDaylight(),fuel:140,hp:CAPTAINS[captain].hp,boost:CAPTAINS[captain].boost,
-    flood:0,valve:false,charge:0,crewHp:100,crewModel:CREW_MODEL,crewUpgrades:[],equipment:[],pendingGear:null,salvage:newSalvage(),harborIntel:newHarborIntel(),voyageRecord:newVoyageRecord(),log:[],radio:null,reason:'',debris:false,netChoices:[],skill:newSkillState(),tools:[],combat:undefined};
+    flood:0,valve:false,charge:0,crewHp:100,crewModel:CREW_MODEL,mechanicService:[0,0,0],crewUpgrades:[],equipment:[],pendingGear:null,salvage:newSalvage(),harborIntel:newHarborIntel(),voyageRecord:newVoyageRecord(),log:[],radio:null,reason:'',debris:false,netChoices:[],skill:newSkillState(),tools:[],combat:undefined};
   floor(s);return s;
 }
 export function hullPoints(b){
@@ -243,6 +244,14 @@ function damage(s,n,reason,source,impactSpeed=null,contact=null){
 }
 export function interact(s,action,input={}){
   if(s.status!=='playing'||s.pendingGear||s.pendingCache||s.salvage?.pending)return false;
+  if(action==='mechanic'){
+    const receipt=useMechanicService(s,maxHp(s));if(!receipt)return false;
+    // Old runs may have no ledger. Start with this real action, never invent prior events.
+    if(s.voyageRecord===null)s.voyageRecord=newVoyageRecord();
+    recordVoyage(s,'mechanic',{ammo:receipt.ammo,hp:receipt.hull,remaining:receipt.remaining});
+    s.radio={text:'정비공: 고철 '+receipt.ammo+'개로 선체를 '+receipt.hull+'만큼 수리했어요. 이 해역에서 '+receipt.remaining+'번 더 손볼 수 있어요.',left:6};
+    return true;
+  }
   if(action==='rest')return startCamp(s);
   if(action==='recoverScrap')return recoverGullScrap(s);
   if(action==='tow'||action==='cargoAnchor'){
@@ -754,7 +763,9 @@ export function restoreRun(raw){
   try{
     if(typeof raw!=='string'||raw.length>160000)return null;
     const s=JSON.parse(raw),finite=(v,min,max)=>Number.isFinite(v)&&v>=min&&v<=max;
-    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,RUN_VERSION].includes(s.version)||![1,2,3,4,5,6,7,8,9,10,11,12].includes(s.generator)||!Number.isInteger(s.seed)||!finite(s.seed,0,0xffffffff)||!Number.isInteger(s.depth)||!finite(s.depth,0,2))return null;
+    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,RUN_VERSION].includes(s.version)||![1,2,3,4,5,6,7,8,9,10,11,12].includes(s.generator)||!Number.isInteger(s.seed)||!finite(s.seed,0,0xffffffff)||!Number.isInteger(s.depth)||!finite(s.depth,0,2))return null;
+    if(s.version<21)s.mechanicService=[0,0,0];
+    if(!validMechanicService(s.mechanicService)||s.mechanicService.some((n,d)=>d>s.depth&&n!==0))return null;
     if(s.version<20)s.crewModel='legacy';
     if(!['legacy',CREW_MODEL].includes(s.crewModel))return null;
     if(s.version<18){s.daylight=newDaylight();if(s.combat?.enemies)for(const e of s.combat.enemies)e.stash=0;}
@@ -825,3 +836,5 @@ export function restoreRun(raw){
     return s;
   }catch{return null;}
 }
+
+export const mechanicOffer=s=>mechanicService(s,maxHp(s));
