@@ -16,8 +16,9 @@ const weights=Array.from({length:FACTOR*FACTOR},(_,sub)=>{
 export function fogRenderField(field){
   const old=cache.get(field.alpha);if(old&&old.sourceCols===field.cols&&old.sourceRows===field.rows)return old;
   const {cols:sourceCols,rows:sourceRows,alpha:source,cell}=field,cols=sourceCols*FACTOR,rows=sourceRows*FACTOR,alpha=new Uint8Array(cols*rows),higher=new Uint16Array(27);
+  alpha.fill(255);
   for(let y=0;y<sourceRows;y++)for(let x=0;x<sourceCols;x++){
-    const base=source[y*sourceCols+x];let count=0;
+    const base=source[y*sourceCols+x];if(base===255)continue;let count=0;
     if(base<255)for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
       const nx=Math.max(0,Math.min(sourceCols-1,x+dx)),ny=Math.max(0,Math.min(sourceRows-1,y+dy)),value=source[ny*sourceCols+nx];
       if(value>base){higher[count++]=dx+1;higher[count++]=dy+1;higher[count++]=value;}
