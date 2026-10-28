@@ -25,13 +25,13 @@ export function voyageEquipmentText(equipment,language='ko'){
 export function rescueResultText(s,language='ko'){
   const r=s.rescue,en=language==='en';if(!r)return '';
   if(r.stage==='aboard')return s.status==='won'?(en?'Mechanic reached the lighthouse with you':'정비공과 함께 등대 도착'):(en?'Mechanic boarded · voyage ended':'정비공 승선 기록 · 항해 중단');
-  if(!r.discovered)return en?'Mechanic not found':'정비공 미발견';
+  if(!r.discovered)return '';
   return r.stage==='left-behind'?(en?'Mechanic left at the harbor':'정비공은 폐항에 남았습니다'):(en?'Mechanic did not board · voyage ended':'정비공 미승선 · 항해 중단');
 }
 function gains(e,en){return [e.fuel>0?`${en?'Fuel':'연료'} +${n(e.fuel)}`:'',e.hp>0?`${en?'Hull':'선체'} +${n(e.hp)}`:'',e.drained>0?`${en?'Drained':'배수'} ${n(e.drained)}%`:'',e.crew>0?`${en?'Crew':'선원'} +${n(e.crew)}`:''].filter(Boolean).join(' · ');}
 export function voyageRecordModel(s,language='ko'){
   const r=voyageDebrief(s),en=language==='en',lang=en?'en':'ko',gear=id=>cacheGearName(id,language);
-  const events=r.events.map(e=>{
+  const events=r.events.map((e,recordIndex)=>({...e,recordIndex})).filter(e=>e.kind!=='rescue'||e.outcome==='aboard'||e.discovered===true).map(e=>{
     let title='',detail=gains(e,en);
     if(e.kind==='cache'){
       title=shoreSiteName(s,e.site,language,e.depth)+' · '+(e.crew?(en?CREW_UPGRADES[e.crew].en+' equipped':CREW_UPGRADES[e.crew].name+' 장착'):e.gear?gear(e.gear)+(e.pending?(en?' selected · replacement pending':' 선택 · 교체 대기'):(en?' recovered':' 회수')):(en?'Supplies taken':'보급품 수령'));
@@ -62,7 +62,7 @@ export function voyageRecordMarkup(s,language='ko'){
   if(!m.available)return `<div class="rogue-debrief"><p class="rogue-record-unavailable">${en?'This older voyage has no choice or damage record.':'이전 버전 항해에는 선택·피해 기록이 없습니다.'}</p><details><summary>${en?'Equipment aboard':'보유 장비'}</summary><p>${esc(m.equipmentText)}</p></details></div>`;
   const rows=items=>`<ol class="rogue-record-list">${items.map(e=>`<li><time>${e.depth+1}/3 · ${e.at}</time><div><strong>${esc(e.title)}</strong>${e.detail?`<p>${esc(e.detail)}</p>`:''}${e.equipmentText?`<small>${esc(e.equipmentText)}</small>`:''}${e.context?`<small>${esc(e.context)}</small>`:''}</div></li>`).join('')}</ol>`;
   const damageSummary=`<div class="rogue-record-summary"><span>${en?'Hull damage':'선체 피해'} <b>${esc(n(m.hullDamage))}</b></span><span>${en?'Crew damage':'선원 피해'} <b>${esc(n(m.crewDamage))}</b></span><span>${en?'Hits taken':'피격'} <b>${m.hitCount}${en?'':'회'}</b></span></div>`;
-  return `<div class="rogue-debrief">${s.rescue?`<p class="rogue-rescue-result">${esc(rescueResultText(s,language))}</p>`:''}
+  return `<div class="rogue-debrief">${rescueResultText(s,language)?`<p class="rogue-rescue-result">${esc(rescueResultText(s,language))}</p>`:''}
     <details id="rogueRecordChoices"><summary>${en?'Voyage choices':'항해 선택 기록'} <small>${m.events.length}${en?' recorded':'건 기록'}</small></summary><p class="rogue-record-equipment">${en?'Equipment aboard: ':'보유 장비: '}${esc(m.equipmentText)}</p>${m.events.length?rows(m.events):`<p>${en?'No choices recorded.':'기록된 선택이 없습니다.'}</p>`}${m.events.length===48?`<p>${en?'Showing the latest 48 choices.':'최근 선택 48건을 표시합니다.'}</p>`:''}</details>
     <details id="rogueRecordHits"><summary>${en?'Recent damage':'최근 피해 기록'} <small>${m.hits.length} / ${m.hitCount}</small></summary>${damageSummary}<div class="rogue-record-totals">${m.damage.hull.map((amount,d)=>`<span>${d+1}/3 · ${en?'Hull':'선체'} ${esc(n(amount))} / ${en?'Crew':'선원'} ${esc(n(m.damage.crew[d]))}</span>`).join('')}</div>${['fuel','flood'].includes(m.terminal)?`<p class="rogue-record-note">${en?'These are earlier hits, not the cause of this voyage ending.':'아래는 이전 피격 기록이며, 이번 항해의 종료 원인은 아닙니다.'}</p>`:''}${m.hits.length?rows(m.hits):`<p>${en?'No damage recorded.':'기록된 피해가 없습니다.'}</p>`}${m.hitCount>m.hits.length?`<p>${en?'Only the latest 8 hits are shown. Totals include every recorded hit.':'최근 피격 8건만 표시합니다. 피해 합계에는 모든 기록이 포함됩니다.'}</p>`:''}</details>
   </div>`;
@@ -91,7 +91,7 @@ export function resultInsight(s,language='ko'){
   if(hits.length){const h=hits[0];return {type:'damage',label:en?'Largest recent '+(m.terminal==='hull'?'hull':'crew')+' hit':'최근 '+(m.terminal==='hull'?'선체':'선원')+' 피해 중 최대',title:h.title,
    detail:`${h.depth+1}/3 · ${h.at}`+(m.hitCount>m.hits.length?(en?` · latest ${m.hits.length} of ${m.hitCount} hits`:` · 최근 ${m.hits.length}/${m.hitCount}회`):''),record:'rogueRecordHits',source:{kind:'hit',index:h.index,time:h.time,depth:h.depth,amount:h.amount,target:h.target,source:h.source}};}
  }
- const choices=m.events.map((e,index)=>({...e,index})).filter(isChoice);
+ const choices=m.events.map((e,index)=>({...e,index:e.recordIndex??index})).filter(isChoice);
  if(choices.length){const e=choices.at(-1),detail=choiceDetail(e,en);return {type:'choice',label:en?'A choice from this voyage':'이번 항해에서 한 선택',title:e.title,detail:`${e.depth+1}/3 · ${e.at}`+(detail?' · '+detail:''),record:'rogueRecordChoices',source:{kind:'event',index:e.index,time:e.time,eventKind:e.kind}};}
  if(['fuel','flood'].includes(m.terminal))return {type:'terminal',label:en?'Voyage ended':'항해 중단',title:m.terminal==='fuel'?(en?'Fuel exhausted':'연료 소진'):(en?'Flooding reached 100%':'침수 100%'),detail:en?'No choices recorded.':'기록된 선택이 없습니다.',record:null,source:{kind:'terminal',terminal:m.terminal}};
  return {type:'none',label:en?'Voyage record':'항해 기록',title:en?'No choice or damage to highlight.':'따로 짚을 선택·피해 기록이 없습니다.',detail:'',record:null,source:null};

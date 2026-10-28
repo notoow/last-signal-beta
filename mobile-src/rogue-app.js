@@ -1,3 +1,4 @@
+import {voyageEnding} from './rogue-ending.js';
 import {VoyageScore} from './soundtrack.js';
 import {frameSampler} from './frame-performance.js';
 import {audioMarkup,bindAudio} from './audio-settings.js';
@@ -369,7 +370,7 @@ export function openRogue({resume=false,language='ko',paint='harbor',reduced=fal
     resultView=structuredClone(state);
     const preparation=voyagePreparationText(state,language),insight=resultInsight(state,language);
     modalSurface('result',resultMarkup({outcome:won?'success':'failure',title:won?ui.rogueComplete:ui.failed,
-      kicker:CAPTAINS[state.captain].name+' · '+(en?'Voyage no. ':'항해 번호 ')+state.seed,summary:won?ui.rogueSummary:rogueFailureText(state.reason,language),
+      kicker:CAPTAINS[state.captain].name+' · '+(en?'Voyage no. ':'항해 번호 ')+state.seed,summary:won?(voyageEnding(state,language)?.summary||ui.rogueSummary):rogueFailureText(state.reason,language),
       facts:[{label:ui.regions,value:(state.depth+1)+' / 3'},{label:ui.hull,value:Math.ceil(state.hp)+' / '+maxHp(state)},{label:ui.equipment,value:state.equipment.length+' / 6'}],
       reward:insightMarkup(insight,language)+'<span id="rogueRetrySetupNote" class="rogue-sr-only">'+esc(preparation.sameSetupDetail)+'</span><p class="rogue-retry-note" id="rogueRetryNote">'+esc(preparation.retryDetail)+(preparation.chartDetail?' '+esc(preparation.chartDetail):'')+'</p>'+voyageRecordMarkup(state,language)+'<p id="rogueSaveStatus" class="session-save" role="status" data-save-state="'+(saveError?'failed':'saved')+'">'+(saveError?ui.saveFailed:ui.saved)+'</p>',
       details:state.log.map(l=>'<p>'+esc(rogueHudText(l.text,language))+'</p>').join(''),
