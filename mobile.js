@@ -1325,11 +1325,13 @@ function render(next) {
   buttonFace(more, language === "en" ? "More" : "\uB354 \uBCF4\uAE30", "more");
   more.setAttribute("aria-label", "\uCD94\uAC00 \uC870\uC791 / More controls");
   more.setAttribute("aria-expanded", "false");
+  more.setAttribute("aria-controls", "mobileTools");
   bindMenuToggle(more, () => {
     const expanded = pad.classList.toggle("expanded");
     more.setAttribute("aria-expanded", String(expanded));
     buttonFace(more, expanded ? language === "en" ? "Close" : "\uC811\uAE30" : language === "en" ? "More" : "\uB354 \uBCF4\uAE30", "more");
     refresh();
+    if (expanded && document.getElementById("mobileSupplyDetails")?.hidden === false) document.getElementById("mobileTools").scrollTop = 0;
   });
   actions.insertBefore(more, actions.children[3] || null);
   const info = document.createElement("button");
@@ -1365,11 +1367,12 @@ function render(next) {
     supply.id = "mobileSupply";
     supply.hidden = true;
     supply.setAttribute("role", "group");
-    supply.innerHTML = "<strong></strong><small></small><p></p>";
     for (let i = 0; i < 2; i++) {
       const button = document.createElement("button");
       button.type = "button";
       button.dataset.supplySlot = i;
+      buttonFace(button, "", i === 0 ? "winch" : "interact");
+      button.setAttribute("aria-describedby", "mobileSupplyHint");
       bindAction(button);
       supply.append(button);
     }
@@ -1397,6 +1400,14 @@ function render(next) {
   tools.setAttribute("role", "group");
   tools.setAttribute("aria-label", language === "en" ? "Additional controls" : "\uCD94\uAC00 \uC870\uC791");
   for (const button of [...actions.children]) if (button.classList.contains("mobile-extra")) tools.append(button);
+  if (mode === "rogue") {
+    const details = document.createElement("section");
+    details.id = "mobileSupplyDetails";
+    details.hidden = true;
+    details.setAttribute("aria-labelledby", "mobileSupplyTitle");
+    details.innerHTML = '<h3 id="mobileSupplyTitle"></h3><p id="mobileSupplyReward"></p><p id="mobileSupplyHint"></p>';
+    tools.prepend(details);
+  }
   actions.append(tools);
   installGullHorn();
 }
@@ -1542,17 +1553,23 @@ function refreshContext() {
   }
   actions.dataset.contextCount = available.length;
   actions.dataset.mode = mobileFrame?.mode || "";
-  const supply = document.getElementById("mobileSupply"), cargo = context?.supply;
+  const supply = document.getElementById("mobileSupply"), cargo = context?.supply, details = document.getElementById("mobileSupplyDetails");
+  if (details) details.hidden = !cargo;
   if (supply) {
     supply.hidden = !cargo;
+    const more = document.getElementById("mobileMore");
+    more?.setAttribute("aria-label", cargo ? en ? "More controls \xB7 supply details" : "\uCD94\uAC00 \uC870\uC791 \xB7 \uBCF4\uAE09\uC815 \uC0C1\uC138" : "\uCD94\uAC00 \uC870\uC791 / More controls");
     if (cargo) {
-      supply.setAttribute("aria-label", en ? cargo.titleEn : cargo.titleKo);
-      supply.querySelector("strong").textContent = en ? cargo.titleEn : cargo.titleKo;
-      supply.querySelector("small").textContent = en ? cargo.rewardEn : cargo.rewardKo;
-      supply.querySelector("p").textContent = en ? cargo.hintEn : cargo.hintKo;
+      const title = en ? cargo.titleEn : cargo.titleKo, reward = en ? cargo.rewardEn : cargo.rewardKo, hint = en ? cargo.hintEn : cargo.hintKo;
+      supply.setAttribute("aria-label", title);
+      details.querySelector("#mobileSupplyTitle").textContent = title;
+      details.querySelector("#mobileSupplyReward").textContent = reward;
+      details.querySelector("#mobileSupplyHint").textContent = hint;
       for (const button of supply.querySelectorAll("button")) {
         const a = cargo.actions[Number(button.dataset.supplySlot)], label = en ? a.labelEn : a.labelKo;
-        button.textContent = label;
+        button.querySelector("span").textContent = en ? { "Connect tow": "Connect", "Disconnect tow": "Release line" }[label] || label : label.replace(/^견인줄 /, "\uC904 ");
+        button.setAttribute("aria-label", label);
+        button.title = label + " \xB7 " + hint;
         button.dataset.code = a.code;
         button.dataset.action = a.id;
         button.dataset.ready = String(a.enabled);

@@ -521,11 +521,15 @@ html[data-mobile-ui=true]:has(#rogueQuayAssets[data-mobile-row=below]:not([hidde
 /* Situational transit sits above Work without shifting the fixed thumb grid. */
 #mobileTransit{position:absolute;right:0;bottom:calc(100% + 8px);display:flex;justify-content:flex-end;gap:8px;pointer-events:none}
 #mobileTransit[hidden]{display:none}
-#mobileSupply{position:fixed;top:58px;left:12px;width:220px;box-sizing:border-box;padding:6px;border:1px solid #cbb27e88;border-radius:10px;background:#0b202bf2;color:#edf1e5;display:grid;grid-template-columns:1fr 1fr;gap:4px 6px;pointer-events:auto}
-#mobileSupply strong,#mobileSupply small,#mobileSupply p{grid-column:1/-1;margin:0;line-height:1.3}
-#mobileSupply strong{font-size:12px;color:#ffe0a1}
-#mobileSupply small,#mobileSupply p{font-size:10px}
-#mobileControls #mobileSupply>button{width:100%;height:44px;min-height:44px;padding:5px;border-radius:8px;border:1px solid #cbb27e;background:#17313b;color:#fff0cb;font-size:12px;pointer-events:auto}
+/* Optional supply operations remain direct; detail is in the existing More tray. */
+#mobileSupply{position:fixed;top:58px;left:12px;width:112px;height:48px;box-sizing:border-box;padding:0;border:0;background:none;display:grid;grid-template-columns:52px 52px;gap:8px;pointer-events:none}
+#mobileControls #mobileSupply>button{box-sizing:border-box;width:52px;height:48px;min-height:48px;padding:3px;gap:1px;border-radius:10px;border:1px solid #cbb27e99;background:#102a36c9;color:#fff0cb;pointer-events:auto}
+#mobileControls #mobileSupply>button svg{width:16px;height:16px;flex:none}
+#mobileControls #mobileSupply>button span{display:block;max-width:44px;font-size:10px;line-height:11px;white-space:normal;word-break:normal;overflow-wrap:normal;text-align:center}
+#mobileTools>#mobileSupplyDetails{grid-column:1/-1;min-width:0;padding:4px 6px 8px;border-bottom:1px solid #667e8a;color:#edf1e5;text-align:left}
+#mobileSupplyDetails h3{margin:0;font-size:12px;line-height:1.35;color:#ffe0a1}
+#mobileSupplyDetails p{margin:5px 0 0;font-size:12px;line-height:1.35;white-space:normal;overflow-wrap:anywhere}
+#mobileSupplyReward{color:#c4d6d8}
 #mobileSupply button:disabled{opacity:.5}
 html[data-mobile-move-side=right] #mobileSupply{left:auto;right:150px}
 #mobileControls.expanded #mobileSupply{visibility:hidden}
@@ -647,7 +651,7 @@ html[data-mobile-move-side=right] #mobileTransit{right:auto;left:0;justify-conte
 #mobileControls #mobileActions>.mobile-captain-skill[data-state=locked]{opacity:1;background:#081b26e6;border-color:#8fa5ac99;color:#aebfc4}
 /* Keep optional transport above the movement hand, clear of the minimap and
    the fixed brake/boost/boarding cluster, even on a 568 x 320 viewport. */
-@media(max-width:600px){html[data-mobile-move-side=right] #mobileControls #mobileSupply{right:124px;width:210px}}
+@media(max-width:600px){html[data-mobile-move-side=right] #mobileControls #mobileSupply{right:124px;width:112px}}
 
 #mobileBossEncounter .boss-encounter[data-kind] .be-parts{gap:6px}
 /* The same phase line is now above the three gates; keep alignment and receipts. */

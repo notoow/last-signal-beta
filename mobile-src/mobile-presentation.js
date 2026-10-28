@@ -41,7 +41,7 @@ export function mobileObstacles(){
     if(el.id==='mobileActions'){
       // Transparent grid/transit containers are layout, not painted barriers.
       // Keep every visible control and its actual labels/rings as a separate box.
-      return [...el.querySelectorAll(':scope>button:not(#mobileGullHorn),#mobileTransit>button,#mobileTransitNote,#mobileSupply')].flatMap(control=>{
+      return [...el.querySelectorAll(':scope>button:not(#mobileGullHorn),#mobileTransit>button,#mobileTransitNote,#mobileSupply>button')].flatMap(control=>{
         const r=paintedRect(control);if(!r)return [];
         const name=control.id||control.dataset.action||control.dataset.code||'slot-'+control.dataset.contextSlot;
         return [{...r,id:'mobileAction:'+name,group:'mobileActions'}];
