@@ -482,7 +482,7 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
         const receipt=rigReceipt?.part?.index===i?rigReceipt.part.status:null;
         c.font=`600 ${11/labelScale}px Pretendard, sans-serif`;
         const status=receipt&&c.measureText(receipt).width*labelScale<=88?receipt:null;
-        label(c,status||copy.status,part.x,part.y-18/labelScale,status?'#a4e0df':copy.color,11);
+        label(c,status||(driveTarget?.index===i?driveTarget.prompt:copy.status),part.x,part.y-18/labelScale,status?'#a4e0df':copy.color,11);
       }
     }else ring(c,part,11,hp<=0?'#6a7771':boss.phase==='recover'?'#e8ce7d':'#856862');
     c.fillStyle=hp<=0?'#6a7771':'#e0c589';c.fillRect(part.x-14,part.y+18,28*hp/30,3);
@@ -560,7 +560,7 @@ export function drawRogue(canvas,s,{reduced=false,mapOpen=false,chartPins=false,
   if(impact)impactFrames.set(canvas,{impact,tag:impactTag(c,impact,frame,s,panel)});else impactFrames.delete(canvas);
   if(!mapOpen){
     const points=[];
-    if(target&&!namedDriveTarget)points.push({p:target,text:driveTarget?.name||connectionMarker?.text||(task.rescue?(language==='en'?'Escort / ladder':'정비공 / 사다리'):task.planSite?(language==='en'?'Planned quay':'선택한 부두'):task.planBoss?(language==='en'?'Outer approach':'바깥 해역 입구'):language==='en'?(s.person?'Search / return':'Target'):(s.person?'수색 / 귀환':'목표')),color:driveTarget?.color||connectionMarker?.color||'#f6dda2'});
+    if(target&&!namedDriveTarget)points.push({p:target,text:(driveTarget?driveTarget.name+' · '+driveTarget.prompt:null)||connectionMarker?.text||(task.rescue?(language==='en'?'Escort / ladder':'정비공 / 사다리'):task.planSite?(language==='en'?'Planned quay':'선택한 부두'):task.planBoss?(language==='en'?'Outer approach':'바깥 해역 입구'):language==='en'?(s.person?'Search / return':'Target'):(s.person?'수색 / 귀환':'목표')),color:driveTarget?.color||connectionMarker?.color||'#f6dda2'});
     if(s.tow?.connected&&!s.person)points.push({p:s.tow,text:language==='en'?'Supply tow':'견인선',color:'#adc8c3'});
     if(!dredger&&!sluice&&!lighthouse&&s.boss.active&&!s.boss.cleared)points.push({p:s.map.boss,text:boss.phase==='warn'?'보스 · 공격 예고':'보스',color:boss.phase==='warn'?'#f4ad7d':'#e4ca9b'});
     for(const {p,text,color} of points){

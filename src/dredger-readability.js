@@ -20,7 +20,10 @@ export function dredgerReadability(s,language='ko'){
     action:exitKnown?(en?'Leave the wreck · dock at the exit pier':'잔해를 떠나 탈출 부두에 접안'):(en?'Leave the wreck · follow the coast to find the exit':'잔해를 떠나 해안을 따라 출구 탐색'),
     exitKnown:!!exitKnown
   }:null;
-  return {parts,threat,completion,target:selected&&!threat?{...selected,name:parts[selected.index].name,color:parts[selected.index].color}:null};
+  const action=selected?.state==='connected'?'connected':selected?.linkable?'connect':selected?.state==='exposed'?(s.tow?.connected?'clear-tow':'approach'):'lure';
+  const prompts=en?{connected:'Connected',connect:'Connect','clear-tow':'Release tow',approach:'Approach',lure:'Lure drop'}:
+    {connected:'연결 중',connect:'연결 가능','clear-tow':'견인줄 분리',approach:'접근',lure:'낙하 유도'};
+  return {parts,threat,completion,target:selected&&!threat?{...selected,name:parts[selected.index].name,color:parts[selected.index].color,action,prompt:prompts[action]}:null};
 }
 
 // An actual break owns its short local motion. Nothing is inferred from a

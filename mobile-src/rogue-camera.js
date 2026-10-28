@@ -1,5 +1,6 @@
 import {mobileScale,mobileObstacles} from './mobile-presentation.js';
 import {project,unproject} from './world-projection.js';
+import {worldEdgeMarker} from './world-edge-marker.js';
 export {project,unproject,screenVectorToWorld} from './world-projection.js';
 export const CAMERA_KEY='lastsignal.mobile.camera.v1';
 export const DEFAULT_CAMERA={autoZoom:false,zoom:1};
@@ -137,6 +138,7 @@ export function playCamera({width,height,world,focus,partner=null,attention=null
 }
 export function edgeMarker(frame,p,inset=26){
   const q=project(frame,p),v=frame.viewport;
+  if(frame.occlusionKnown&&(q.x<0||q.y<0||q.x>frame.width||q.y>frame.height))return worldEdgeMarker(frame,p,inset);
   // The framing rectangle keeps the controlled actor clear of the HUD; it
   // does not crop the rest of the sea. Do not point at an already visible
   // target beside that rectangle. Legacy callers without HUD geometry retain
