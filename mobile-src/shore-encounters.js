@@ -19,7 +19,7 @@ const humanFauna=Object.fromEntries(Object.entries(FAUNA).map(([id,spec])=>[id,{
   notice:{rat:85,dog:135,crab:70,gull:180}[id]}]));
 export const fauna=(s,id)=>humanShore(s)?humanFauna[id]:FAUNA[id];
 export const faunaVisualScale=s=>humanShore(s)?1.4:1;
-export const meleeReach=s=>(humanShore(s)?80:54)*shoreScale(s);
+export const meleeReach=s=>(humanShore(s)?112:54)*shoreScale(s);
 export const throwSpeed=s=>390*shoreScale(s)*(humanShore(s)?1.6:1);
 export const SHORE_SITES=['폐선 수리장','연료 하역장','어시장 나루'];
 export const FLOOR_TOOLS=[
@@ -179,7 +179,7 @@ export function shoreAttack(s,kind='ranged',aim=null){
   const p=s.person||s.boat;
   if(kind==='melee'&&!s.person)return false;
   let angle=p.angle||0;
-  if(aim&&Number.isFinite(aim.x)&&Number.isFinite(aim.y))angle=Math.atan2(aim.y-p.y,aim.x-p.x);
+  if(kind!=='melee'&&aim&&Number.isFinite(aim.x)&&Number.isFinite(aim.y))angle=Math.atan2(aim.y-p.y,aim.x-p.x);
   else {
     const target=c.enemies.filter(e=>e.hp>0&&dist(e,p)<(kind==='melee'?meleeReach(s)+fauna(s,e.kind).radius:throwSpeed(s)*(s.person?.55:.84))&&sightLine(s.map,p,e)).sort((a,b)=>dist(a,p)-dist(b,p))[0];
     if(target)angle=Math.atan2(target.y-p.y,target.x-p.x);
@@ -273,6 +273,10 @@ export function tickEncounter(s,input,dt){
     if(c.action.kind==='melee'&&!c.action.done&&c.action.left<.26&&s.person){
       c.action.done=true;
       const fx=crewEffects(s);
+      // Reacquire at contact: movement during windup must not leave the swing
+      // pointing behind the closest reachable enemy. Never pull the player.
+      const target=c.enemies.filter(e=>e.hp>0&&dist(e,s.person)<meleeReach(s)+fauna(s,e.kind).radius&&sightLine(s.map,s.person,e)).sort((a,b)=>dist(a,s.person)-dist(b,s.person))[0];
+      if(target){c.action.angle=Math.atan2(target.y-s.person.y,target.x-s.person.x);s.person.angle=c.action.angle;}
       for(const e of c.enemies)if(e.hp>0&&dist(e,s.person)<meleeReach(s)+fauna(s,e.kind).radius&&Math.abs(diff(Math.atan2(e.y-s.person.y,e.x-s.person.x),c.action.angle))<fx.meleeArc&&sightLine(s.map,s.person,e))hurtEnemy(s,e,fx.melee*(c.action.ambushIds?.includes(e.id)?fx.ambush:1),c.action.angle,{breakGuard:fx.breakGuard});
     }
     if(c.action.left<=0)c.action=null;

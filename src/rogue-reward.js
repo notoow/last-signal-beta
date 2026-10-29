@@ -62,8 +62,10 @@ export function rewardReceipt(before,after,id,slot,lang,legacy=false){
 export function rewardInputGuard(root,signal){
   const contacts=new Set();let overlap=false,generation=0,modality='pointer';
   const options={capture:true,signal};
-  window.addEventListener('pointerdown',e=>{modality='pointer';root.dataset.rewardInput=modality;if(!contacts.size)overlap=false;contacts.add(e.pointerId);if(contacts.size>1)overlap=true;},options);
-  for(const type of ['pointerup','pointercancel'])window.addEventListener(type,e=>contacts.delete(e.pointerId),options);
+  // Mobile world aiming dispatches a synthetic mouse down without a matching
+  // up. It is an action command, not a physical contact held over the dialog.
+  window.addEventListener('pointerdown',e=>{if(e.isTrusted===false)return;modality='pointer';root.dataset.rewardInput=modality;if(!contacts.size)overlap=false;contacts.add(e.pointerId);if(contacts.size>1)overlap=true;},options);
+  for(const type of ['pointerup','pointercancel'])window.addEventListener(type,e=>{if(e.isTrusted!==false)contacts.delete(e.pointerId);},options);
   // Only an actual window blur ends contacts. Capturing descendant focus blur
   // would erase the fingers still held when gameplay focuses the new dialog.
   const interrupt=()=>{contacts.clear();overlap=true;generation++;};
